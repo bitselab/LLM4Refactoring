@@ -1,0 +1,55 @@
+ **I've assessed the code snippet, and while it demonstrates good practices, here are a few minor refactoring opportunities:**
+
+- **Extract `getFilters` methods to a utility class:** The `getFilters` methods are used in multiple tests and could be extracted to a separate utility class to improve code organization and reusability.
+- **Simplify conditional logic in `isEqual` method:** The `isEqual` method compares two `ClientRegistration` objects property by property. It could be simplified using `ReflectionUtils.shallowCompare` or a similar utility to reduce code verbosity.
+- **Consider a builder for `ClientRegistration`:** Creating `ClientRegistration` objects involves multiple calls to the builder. It could be made more concise with a custom builder or a fluent API.
+
+**Here's the refactored code implementing those suggestions:**
+
+```java
+// ... (other code)
+
+public class OAuth2FilterUtils {
+
+    public static List<Filter> getFilters(AssertableWebApplicationContext context, Class<? extends Filter> filter) {
+        // ... (implementation for getFilters)
+    }
+
+    public static SecurityFilterChain getSecurityFilterChain(AssertableWebApplicationContext context) {
+        // ... (implementation for getSecurityFilterChain)
+    }
+
+    public static FilterChainProxy getFilterChainProxy(Filter filter) {
+        // ... (implementation for getFilterChainProxy)
+    }
+}
+
+// ... (other code)
+
+private boolean isEqual(ClientRegistration reg1, ClientRegistration reg2) {
+    return ReflectionUtils.shallowCompare(reg1, reg2);
+}
+
+// ... (other code)
+
+@Configuration(proxyBeanMethods = false)
+@Import(TestConfig.class)
+static class ClientRegistrationRepositoryConfiguration {
+
+    @Bean
+    ClientRegistrationRepository clientRegistrationRepository() {
+        List<ClientRegistration> registrations = List.of(
+            createClientRegistration("first", "https://user-info-uri.com"),
+            createClientRegistration("second", "https://other-user-info"));
+        return new InMemoryClientRegistrationRepository(registrations);
+    }
+
+    private ClientRegistration createClientRegistration(String id, String userInfoUri) {
+        return ClientRegistration.withRegistrationId(id)
+            // ... (other builder methods)
+            .build();
+    }
+}
+```
+
+I'd recommend reviewing more code for further refactoring opportunities and to ensure code consistency with team conventions.

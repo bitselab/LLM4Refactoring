@@ -1,0 +1,70 @@
+In the provided code snippet for the `AutoCloseTests` class, there are a few segments that can potentially benefit from the Extract Method refactoring pattern. The intent of this refactoring is to improve code readability and maintainability by reducing duplication and separating concerns into well-defined methods.
+
+Here are two key opportunities for refactoring:
+
+1. **Assertion of Hash Codes for Ordering**: The initial part of the test asserts that certain static and non-static fields are in a particular order based on their hash codes. This is a distinct operation that can be extracted into its own method to clarify the purpose of these assertions and to potentially reuse this checking mechanism in other tests if needed.
+
+2. **Assertion of Throwable Details**: The pattern of retrieving and asserting details from exceptions is repeated twice: once for test-level failures and once for container-level failures. Extracting this into a method would reduce duplication and encapsulate the error handling in a single, reusable method.
+
+### Refactored Code with Extracted Methods
+
+```java
+class AutoCloseTests extends AbstractJupiterTestEngineTests {
+
+    @Test
+    void allFieldsAreClosedIfAnyFieldThrowsAnException() {
+        String staticField1 = "staticField1";
+        String staticField2 = "staticField2";
+        String staticField3 = "staticField3";
+        String field1 = "field1";
+        String field2 = "field2";
+        String field3 = "field3";
+
+        assertFieldOrder(staticField1, staticField2, staticField3, field1, field2, field3);
+
+        Class<?> testClass = FailingFieldsTestCase.class;
+        EngineExecutionResults allEvents = executeTestsForClass(testClass);
+
+        Events tests = allEvents.testEvents();
+        tests.assertStatistics(stats -> stats.succeeded(0).failed(1));
+        // Verify that ALL fields were closed.
+        assertThat(recorder).containsExactly(
+                "FailingFieldsTestCase.field1.close()",
+                "FailingFieldsTestCase.field2.close()",
+                "FailingFieldsTestCase.field3.close()",
+                "FailingFieldsTestCase.staticField1.close()",
+                "FailingFieldsTestCase.staticField2.close()",
+                "FailingFieldsTestCase.staticField3.close()"
+        );
+
+        verifyThrowableDetails(tests, "test()", RuntimeException.class, "FailingFieldsTestCase.field1.close()");
+        verifyThrowableDetails(tests, testClass.getSimpleName(), RuntimeException.class, "FailingFieldsTestCase.staticField1.close()");
+
+        Events containers = allEvents.containerEvents();
+        containers.assertStatistics(stats -> stats.succeeded(1).failed(1));
+    }
+
+    private void assertFieldOrder(String... fields) {
+        assertThat(fields[0].hashCode()).isLessThan(fields[1].hashCode()).isLessThan(fields[2].hashCode());
+        assertThat(fields[3].hashCode()).isLessThan(fields[4].hashCode()).isLessThan(fields[5].hashCode());
+    }
+
+    private void verifyThrowableDetails(Events events, String identifier, Class<? extends Throwable> expectedType, String expectedMessage) {
+        Throwable throwable = findExecution(events, identifier)
+                .getTerminationInfo().getExecutionResult().getThrowable().orElseThrow();
+        assertThat(throwable)
+                .isExactlyInstanceOf(expectedType)
+                .hasMessage(expectedMessage)
+                .hasNoCause()
+                .hasSuppressedException(new RuntimeException(expectedMessage.replace("1.close()", "2.close()")));
+    }
+}
+```
+
+### Explanation of Refactoring
+
+- **assertFieldOrder Method**: This method takes variable field names as arguments and performs hash code comparisons to ensure they are in the expected order. This makes the code cleaner and reusable.
+
+- **verifyThrowableDetails Method**: This method abstracts the process of verifying the details of a throwable, including its type, message, and suppressed exceptions. It uses parameters to specify the throwable details, which increases the method's flexibility and reuse.
+
+By applying these refactorings, the test class becomes more modular, easier to understand, and better prepared for potential future extensions where similar assertions might be needed.

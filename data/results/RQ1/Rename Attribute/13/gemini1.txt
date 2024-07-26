@@ -1,0 +1,73 @@
+## Refactoring Opportunities in TempDirectory Class
+
+The provided `TempDirectory` class has several areas for improvement through refactoring. Here's a breakdown of the opportunities:
+
+**1. Extract method for path retrieval:**
+
+- There's duplicate code retrieving the path from `CloseablePath`. Extract a method like `getPath` to reduce redundancy.
+
+**2. Refactor error handling:**
+
+- The `CloseablePath.close` method uses a nested `try-catch` block. Consider using a separate method for error handling logic to improve readability.
+
+**3. Simplify permission handling:**
+
+- The `tryToResetPermissions` method can be potentially simplified by using `Files.setPosixFilePermissions` if the platform supports it.
+
+**4. Refactor `createIOExceptionWithAttachedFailures`:**
+
+- The logic for building the error message can be improved using streams and a custom exception type to encapsulate the deletion failures.
+
+**5. Rename variables:**
+
+- Some variable names like `notYetRetried` or `cleanedUp` could be made more descriptive (e.g., `pathAlreadyAttemptedDeletion`).
+
+**6. Standardize logging:**
+
+- The logging statements use a mix of levels (`info` and suppressed exceptions). Consider defining a specific log level for cleanup failures.
+
+**7. Consider using Optional for CleanupMode:**
+
+- The `determineCleanupMode` methods could potentially leverage `Optional` to handle the absence of an explicitly defined mode.
+
+**Refactored Code (Example):**
+
+```java
+class TempDirectory implements BeforeAllCallback, BeforeEachCallback, ParameterResolver {
+
+    // ... existing code ...
+
+    private Path getPath(CloseablePath closeablePath) {
+        return closeablePath.get();
+    }
+
+    private void handleCloseException(CloseablePath closeablePath, IOException ex) throws IOException {
+        // Implement error handling logic here (e.g., logging)
+        throw ex;
+    }
+
+    // ... existing code ...
+
+    private IOException createTempDirDeletionFailureException(SortedMap<Path, IOException> failures) {
+        // Improved logic using streams and custom exception
+        return new TempDirDeletionException(failures);
+    }
+
+    // ... existing code ...
+
+    public static class TempDirDeletionException extends IOException {
+        private final SortedMap<Path, IOException> failures;
+
+        public TempDirDeletionException(SortedMap<Path, IOException> failures) {
+            super("Failed to delete temp directory");
+            this.failures = failures;
+        }
+
+        // Getter methods for failures map
+    }
+
+    // ... existing code ...
+}
+```
+
+These are just some suggestions, and the specific refactoring techniques can be further customized based on your coding preferences and project guidelines. 

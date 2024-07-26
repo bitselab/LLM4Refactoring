@@ -1,0 +1,59 @@
+In the provided code snippet, I notice a couple of opportunities where renaming variables could improve clarity, especially concerning their type and role in the context of the method:
+
+1. `switchStmt` could be more descriptively named to reflect its role and type. Since it represents a `SwitchNode`, a more descriptive name like `currentSwitchNode` might clarify that it pertains to the current context of the `SwitchNode` being processed.
+
+2. `typeDeclaration` is used within a conditional block checking if the type is an enumeration. A more explicit name such as `enumTypeDeclaration` might be clearer, indicating that this variable specifically references an enumeration type declaration.
+
+3. `referenceType` is used within the context of handling a reference type implementation. A clearer name like `specificReferenceType` could better denote that it refers to a more narrowly defined `ReferenceTypeImpl`.
+
+4. `typeUsageTypeDeclaration` is a little redundant and can be streamlined for better readability. Renaming it to `resolvedRefTypeDecl` could better convey its purpose and reduce verbosity while clarifying that it is a resolved reference type declaration.
+
+Here is how the refactored code would look:
+
+```java
+@Override
+public SymbolReference<? extends ResolvedValueDeclaration> solveSymbol(String name) {
+    SwitchNode currentSwitchNode = (SwitchNode) demandParentNode(wrappedNode);
+    ResolvedType type = JavaParserFacade.get(typeSolver).getType(currentSwitchNode.getSelector());
+    if (type.isReferenceType() && type.asReferenceType().getTypeDeclaration().isPresent()) {
+        ResolvedReferenceTypeDeclaration enumTypeDeclaration = type.asReferenceType().getTypeDeclaration().get();
+        if (enumTypeDeclaration.isEnum()) {
+            if (type instanceof ReferenceTypeImpl) {
+                ReferenceTypeImpl specificReferenceType = (ReferenceTypeImpl) type;
+                if(specificReferenceType.getTypeDeclaration().isPresent()) {
+                    ResolvedReferenceTypeDeclaration resolvedRefTypeDecl = specificReferenceType.getTypeDeclaration().get();
+                    if (resolvedRefTypeDecl.asEnum().hasEnumConstant(name)) {
+                        return SymbolReference.solved(resolvedRefTypeDecl.asEnum().getEnumConstant(name));
+                    }
+                    if (resolvedRefTypeDecl.hasField(name)) {
+                        return SymbolReference.solved(resolvedRefTypeDecl.getField(name));
+                    }
+                } else {
+                    // Consider IllegalStateException or similar?
+                }
+            } else {
+                throw new UnsupportedOperationException();
+            }
+        }
+    }
+
+    // look for declaration in this and previous switch entry statements
+    for (SwitchEntry seStmt : currentSwitchNode.getEntries()) {
+        for (Statement stmt : seStmt.getStatements()) {
+            SymbolDeclarator symbolDeclarator = JavaParserFactory.getSymbolDeclarator(stmt, typeSolver);
+            SymbolReference<? extends ResolvedValueDeclaration> symbolReference = solveWith(symbolDeclarator, name);
+            if (symbolReference.isSolved()) {
+                return symbolReference;
+            }
+        }
+        // once we reach this switch entry statement, stop: we do not want to look in later switch entry statements
+        if (seStmt == wrappedNode) {
+            break;
+        }
+    }
+
+    return solveSymbolInParentContext(name);
+}
+```
+
+These changes aim to enhance readability by making the variable names more descriptive and type-appropriate, following the pattern you've indicated.

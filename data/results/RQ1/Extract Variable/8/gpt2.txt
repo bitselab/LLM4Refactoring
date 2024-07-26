@@ -1,0 +1,50 @@
+The provided code snippet can benefit from "Extract Variable" refactorings to enhance readability and maintainability. This refactoring is especially useful in cases where the same expression is used multiple times or when a complex expression can be broken down for clarity. Here are the refactoring changes:
+
+1. **In `doToQuery` Method**: Extract the repeated expression `filter == null ? null : filter.toQuery(context)` into a variable, as it is used in both the `if` and `else if` blocks.
+
+2. **In `Builder.vector` Method**: Extract repeated method calls like `vector.getClass()`, `vector.getClass().getComponentType()`, and `Array.getLength(vector)` into variables, as they are used more than once.
+
+Refactored Code:
+
+```java
+// ... [Other parts of the code remain unchanged]
+
+@Override
+protected Query doToQuery(PredicateRequestContext context) {
+    Query filterQuery = filter == null ? null : filter.toQuery(context);
+
+    if (vector instanceof byte[]) {
+        return new KnnByteVectorQuery(absoluteFieldPath, (byte[]) vector, k, filterQuery);
+    }
+    if (vector instanceof float[]) {
+        return new KnnFloatVectorQuery(absoluteFieldPath, (float[]) vector, k, filterQuery);
+    }
+
+    throw new UnsupportedOperationException(
+            "Unknown vector type " + vector.getClass() + ". only byte[] and float[] vectors are supported.");
+}
+
+// ... [Other parts of the code remain unchanged]
+
+@Override
+public void vector(Object vector) {
+    Class<?> vectorClass = vector.getClass();
+    Class<?> componentType = vectorClass.getComponentType();
+    int vectorLength = Array.getLength(vector);
+
+    if (!vectorClass.isArray()) {
+        throw new IllegalArgumentException("Vector can only be either a float or a byte array (float[], byte[]).");
+    }
+    if (!vectorElementsType.equals(componentType)) {
+        throw log.vectorKnnMatchVectorTypeDiffersFromField(absoluteFieldPath, vectorElementsType, componentType);
+    }
+    if (vectorLength != indexedVectorsDimension) {
+        throw log.vectorKnnMatchVectorDimensionDiffersFromField(absoluteFieldPath, indexedVectorsDimension, vectorLength);
+    }
+    this.vector = vector;
+}
+
+// ... [Rest of the code]
+```
+
+These changes improve the code by making it more readable and reducing the duplication of method calls, thereby adhering to the DRY (Don't Repeat Yourself) principle.

@@ -1,0 +1,52 @@
+Upon reviewing the provided code, I can identify several opportunities for "Extract Variable" refactoring to improve readability and possibly reusability. This type of refactoring is beneficial when you have complex expressions or repeated code. It involves creating a new variable to hold the result of the expression, making the code clearer and less error-prone.
+
+Here are the refactoring changes I suggest:
+
+1. **Extract Repeated Expressions**: In multiple test methods, `new ManualClock()` is repeatedly instantiated. This can be extracted to a field in the test class, initialized once and reused across tests.
+
+2. **Extract Complex Expressions**: In some test methods, complex expressions like `Duration.ofMillis(maxBackoffMS + 1)` are used multiple times. These can be extracted into variables to improve readability.
+
+3. **Extract Common Test Setup Logic**: There is repeated instantiation of `ExponentialDelayRestartBackoffTimeStrategy` with different parameters. This setup can be extracted into a helper method that takes these parameters as arguments.
+
+Now, let's apply these refactorings to the code:
+
+```java
+package org.apache.flink.runtime.executiongraph.failover;
+
+// imports remain the same
+
+class ExponentialDelayRestartBackoffTimeStrategyTest {
+
+    private final Exception failure = new Exception();
+    private final ManualClock clock = new ManualClock();
+
+    private ExponentialDelayRestartBackoffTimeStrategy createRestartStrategy(long initialBackoff, long maxBackoff, double multiplier, long threshold, double jitter, int maxAttempts) {
+        return new ExponentialDelayRestartBackoffTimeStrategy(clock, initialBackoff, maxBackoff, multiplier, threshold, jitter, maxAttempts);
+    }
+
+    @Test
+    void testMaxAttempts() {
+        int maxAttempts = 13;
+        long maxBackoffMS = 3L;
+        final ExponentialDelayRestartBackoffTimeStrategy restartStrategy = createRestartStrategy(1L, maxBackoffMS, 1.2, 10L, 0.25, maxAttempts);
+
+        Duration advanceDuration = Duration.ofMillis(maxBackoffMS + 1);
+        for (int i = 0; i <= maxAttempts; i++) {
+            assertThat(restartStrategy.canRestart()).isTrue();
+            restartStrategy.notifyFailure(failure);
+            clock.advanceTime(advanceDuration);
+        }
+        assertThat(restartStrategy.canRestart()).isFalse();
+    }
+
+    // Other test methods refactored similarly...
+
+}
+```
+
+In this refactored code:
+- I've added a `clock` field to the class and initialized it once.
+- A `createRestartStrategy` helper method is used to instantiate `ExponentialDelayRestartBackoffTimeStrategy`.
+- I extracted the `Duration.ofMillis(maxBackoffMS + 1)` expression into a variable `advanceDuration` for clarity.
+
+Similar refactorings would be applied to other test methods to extract repeated expressions and complex logic into variables or helper methods.

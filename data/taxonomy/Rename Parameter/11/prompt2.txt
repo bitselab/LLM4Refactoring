@@ -1,0 +1,80 @@
+Rename parameter refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename parameter refactoring pattern is to rename parameters whose semantics are inappropriate in the context. Here is an example of the rename parameter refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public List<MethodMetadata> parseAndValidatateMetadata(Class<?> declaring) {
+    checkState(declaring.getTypeParameters().length == 0, "Parameterized types unsupported: %s",
+            declaring.getSimpleName());
+    checkState(declaring.getInterfaces().length <= 1, "Only single inheritance supported: %s",
+            declaring.getSimpleName());
+    if (declaring.getInterfaces().length == 1) {
+        checkState(declaring.getInterfaces()[0].getInterfaces().length == 0,
+                "Only single-level inheritance supported: %s",
+                declaring.getSimpleName());
+    }
+    Map<String, MethodMetadata> result = new LinkedHashMap<String, MethodMetadata>();
+    for (Method method : declaring.getMethods()) {
+        if (method.getDeclaringClass() == Object.class) {
+            continue;
+        }
+        MethodMetadata metadata = parseAndValidateMetadata(declaring, method);
+        checkState(!result.containsKey(metadata.configKey()), "Overrides unsupported: %s",
+                metadata.configKey());
+        result.put(metadata.configKey(), metadata);
+    }
+    return new ArrayList<MethodMetadata>(result.values());
+}
+```
+The source code after refactoring is:
+```
+public List<MethodMetadata> parseAndValidatateMetadata(Class<?> targetType) {
+    checkState(targetType.getTypeParameters().length == 0, "Parameterized types unsupported: %s",
+            targetType.getSimpleName());
+    checkState(targetType.getInterfaces().length <= 1, "Only single inheritance supported: %s",
+            targetType.getSimpleName());
+    if (targetType.getInterfaces().length == 1) {
+        checkState(targetType.getInterfaces()[0].getInterfaces().length == 0,
+                "Only single-level inheritance supported: %s",
+                targetType.getSimpleName());
+    }
+    Map<String, MethodMetadata> result = new LinkedHashMap<String, MethodMetadata>();
+    for (Method method : targetType.getMethods()) {
+        if (method.getDeclaringClass() == Object.class) {
+            continue;
+        }
+        MethodMetadata metadata = parseAndValidateMetadata(targetType, method);
+        checkState(!result.containsKey(metadata.configKey()), "Overrides unsupported: %s",
+                metadata.configKey());
+        result.put(metadata.configKey(), metadata);
+    }
+    return new ArrayList<MethodMetadata>(result.values());
+}
+```
+In this example, the developer renamed the parameter "declaring" to "targetType".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename parameter refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+protected Tick formatTick(long now)
+{
+    long seconds = now / 1000;
+
+    // Two Ticks are cached so that for monotonically increasing times to not see any jitter from multiple cores.
+    // The ticks are kept in a volatile field, so there a small risk of inconsequential multiple recalculations
+    TickHolder holder = _tickHolder;
+    if (holder != null)
+    {
+        if (holder.tick1 != null && holder.tick1.getSeconds() == seconds)
+            return holder.tick1;
+        if (holder.tick2 != null && holder.tick2.getSeconds() == seconds)
+            return holder.tick2;
+    }
+
+    String prefix = doFormat(now, _tzFormat1);
+    String suffix = doFormat(now, _tzFormat2);
+    Tick tick = new Tick(seconds, prefix, suffix);
+    _tickHolder = new TickHolder(tick, (holder == null) ? null : holder.tick1);
+    return tick;
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

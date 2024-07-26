@@ -1,0 +1,59 @@
+Here are some refactoring opportunities for the provided code snippet:
+
+1. **Extract `getCheckShortName` logic:** The logic for extracting the check name  without the "Check" suffix is encapsulated in the `getCheckShortName` method. This functionality can be reused if needed elsewhere, so it's a good candidate for extraction.
+
+2. **Use `String.split` for `getCheckShortName`:** The `getCheckShortName` method uses substring operations to achieve the desired outcome. This logic can be simplified by leveraging the `String.split` method.
+
+3. **Calculate buffer size directly:** The `initStringBuilderWithOptimalBuffer` method calculates the  optimal buffer size for the `StringBuilder`. This calculation can be done directly  within the constructor of `StringBuilder` instead of using a separate method.
+
+Here's the refactored code with the suggested improvements:
+
+```java
+public class AuditEventDefaultFormatter implements AuditEventFormatter {
+
+  private static final int LENGTH_OF_ALL_SEPARATORS = 10;
+  private static final String SUFFIX = "Check";
+
+  @Override
+  public String format(AuditEvent event) {
+    final String fileName = event.getFileName();
+    final String message = event.getMessage();
+
+    final SeverityLevel severityLevel = event.getSeverityLevel();
+    final String severityLevelName = severityLevel.getName().toUpperCase(Locale.US);
+
+    // Calculate buffer size directly in StringBuilder constructor
+    final StringBuilder sb = new StringBuilder(
+        LENGTH_OF_ALL_SEPARATORS + fileName.length() + message.length() + severityLevelName.length()
+            + getCheckShortName(event).length());
+
+    sb.append('[').append(severityLevelName).append("] ")
+        .append(fileName).append(':').append(event.getLine());
+    if (event.getColumn() > 0) {
+      sb.append(':').append(event.getColumn());
+    }
+    sb.append(": ").append(message).append(" [");
+    if (event.getModuleId() == null) {
+      sb.append(getCheckShortName(event));
+    } else {
+      sb.append(event.getModuleId());
+    }
+    sb.append(']');
+
+    return sb.toString();
+  }
+
+  private static String getCheckShortName(AuditEvent event) {
+    final String checkFullName = event.getSourceName();
+    // Use String.split to extract check name
+    String[] parts = checkFullName.split("\\.");
+    String checkShortName = parts[parts.length - 1];
+    if (checkShortName.endsWith(SUFFIX)) {
+      checkShortName = checkShortName.substring(0, checkShortName.length() - SUFFIX.length());
+    }
+    return checkShortName;
+  }
+}
+```
+
+These changes improve code readability and maintainability by extracting reusable logic and simplifying calculations.

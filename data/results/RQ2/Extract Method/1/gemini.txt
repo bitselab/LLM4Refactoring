@@ -1,0 +1,50 @@
+ **Here's the refactored code with the extracted method:**
+
+```java
+package com.puppycrawl.tools.checkstyle.checks.regexp;
+
+// ... other imports
+
+public class RegexpCheck extends AbstractCheck {
+
+    // ... other fields and methods
+
+    private String constructMessage() {
+        String msg;
+        if (message == null || message.isEmpty()) {
+            msg = format.pattern();
+        } else {
+            msg = message;
+        }
+        if (errorCount >= errorLimit) {
+            msg = ERROR_LIMIT_EXCEEDED_MESSAGE + msg;
+        }
+        return msg;
+    }
+
+    private void logMessage(int lineNumber) {
+        String msg = constructMessage();
+        if (illegalPattern) {
+            log(lineNumber, MSG_ILLEGAL_REGEXP, msg);
+        } else {
+            log(lineNumber, MSG_DUPLICATE_REGEXP, msg);
+        }
+    }
+
+    // ... other methods
+
+}
+```
+
+**Explanation of the Refactoring:**
+
+1. **Identify Duplicate Code:** The duplicate code snippet was identified, found within both the `findMatch` and `logMessage` methods.
+2. **Extract Method:** The duplicated code was extracted into a new method named `constructMessage`.
+3. **Replace Duplicates with Method Calls:** The original code blocks containing the duplicates were replaced with calls to the newly extracted `constructMessage` method.
+
+**Benefits of Refactoring:**
+
+- **Improved Readability:** The code becomes more readable and easier to understand by encapsulating the logic of constructing the message within a separate method.
+- **Enhanced Maintainability:** Changes to the message construction logic can be made in a single place, reducing the likelihood of errors and inconsistencies.
+- **Reusability:** The `constructMessage` method can potentially be reused in other parts of the code if needed.
+- **Reduced Code Duplication:** Eliminating code duplication makes the code more concise and less prone to errors.

@@ -1,0 +1,40 @@
+To improve the readability and reusability of the provided code snippet, I'll apply the Extract Method refactoring technique. The identified duplicate code snippet appears in multiple test methods and creates a file with content in the Azure Blob FileSystem. By extracting this repeated logic into a separate method, we can reduce duplication and enhance maintainability.
+
+Here's how the refactored code would look:
+
+```java
+public class ITestAbfsInputStreamReadFooter extends ITestAbfsInputStream {
+    // Existing class members and methods...
+
+    private void testNumBackendCalls(boolean optimizeFooterRead) throws Exception {
+        int fileIdx = 0;
+        for (int i = 0; i <= 4; i++) {
+            for (int j = 0; j <= 2; j++) {
+                int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+                int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+                final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+                Path testFilePath = createTestFile(fs, methodName.getMethodName(), fileIdx++, fileSize);
+                // Rest of the code...
+            }
+        }
+    }
+
+    // Other test methods using createTestFile...
+
+    private Path createTestFile(AzureBlobFileSystem fs, String methodName, int fileIdx, int fileSize) throws IOException {
+        String fileName = methodName + fileIdx;
+        byte[] fileContent = getRandomBytesArray(fileSize);
+        return createFileWithContent(fs, fileName, fileContent);
+    }
+
+    // Rest of the existing methods...
+}
+```
+
+In this refactoring:
+- The duplicate code snippet is extracted into a new method named `createTestFile`.
+- This method takes parameters for the `AzureBlobFileSystem` instance, method name, file index, and file size.
+- It generates the file name, creates file content, and returns the path of the created file.
+- The original places where the code snippet was used are now replaced with calls to `createTestFile`, passing the necessary arguments.
+
+This refactoring makes the code cleaner and ensures that changes to the file creation logic only need to be made in one place, adhering to the DRY (Don't Repeat Yourself) principle.

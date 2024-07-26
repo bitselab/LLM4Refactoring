@@ -1,0 +1,29 @@
+In the provided code snippet, a potential candidate for inline method refactoring is the `getTargetClass` method. This method is short, consisting of only one line, and it is used only once within the `execute` method. By inlining `getTargetClass`, we can eliminate the need for this separate method call, which might enhance readability by reducing the overall number of methods and keeping related logic together, especially when the abstraction does not add significant clarity or reuse benefit.
+
+Here's the refactored code:
+
+```java
+public abstract class CacheAspectSupport extends AbstractCacheInvoker
+        implements BeanFactoryAware, InitializingBean, SmartInitializingSingleton {
+
+    @Nullable
+    protected Object execute(CacheOperationInvoker invoker, Object target, Method method, Object[] args) {
+        // Check whether aspect is enabled (to cope with cases where the AJ is pulled in automatically)
+        if (this.initialized) {
+            Class<?> targetClass = AopProxyUtils.ultimateTargetClass(target);
+            CacheOperationSource cacheOperationSource = getCacheOperationSource();
+            if (cacheOperationSource != null) {
+                Collection<CacheOperation> operations = cacheOperationSource.getCacheOperations(method, targetClass);
+                if (!CollectionUtils.isEmpty(operations)) {
+                    return execute(invoker, method,
+                            new CacheOperationContexts(operations, method, args, target, targetClass));
+                }
+            }
+        }
+
+        return invokeOperation(invoker);
+    }
+}
+```
+
+In this version, `AopProxyUtils.ultimateTargetClass(target)` is directly used where `getTargetClass` was previously called. This refactoring is aligned with the pattern of simplifying methods by eliminating those that wrap a single statement or are used only in a limited context.

@@ -1,0 +1,25 @@
+In the given code snippet:
+
+```java
+private List<Filter> getFilters(AssertableWebApplicationContext context, Class<? extends Filter> filter) {
+    return getSecurityFilterChain(context).getFilters().stream().filter(filter::isInstance).toList();
+}
+```
+
+The method name `getFilters` is fairly generic, and it might not adequately describe the action being performed. The method is specifically retrieving filters from a security filter chain that are instances of a specified filter class. This is more specific than merely getting filters.
+
+A more descriptive method name could help clarify the purpose of the method and improve code readability. Therefore, a rename method refactoring could be applied here.
+
+### Suggested Refactoring
+
+Rename the method from `getFilters` to `getFiltersByType` or `getInstanceOfFilters`. These names better reflect the method's functionality, which is filtering the list of filters to only include instances of a specified type.
+
+Here is the refactored code:
+
+```java
+private List<Filter> getFiltersByType(AssertableWebApplicationContext context, Class<? extends Filter> filterType) {
+    return getSecurityFilterChain(context).getFilters().stream().filter(filterType::isInstance).toList();
+}
+```
+
+In this refactoring, I also renamed the `filter` parameter to `filterType` to make it clear that this parameter specifies the type of filter to retrieve, rather than being an actual filter object. This should further enhance the readability and clarity of the method's purpose.

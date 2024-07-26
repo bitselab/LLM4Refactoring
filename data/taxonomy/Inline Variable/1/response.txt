@@ -1,0 +1,178 @@
+In the provided code, the primary opportunity for inline variable refactoring involves removing temporary variables that only pass values from one place to another without adding clarity or reducing complexity. After reviewing the code, here's a specific opportunity for refactoring:
+
+### Refactoring Opportunity
+
+In the method `extract(Query query, float boost, Map<String, WeightedSpanTerm> terms)`, there are multiple instances where a local variable is assigned a value only to be used once in a subsequent method call. These can be inlined to simplify the code.
+
+Here's the refactored code snippet from the `extract` method:
+
+Original Code:
+```java
+final Query q = ((ConstantScoreQuery) query).getQuery();
+if (q != null) {
+    extract(q, boost, terms);
+}
+```
+Refactored Code:
+```java
+if (((ConstantScoreQuery) query).getQuery() != null) {
+    extract(((ConstantScoreQuery) query).getQuery(), boost, terms);
+}
+```
+
+Another section that can be refactored:
+Original Code:
+```java
+Query origQuery = query;
+final IndexReader reader = getLeafContext().reader();
+Query rewritten;
+if (query instanceof MultiTermQuery) {
+    rewritten = MultiTermQuery.SCORING_BOOLEAN_REWRITE.rewrite(new IndexSearcher(reader), (MultiTermQuery) query);
+} else {
+    rewritten = origQuery.rewrite(new IndexSearcher(reader));
+}
+if (rewritten != origQuery) {
+    extract(rewritten, boost, terms);
+} else {
+    extractUnknownQuery(query, terms);
+}
+```
+Refactored Code:
+```java
+final IndexReader reader = getLeafContext().reader();
+Query rewritten = query instanceof MultiTermQuery ?
+    MultiTermQuery.SCORING_BOOLEAN_REWRITE.rewrite(new IndexSearcher(reader), (MultiTermQuery) query) :
+    query.rewrite(new IndexSearcher(reader));
+
+if (rewritten != query) {
+    extract(rewritten, boost, terms);
+} else {
+    extractUnknownQuery(query, terms);
+}
+```
+
+### Complete Refactored Method
+Below is the part of the `extract` method incorporating these refactoring changes:
+
+```java
+protected void extract(Query query, float boost, Map<String, WeightedSpanTerm> terms)
+        throws IOException {
+    if (query instanceof BoostQuery) {
+        BoostQuery boostQuery = (BoostQuery) query;
+        extract(boostQuery.getQuery(), boost * boostQuery.getBoost(), terms);
+    } else if (query instanceof BooleanQuery) {
+        for (BooleanClause clause : (BooleanQuery) query) {
+            if (!clause.isProhibited()) {
+                extract(clause.getQuery(), boost, terms);
+            }
+        }
+    } else if (query instanceof PhraseQuery) {
+        PhraseQuery phraseQuery = (PhraseQuery) query;
+        Term[] phraseQueryTerms = phraseQuery.getTerms();
+        if (phraseQueryTerms.length == 1) {
+            extractWeightedSpanTerms(terms, new SpanTermQuery(phraseQueryTerms[0]), boost);
+        } else {
+            SpanQuery[] clauses = new SpanQuery[phraseQueryTerms.length];
+            for (int i = 0; i < phraseQueryTerms.length; i++) {
+                clauses[i] = new SpanTermQuery(phraseQueryTerms[i]);
+            }
+
+            int positionGaps = 0;
+            int[] positions = phraseQuery.getPositions();
+            if (positions.length >= 2) {
+                positionGaps = Math.max(0, positions[positions.length - 1] - positions[0] - positions.length + 1);
+            }
+
+            boolean inorder = (phraseQuery.getSlop() == 0);
+
+            SpanNearQuery sp = new SpanNearQuery(clauses, phraseQuery.getSlop() + positionGaps, inorder);
+            extractWeightedSpanTerms(terms, sp, boost);
+        }
+    } else if (query instanceof TermQuery || query instanceof SynonymQuery) {
+        extractWeightedTerms(terms, query, boost);
+    } else if (query instanceof SpanQuery) {
+        extractWeightedSpanTerms(terms, (SpanQuery) query, boost);
+    } else if (query instanceof ConstantScoreQuery) {
+        if (((ConstantScoreQuery) query).getQuery() != null) {
+            extract(((ConstantScoreQuery) query).getQuery(), boost, terms);
+        }
+    } else if (query instanceof CommonTermsQuery) {
+        extractWeightedTerms(terms, query, boost);
+    } else if (query instanceof DisjunctionMaxQuery) {
+        for (Query clause : ((DisjunctionMaxQuery) query)) {
+            extract(clause, boost, terms);
+        }
+    } else if (query instanceof MultiPhraseQuery) {
+        MultiPhraseQuery mpq = (MultiPhraseQuery) query;
+        Term[][] termArrays = mpq.getTermArrays();
+        int[] positions = mpq.getPositions();
+        if (positions.length > 0) {
+
+            int maxPosition = positions[positions.length - 1];
+            for (int i = 0; i < positions.length - 1; ++i) {
+                if (positions[i] > maxPosition) {
+                    maxPosition = positions[i];
+                }
+            }
+
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            List<SpanQuery>[] disjunctLists = new List[maxPosition + 1];
+            int distinctPositions = 0;
+
+            for (int i = 0; i < termArrays.length; ++i) {
+                Term[] termArray = termArrays[i];
+                List<SpanQuery> disjuncts = disjunctLists[positions[i]];
+                if (disjuncts == null) {
+                    disjuncts = (disjunctLists[positions[i]] = new ArrayList<>(termArray.length));
+                    ++distinctPositions;
+                }
+                for (Term aTermArray : termArray) {
+                    disjuncts.add(new SpanTermQuery(aTermArray));
+                }
+            }
+
+            int positionGaps = 0;
+            int position = 0;
+            SpanQuery[] clauses = new SpanQuery[distinctPositions];
+            for (List<SpanQuery> disjuncts : disjunctLists) {
+                if (disjuncts != null) {
+                    clauses[position++] = new SpanOrQuery(disjuncts.toArray(new SpanQuery[disjuncts.size()]));
+                } else {
+                    ++positionGaps;
+                }
+            }
+
+            if (clauses.length == 1) {
+                extractWeightedSpanTerms(terms, clauses[0], boost);
+            } else {
+                int slop = mpq.getSlop();
+                boolean inorder = (slop == 0);
+
+                SpanNearQuery sp = new SpanNearQuery(clauses, slop + positionGaps, inorder);
+                extractWeightedSpanTerms(terms, sp, boost);
+            }
+        }
+    } else if (query instanceof MatchAllDocsQuery) {
+        // nothing
+    } else if (query instanceof FieldExistsQuery) {
+        // nothing
+    } else if (query instanceof FunctionScoreQuery) {
+        extract(((FunctionScoreQuery) query).getWrappedQuery(), boost, terms);
+    } else if (isQueryUnsupported(query.getClass())) {
+        // nothing
+    } else {
+        final IndexReader reader = getLeafContext().reader();
+        Query rewritten = query instanceof MultiTermQuery ?
+            MultiTermQuery.SCORING_BOOLEAN_REWRITE.rewrite(new IndexSearcher(reader), (MultiTermQuery) query) :
+            query.rewrite(new IndexSearcher(reader));
+
+        if (rewritten != query) {
+            extract(rewritten, boost, terms);
+        } else {
+            extractUnknownQuery(query, terms);
+        }
+    }
+}
+```
+
+This refactoring eliminates intermediate variables that don't add significant value, streamlining the code and improving its readability without altering its functionality.

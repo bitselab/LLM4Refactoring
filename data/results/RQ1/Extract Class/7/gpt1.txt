@@ -1,0 +1,83 @@
+The provided code is part of a larger project, likely related to database operations in Java, specifically with Hibernate. Let's go through some potential refactoring opportunities:
+
+1. **Singleton Pattern**: The class `ArrayViaElementArgumentReturnTypeResolver` uses a singleton pattern, but it's not thread-safe. If thread safety is a concern, you might consider a thread-safe singleton pattern.
+
+2. **Method Overloading**: The class overloads the method `resolveFunctionReturnType` but the second overloaded method returns `null`. This could be intentional, but if it's not used, it might be better to remove it or implement it properly.
+
+3. **Suppressed Warnings**: The method `resolveArrayType` uses `@SuppressWarnings("unchecked")`. It's generally a good idea to handle unchecked casts in a safer way, if possible, to avoid `ClassCastException` at runtime.
+
+4. **Error Handling**: The method `resolveFunctionReturnType` returns `null` in some scenarios. It would be better to handle these cases more gracefully, possibly by throwing an exception or using an Optional return type.
+
+5. **Code Comments**: While there are some comments, more detailed documentation could be helpful, especially explaining the purpose and usage of each method and the overall class.
+
+6. **Refactoring for Readability**: Some parts of the code, like the castings and the instance checks, could be refactored for better readability and maintainability.
+
+Considering these points, here's a refactored version of the code. Note that without the complete context of the application and its requirements, some of these changes are speculative and should be tested thoroughly.
+
+```java
+package org.hibernate.dialect.function.array;
+
+import java.util.List;
+import java.util.function.Supplier;
+
+import org.hibernate.metamodel.mapping.BasicValuedMapping;
+import org.hibernate.metamodel.mapping.MappingModelExpressible;
+import org.hibernate.metamodel.model.domain.DomainType;
+import org.hibernate.query.ReturnableType;
+import org.hibernate.query.sqm.produce.function.FunctionReturnTypeResolver;
+import org.hibernate.query.sqm.tree.SqmTypedNode;
+import org.hibernate.sql.ast.tree.SqlAstNode;
+import org.hibernate.type.spi.TypeConfiguration;
+
+public class ArrayViaElementArgumentReturnTypeResolver implements FunctionReturnTypeResolver {
+
+    private static final FunctionReturnTypeResolver INSTANCE = new ArrayViaElementArgumentReturnTypeResolver();
+
+    private ArrayViaElementArgumentReturnTypeResolver() {
+    }
+
+    public static FunctionReturnTypeResolver getInstance() {
+        return INSTANCE;
+    }
+
+    @Override
+    public ReturnableType<?> resolveFunctionReturnType(
+            ReturnableType<?> impliedType,
+            Supplier<MappingModelExpressible<?>> inferredTypeSupplier,
+            List<? extends SqmTypedNode<?>> arguments,
+            TypeConfiguration typeConfiguration) {
+        MappingModelExpressible<?> inferredType = inferredTypeSupplier.get();
+        if (inferredType instanceof ReturnableType<?>) {
+            return (ReturnableType<?>) inferredType;
+        }
+        if (inferredType instanceof BasicValuedMapping) {
+            return (ReturnableType<?>) ((BasicValuedMapping) inferredType).getJdbcMapping();
+        }
+        if (impliedType != null) {
+            return impliedType;
+        }
+        return arguments.stream()
+                .map(SqmTypedNode::getExpressible)
+                .filter(sqmType -> sqmType instanceof ReturnableType<?>)
+                .map(sqmType -> ArrayTypeHelper.resolveArrayType(sqmType, typeConfiguration))
+                .findFirst()
+                .orElse(null);
+    }
+
+    public static BasicType<?> resolveArrayType(DomainType<?> elementType, TypeConfiguration typeConfiguration) {
+        Class<?> arrayClass = Array.newInstance(elementType.getBindableJavaType(), 0).getClass();
+        BasicPluralJavaType<Object> arrayJavaType = (BasicPluralJavaType<Object>) typeConfiguration.getJavaTypeRegistry()
+                .getDescriptor(arrayClass);
+        Dialect dialect = typeConfiguration.getCurrentBaseSqlTypeIndicators().getDialect();
+        return arrayJavaType.resolveType(
+                typeConfiguration,
+                dialect,
+                (BasicType<Object>) elementType,
+                null,
+                typeConfiguration.getCurrentBaseSqlTypeIndicators()
+        );
+    }
+}
+```
+
+This refactoring focuses on improving readability, maintainability, and safety. However, any changes should be validated with the complete project context and requirements in mind.

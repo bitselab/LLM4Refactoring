@@ -1,0 +1,95 @@
+In the provided `ArrayViaElementArgumentReturnTypeResolver` class, there are a few potential opportunities for extract class refactoring. Let's analyze the functionality to identify closely related attributes and methods that can be grouped into a new class:
+
+### Analysis
+1. **Type Resolution Logic**:
+   - Methods involved: `resolveFunctionReturnType` (two overloaded versions) and `resolveArrayType`.
+   - These methods are all involved in determining the type based on different inputs and configurations.
+   - They use `TypeConfiguration` and type-related information heavily.
+
+2. **Array Type Helper Logic**:
+   - The `resolveArrayType` method is a utility function that computes array types based on the domain type. This is a specific functionality that could be encapsulated in a helper class.
+
+### Proposed Refactoring
+- **Extract Class `ArrayTypeResolver`**:
+  - This new class can encapsulate the logic to resolve array types, which is currently spread across different methods in the main class. It would take responsibilities related to computing the array type based on the domain type and configuration settings.
+
+### Refactored Code
+```java
+package org.hibernate.dialect.function.array;
+
+import java.util.List;
+import java.util.function.Supplier;
+import java.lang.reflect.Array;
+
+import org.hibernate.metamodel.mapping.BasicValuedMapping;
+import org.hibernate.metamodel.mapping.MappingModelExpressible;
+import org.hibernate.metamodel.model.domain.DomainType;
+import org.hibernate.query.ReturnableType;
+import org.hibernate.query.sqm.produce.function.FunctionReturnTypeResolver;
+import org.hibernate.query.sqm.tree.SqmTypedNode;
+import org.hibernate.sql.ast.tree.SqlAstNode;
+import org.hibernate.type.spi.TypeConfiguration;
+import org.hibernate.type.BasicPluralJavaType;
+import org.hibernate.type.BasicType;
+import org.hibernate.dialect.Dialect;
+
+public class ArrayTypeResolver {
+
+    public static BasicType<?> resolveArrayType(DomainType<?> elementType, TypeConfiguration typeConfiguration) {
+        final BasicPluralJavaType<Object> arrayJavaType = (BasicPluralJavaType<Object>) typeConfiguration.getJavaTypeRegistry()
+                .getDescriptor(Array.newInstance(elementType.getBindableJavaType(), 0).getClass());
+        final Dialect dialect = typeConfiguration.getCurrentBaseSqlTypeIndicators().getDialect();
+        return arrayJavaType.resolveType(
+                typeConfiguration,
+                dialect,
+                (BasicType<Object>) elementType,
+                null,
+                typeConfiguration.getCurrentBaseSqlTypeIndicators()
+        );
+    }
+}
+
+public class ArrayViaElementArgumentReturnTypeResolver implements FunctionReturnTypeResolver {
+
+    public static final FunctionReturnTypeResolver INSTANCE = new ArrayViaElementArgumentReturnTypeResolver();
+
+    private ArrayViaElementArgumentReturnTypeResolver() {
+    }
+
+    @Override
+    public ReturnableType<?> resolveFunctionReturnType(
+            ReturnableType<?> impliedType,
+            Supplier<MappingModelExpressible<?>> inferredTypeSupplier,
+            List<? extends SqmTypedNode<?>> arguments,
+            TypeConfiguration typeConfiguration) {
+        final MappingModelExpressible<?> inferredType = inferredTypeSupplier.get();
+        if (inferredType != null) {
+            if (inferredType instanceof ReturnableType<?>) {
+                return (ReturnableType<?>) inferredType;
+            } else if (inferredType instanceof BasicValuedMapping) {
+                return (ReturnableType<?>) ((BasicValuedMapping) inferredType).getJdbcMapping();
+            }
+        }
+        if (impliedType != null) {
+            return impliedType;
+        }
+        for (SqmTypedNode<?> argument : arguments) {
+            final DomainType<?> sqmType = argument.getExpressible().getSqmType();
+            if (sqmType instanceof ReturnableType<?>) {
+                return ArrayTypeResolver.resolveArrayType(sqmType, typeConfiguration);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public BasicValuedMapping resolveFunctionReturnType(
+            Supplier<BasicValuedMapping> impliedTypeAccess,
+            List<? extends SqlAstNode> arguments) {
+        return null;
+    }
+}
+```
+
+### Summary
+This refactor focuses on extracting the array type resolution logic into a new class named `ArrayTypeResolver`, simplifying the main class and separating concerns effectively. The `ArrayViaElementArgumentReturnTypeResolver` now delegates array type computations to the `ArrayTypeResolver`, making the code cleaner and more maintainable.

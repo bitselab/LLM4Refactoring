@@ -1,0 +1,142 @@
+Inline method refactorings are frequently employed to eliminate unnecessary variables to improve readability.
+##################################################
+An inline method refactoring pattern is to remove private methods that are called once within the class. Here is an example of the inline method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public class PSurfaceJOGL implements PSurface {
+
+    public void placeWindow(int[] location, int[] editorLocation) {
+        int x = window.getX() - window.getInsets().getLeftWidth();
+        int y = window.getY() - window.getInsets().getTopHeight();
+        int w = window.getWidth() + window.getInsets().getTotalWidth();
+        int h = window.getHeight() + window.getInsets().getTotalHeight();
+        if (location != null) {
+            window.setTopLevelPosition(location[0], location[1]);
+        } else if (editorLocation != null) {
+            int locationX = editorLocation[0] - 20;
+            int locationY = editorLocation[1];
+            if (locationX - w > 10) {
+                window.setTopLevelPosition(locationX - w, locationY);
+            } else {
+                locationX = editorLocation[0] + 66;
+                locationY = editorLocation[1] + 66;
+                if ((locationX + w > sketch.displayWidth - 33) ||
+                        (locationY + h > sketch.displayHeight - 33)) {
+                    // otherwise center on screen
+                    locationX = (sketch.displayWidth - w) / 2;
+                    locationY = (sketch.displayHeight - h) / 2;
+                }
+                window.setTopLevelPosition(locationX, locationY);
+            }
+        } else {
+            setFrameCentered();
+        }
+
+        Point frameLoc = new Point(x, y);
+        if (frameLoc.y < 0) {
+            window.setTopLevelPosition(frameLoc.x, 30);
+        }
+
+        placedWindow = true;
+        if (requestedStart) startThread();
+    }
+
+    private void setFrameCentered() {
+        int sketchX = displayDevice.getViewportInWindowUnits().getX();
+        int sketchY = displayDevice.getViewportInWindowUnits().getY();
+        window.setTopLevelPosition(sketchX + screenRect.x + (screenRect.width - sketchWidth) / 2,
+                sketchY + screenRect.y + (screenRect.height - sketchHeight) / 2);
+    }
+
+}
+```
+The source code after refactoring is:
+```
+public class PSurfaceJOGL implements PSurface {
+
+    public void placeWindow(int[] location, int[] editorLocation) {
+        int x = window.getX() - window.getInsets().getLeftWidth();
+        int y = window.getY() - window.getInsets().getTopHeight();
+        int w = window.getWidth() + window.getInsets().getTotalWidth();
+        int h = window.getHeight() + window.getInsets().getTotalHeight();
+        if (location != null) {
+            window.setTopLevelPosition(location[0], location[1]);
+        } else if (editorLocation != null) {
+            int locationX = editorLocation[0] - 20;
+            int locationY = editorLocation[1];
+            if (locationX - w > 10) {
+                window.setTopLevelPosition(locationX - w, locationY);
+            } else {
+                locationX = editorLocation[0] + 66;
+                locationY = editorLocation[1] + 66;
+                if ((locationX + w > sketch.displayWidth - 33) ||
+                        (locationY + h > sketch.displayHeight - 33)) {
+                    // otherwise center on screen
+                    locationX = (sketch.displayWidth - w) / 2;
+                    locationY = (sketch.displayHeight - h) / 2;
+                }
+                window.setTopLevelPosition(locationX, locationY);
+            }
+        } else {
+            int sketchX = displayDevice.getViewportInWindowUnits().getX();
+            int sketchY = displayDevice.getViewportInWindowUnits().getY();
+            window.setTopLevelPosition(sketchX + screenRect.x + (screenRect.width - sketchWidth) / 2,
+                    sketchY + screenRect.y + (screenRect.height - sketchHeight) / 2);
+        }
+
+        Point frameLoc = new Point(x, y);
+        if (frameLoc.y < 0) {
+            window.setTopLevelPosition(frameLoc.x, 30);
+        }
+
+        placedWindow = true;
+        if (requestedStart) startThread();
+    }
+
+}
+```
+In this example, the developer removed the unnecessary method "setFrameCentered".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential inline method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public class ITestAzureBlobFileSystemAttributes extends AbstractAbfsIntegrationTest {
+
+    @Test
+    public void testSetGetXAttr() throws Exception {
+        AzureBlobFileSystem fs = getFileSystem();
+        AbfsConfiguration conf = fs.getAbfsStore().getAbfsConfiguration();
+        testGetSetXAttrHelper(fs, conf);
+    }
+
+    private void testGetSetXAttrHelper(final AzureBlobFileSystem fs,
+                                  final AbfsConfiguration conf){
+        Assume.assumeTrue(getIsNamespaceEnabled(fs));
+
+        byte[] attributeValue1 = fs.getAbfsStore().encodeAttribute("hi");
+        byte[] attributeValue2 = fs.getAbfsStore().encodeAttribute("你好");
+        String attributeName1 = "user.asciiAttribute";
+        String attributeName2 = "user.unicodeAttribute";
+        Path testFile = path("setGetXAttr");
+
+        // after creating a file, the xAttr should not be present
+        touch(testFile);
+        assertNull(fs.getXAttr(testFile, attributeName1));
+
+        // after setting the xAttr on the file, the value should be retrievable
+        fs.registerListener(
+                new TracingHeaderValidator(conf.getClientCorrelationId(),
+                        fs.getFileSystemId(), FSOperationType.SET_ATTR, true, 0));
+        fs.setXAttr(testFile, attributeName1, attributeValue1);
+        fs.setListenerOperation(FSOperationType.GET_ATTR);
+        assertArrayEquals(attributeValue1, fs.getXAttr(testFile, attributeName1));
+        fs.registerListener(null);
+
+        // after setting a second xAttr on the file, the first xAttr values should not be overwritten
+        fs.setXAttr(testFile, attributeName2, attributeValue2);
+        assertArrayEquals(attributeValue1, fs.getXAttr(testFile, attributeName1));
+        assertArrayEquals(attributeValue2, fs.getXAttr(testFile, attributeName2));
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

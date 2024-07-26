@@ -1,0 +1,73 @@
+Rename variable refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename variable refactoring pattern is to rename variables whose semantics are inappropriate in the context. Here is an example of the rename variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private Availability availability() {
+    if (isShutdown.get()) {
+        return Availability.SHUTDOWN;
+    }
+    int val = requirementCount.get();
+    if (val == 0) {
+        return Availability.AVAILABLE;
+    }
+    assert (val > 0); 
+    return Availability.UNAVAILABLE;
+}
+```
+The source code after refactoring is:
+```
+private Availability availability() {
+    if (isShutdown.get()) {
+        return Availability.SHUTDOWN;
+    }
+    int count = requirementCount.get();
+    if (count == 0) {
+        return Availability.AVAILABLE;
+    }
+    assert (count > 0);
+    return Availability.UNAVAILABLE;
+}
+```
+In this example, the developer renamed the variable "val" to "count".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+@Test
+public void basicAssertions(SessionFactoryScope scope) {
+    final SessionFactoryImplementor sessionFactory = scope.getSessionFactory();
+    final JdbcTypeRegistry jdbcTypeRegistry = sessionFactory.getTypeConfiguration().getJdbcTypeRegistry();
+    final EntityPersister entityDescriptor = sessionFactory.getMappingMetamodel().getEntityDescriptor(
+            LocaleMappingTestEntity.class );
+
+    {
+        final BasicAttributeMapping localeAttribute = (BasicAttributeMapping) entityDescriptor.findAttributeMapping(
+                "locale" );
+        assertThat( localeAttribute.getJdbcMapping().getJdbcType() )
+                .isEqualTo( jdbcTypeRegistry.getDescriptor( Types.VARCHAR ) );
+        assertThat( localeAttribute.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass() ).isEqualTo(
+                Locale.class );
+    }
+
+    {
+        final PluralAttributeMapping yearsAttribute = (PluralAttributeMapping) entityDescriptor.findAttributeMapping(
+                "locales" );
+        final BasicValuedCollectionPart elementDescriptor = (BasicValuedCollectionPart) yearsAttribute.getElementDescriptor();
+        assertThat( elementDescriptor.getJdbcMapping().getJdbcType() )
+                .isEqualTo( jdbcTypeRegistry.getDescriptor( Types.VARCHAR ) );
+        assertThat( elementDescriptor.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass() ).isEqualTo(
+                Locale.class );
+    }
+
+    {
+        final PluralAttributeMapping countByLocaleAttribute = (PluralAttributeMapping) entityDescriptor.findAttributeMapping(
+                "countByLocale" );
+        final BasicValuedCollectionPart keyDescriptor = (BasicValuedCollectionPart) countByLocaleAttribute.getIndexDescriptor();
+        assertThat( keyDescriptor.getJdbcMapping().getJdbcType() )
+                .isEqualTo( jdbcTypeRegistry.getDescriptor( Types.VARCHAR ) );
+        assertThat( keyDescriptor.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass() ).isEqualTo(
+                Locale.class );
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

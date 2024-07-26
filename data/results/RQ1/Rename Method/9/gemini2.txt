@@ -1,0 +1,73 @@
+## Refactoring Opportunities in DescriptorsGenerator Class
+
+Here are some refactoring opportunities in the `DescriptorsGenerator` class:
+
+1. **Descriptive Method Names:**
+
+  * `collectDependencies` can be renamed to `buildPackageDependencyMap` for better clarity.
+  * `prepareModulesWithDependencies` can be renamed to `calculateModuleDependencies` to reflect its purpose.
+  * `prepareModuleInfos` can be renamed to `createModuleInfoList` for better readability.
+
+2. **Extract Method:**
+
+  * The logic for creating `ModuleInfo` objects can be extracted into a separate method named `createModuleInfo` to improve code organization.
+
+3. **Use Optional for ModuleNode:**
+
+  * The `findLibraryNodes` method can potentially return null. Consider using `Optional<ModuleNode>` to handle this case explicitly.
+
+4. **Simplify `merge` method:**
+
+  * The `merge` method can be simplified using `orElse` and `addAll` methods from `Set` interface.
+
+Here's the refactored code with the suggested changes:
+
+```java
+class DescriptorsGenerator {
+  // ... other fields and methods
+
+  private Map<String, Set<ModuleNode>> buildPackageDependencyMap(@NotNull List<ModuleFiles> modulesFiles) {
+    // ... existing implementation
+  }
+
+  private Set<ModuleNode> calculateModuleDependencies(@NotNull Map<String, Set<ModuleNode>> packagesDeclaredInModules) {
+    // ... existing implementation
+  }
+
+  private List<ModuleInfo> createModuleInfoList(@NotNull Set<ModuleNode> modules) {
+    List<ModuleInfo> moduleInfos = new ArrayList<>();
+    for (ModuleNode moduleNode : modules) {
+      // ... existing logic for creating ModuleInfo objects
+      moduleInfos.add(createModuleInfo(moduleNode));  // Call the extracted method
+    }
+    return moduleInfos;
+  }
+
+  private ModuleInfo createModuleInfo(ModuleNode moduleNode) {
+    // ... existing logic for creating a single ModuleInfo
+  }
+
+  @Nullable
+  private Optional<ModuleNode> findLibraryNodes(@NotNull Map<String, Set<ModuleNode>> packagesDeclaredInModules,
+                                                  @NotNull Map<PsiJavaModule, ModuleNode> nodesByDescriptor,
+                                                  @NotNull Project project,
+                                                  @NotNull Library library) {
+    // ... existing implementation
+
+    final PsiJavaModule descriptor = ReadAction.compute(() -> JavaModuleGraphUtil.findDescriptorByFile(libraryFiles[0], project));
+    if (descriptor == null) return Optional.empty();  // Handle null case explicitly
+
+    // ... remaining logic
+  }
+
+  private static <T> Set<T> merge(@Nullable Set<T> first, @Nullable Set<T> second, @NotNull Supplier<Set<T>> initializer) {
+    return first.orElse(Collections.emptySet()) // Use orElse for null handling
+           .stream()
+           .collect(Collectors.toSet());  // Simplify using existing methods
+  }
+
+  // ... other methods
+}
+```
+
+These refactorings improve code readability and maintainability without changing the core functionality.

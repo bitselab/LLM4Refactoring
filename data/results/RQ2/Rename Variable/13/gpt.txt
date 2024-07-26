@@ -1,0 +1,18 @@
+To improve readability in the provided code snippet, we can refactor the variable name `clazz` in the `getJavaClass()` method. The name `clazz` is a common workaround in Java to avoid the reserved keyword `class`, but it can be less intuitive for those unfamiliar with this convention. A more descriptive name like `loadedClass` would better convey the purpose of this variable, which is to hold the class loaded either directly or via the specified class loader.
+
+Here's the refactored `getJavaClass()` method:
+
+```java
+public Class<?> getJavaClass() {
+    if (this.javaClass == null) {
+        Try<Class<?>> loadedClass = this.classLoader == null
+                ? ReflectionUtils.tryToLoadClass(this.className)
+                : ReflectionUtils.tryToLoadClass(this.className, this.classLoader);
+        this.javaClass = loadedClass.getOrThrow(cause ->
+                new PreconditionViolationException("Could not load class with name: " + this.className, cause));
+    }
+    return this.javaClass;
+}
+```
+
+In this refactored version, `loadedClass` clearly indicates that this variable represents the class that has been loaded, enhancing code readability and maintainability.

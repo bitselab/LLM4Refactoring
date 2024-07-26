@@ -1,0 +1,64 @@
+The provided code snippet presents several opportunities for refactoring:
+
+1. **Reduce Code Duplication:**
+   - There is duplicated logic in `setMessage` for setting the outline property based on the message type (error or warning). This can be refactored into a separate method to set the outline based on the message and a boolean flag.
+
+2. **Extract Error Handling Logic:**
+   - The logic within `checkError` in the `ErrorBorder` class can be extracted into a separate utility method `hasErrorOutline` that takes a `JComponent` as input and returns a boolean indicating the presence of an error or warning outline.
+
+3. **Simplify `createTextField`:**
+   - The `createTextField` method sets up various properties and listeners for the text field. This can be simplified by creating a separate method(s) to handle specific functionalities like setting the error border or adding the key listener for Enter press.
+
+4. **Consider Alternative for `ErrorBorder`:**
+   - The custom `ErrorBorder` class can be potentially replaced with utilizing a `FocusListener` to dynamically update the border based on the outline property of the text field. This might reduce the complexity of the border class.
+
+Here's the refactored code incorporating these suggestions:
+
+```java
+// ... imports
+
+public class NewItemSimplePopupPanel extends JBPanel implements Disposable {
+
+  // ... other fields
+
+  public void setError(@NlsContexts.DialogMessage String error) {
+    setMessage(error, false);
+  }
+
+  public void setWarning(@NlsContexts.DialogMessage String warning) {
+    setMessage(warning, true);
+  }
+
+  private void setMessage(String message, boolean isWarning) {
+    myTextField.putClientProperty("JComponent.outline", getOutlineType(message, isWarning));
+    // ... rest of the logic from setMessage
+  }
+
+  private String getOutlineType(String message, boolean isWarning) {
+    return message != null ? (isWarning ? "warning" : "error") : null;
+  }
+
+  // ... other methods
+
+  protected @NotNull ExtendableTextField createTextField(boolean liveErrorValidation) {
+    ExtendableTextField textField = createNonCustomizedTextField();
+    // ... set preferred size, minimum size, columns
+    textField.setBorder(createErrorBorder(textField));
+    // ... other textField setup logic
+    return textField;
+  }
+
+  private Border createErrorBorder(JComponent component) {
+    returnBorderFactory.createLineBorder(JBUI.CurrentTheme.NewClassDialog.bordersColor(), 1);
+  }
+
+  protected static boolean hasErrorOutline(JComponent component) {
+    DarculaUIUtil.Outline outline = DarculaUIUtil.getOutline(component);
+    return DarculaUIUtil.isWarningOrError(outline);
+  }
+
+  // ... other methods
+}
+```
+
+These are just suggestions, and the final implementation might depend on your specific needs and preferences. 

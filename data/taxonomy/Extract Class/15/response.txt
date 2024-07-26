@@ -1,0 +1,97 @@
+The given code snippet from the `TransactionAutoConfiguration` class is a typical example of Spring Boot's approach to configuring transaction management through auto-configuration. To determine potential extract class refactoring opportunities, we need to look for groups of attributes or methods that can logically belong together in a separate class, simplifying the main class while maintaining a clear focus on related functionalities.
+
+### Analysis of the Current Code
+
+1. **Transactional Operators and Templates**:
+   - The methods `transactionalOperator` and the inner class `TransactionTemplateConfiguration` handle operations related to reactive and non-reactive transaction management respectively. These two aspects could potentially be separated into distinct classes.
+
+2. **Configuration Classes**:
+   - `EnableTransactionManagementConfiguration` and its nested configurations (`JdkDynamicAutoProxyConfiguration` and `CglibAutoProxyConfiguration`) manage the details of how transactions are proxied. These configurations could potentially be abstracted into their own classes focusing specifically on proxy management.
+
+### Suggested Refactoring
+
+Given the structure and responsibilities in the existing code, it seems that the configurations related to transaction proxying (JDK dynamic proxy and CGLIB proxy) are candidates for extraction. This would separate the concerns of transaction management configuration from the specific proxy configurations, which can often vary independently based on different deployment or development scenarios.
+
+#### Refactored Code
+
+```java
+package org.springframework.boot.autoconfigure.transaction;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.ReactiveTransactionManager;
+import org.springframework.transaction.TransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.reactive.TransactionalOperator;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
+
+@AutoConfiguration
+@ConditionalOnClass(PlatformTransactionManager.class)
+@EnableConfigurationProperties(TransactionProperties.class)
+public class TransactionAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    TransactionManagerCustomizers platformTransactionManagerCustomizers(
+            ObjectProvider<PlatformTransactionManagerCustomizer<?>> customizers) {
+        return new TransactionManagerCustomizers(customizers.orderedStream().toList());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnSingleCandidate(ReactiveTransactionManager.class)
+    public TransactionalOperator transactionalOperator(ReactiveTransactionManager transactionManager) {
+        return TransactionalOperator.create(transactionManager);
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnSingleCandidate(PlatformTransactionManager.class)
+    public static class TransactionTemplateConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean(TransactionOperations.class)
+        public TransactionTemplate transactionTemplate(PlatformTransactionManager transactionManager) {
+            return new TransactionTemplate(transactionManager);
+        }
+
+    }
+}
+
+@Configuration
+@ConditionalOnBean(TransactionManager.class)
+@ConditionalOnMissingBean(AbstractTransactionManagementConfiguration.class)
+class TransactionProxyConfiguration {
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableTransactionManagement(proxyTargetClass = false)
+    @ConditionalOnProperty(prefix = "spring.aop", name = "proxy-target-class", havingValue = "false")
+    public static class JdkDynamicAutoProxyConfiguration {
+
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableTransactionManagement(proxyTargetClass = true)
+    @ConditionalOnProperty(prefix = "spring.aop", name = "proxy-target-class", havingValue = "true",
+            matchIfMissing = true)
+    public static class CglibAutoProxyConfiguration {
+
+    }
+
+}
+```
+
+### Explanation
+- The `TransactionProxyConfiguration` class has been extracted to handle all configuration related to transaction proxying. This keeps the main `TransactionAutoConfiguration` class focused on providing the basic transaction manager customization and reactive transaction support.
+- The proxy-related configurations have been isolated, making it easier to modify or extend proxy behavior without affecting the rest of the transaction configuration.
+
+This refactoring maintains the separation of concerns and can potentially improve the maintainability and clarity of the Spring Boot auto-configuration classes.

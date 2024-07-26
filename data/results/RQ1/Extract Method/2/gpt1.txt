@@ -1,0 +1,78 @@
+Reviewing the provided code, which is a test class for `ClosedInputStream` in the Apache Commons IO package, it seems well-structured and follows good coding practices. However, there are a few minor refactoring opportunities that can make the code more concise and maintainable:
+
+1. **Reduce Duplication in Test Cases**: The test methods `testRead()`, `testReadArray()`, and `testReadArrayIndex()` have similar structures. We can introduce a private helper method to reduce this duplication.
+
+2. **Parameterized Tests**: Since `testReadArray()` and `testReadArrayIndex()` are testing similar functionality with different parameters, we can use JUnit's parameterized tests feature to combine these tests and run them with different parameters.
+
+3. **Clarify Test Names**: The test method names can be more descriptive to reflect the specific scenario they are testing.
+
+Here is the refactored code:
+
+```java
+package org.apache.commons.io.input;
+
+import static org.apache.commons.io.IOUtils.EOF;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.stream.Stream;
+
+/**
+ * Tests {@link ClosedInputStream}.
+ */
+public class ClosedInputStreamTest {
+
+    @Test
+    public void whenReadSingleByte_shouldReturnEndOfFile() throws Exception {
+        testWithClosedInputStream(cis -> assertEquals(EOF, cis.read(), "read()"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("byteArrayProvider")
+    public void whenReadByteArray_shouldReturnEndOfFile(byte[] bytes) throws Exception {
+        testWithClosedInputStream(cis -> assertEquals(EOF, cis.read(bytes)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("byteArrayProvider")
+    public void whenReadByteArrayWithOffset_shouldReturnEndOfFile(byte[] bytes) throws Exception {
+        testWithClosedInputStream(cis -> assertEquals(EOF, cis.read(bytes, 0, bytes.length)));
+    }
+
+    @Test
+    public void whenUsingSingletonInstances_shouldReturnEndOfFile() throws Exception {
+        testSingletonInstance(ClosedInputStream.CLOSED_INPUT_STREAM);
+        testSingletonInstance(ClosedInputStream.INSTANCE);
+    }
+
+    private static Stream<byte[]> byteArrayProvider() {
+        return Stream.of(
+                new byte[4096],
+                new byte[1],
+                new byte[0]
+        );
+    }
+
+    private void testWithClosedInputStream(ThrowingConsumer<ClosedInputStream> test) throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            test.accept(cis);
+        }
+    }
+
+    private void testSingletonInstance(ClosedInputStream singletonInstance) throws Exception {
+        try (@SuppressWarnings("deprecation")
+             ClosedInputStream cis = singletonInstance) {
+            assertEquals(EOF, cis.read(), "read()");
+        }
+    }
+
+    @FunctionalInterface
+    interface ThrowingConsumer<T> {
+        void accept(T t) throws Exception;
+    }
+}
+```
+
+This refactoring maintains the original functionality while making the code more concise and easier to maintain. It also enhances the clarity of what each test is verifying.

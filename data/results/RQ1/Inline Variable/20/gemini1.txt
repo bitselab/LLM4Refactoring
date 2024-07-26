@@ -1,0 +1,64 @@
+In this code, there are some minor refactoring opportunities to improve readability and maintain the current functionality. Here's the refactored version with explanations:
+
+**1. Use More Descriptive Test Data Names:**
+- Renaming `SIMPLE_PERSON_ROW`, `EXTENDED_PERSON_ROW`, and `EMAIL_PERSON_ROW` to names that reflect their content improves readability:
+
+```java
+private static final MockRow FULL_NAME_AND_AGE_ROW = MockRow.builder()
+    // ... (Define row details)
+    .build();
+
+private static final MockRow FULL_PERSON_INFO_ROW = MockRow.builder()
+    // ... (Define row details)
+    .build();
+
+private static final MockRow WITH_EMAIL_ROW = MockRow.builder()
+    // ... (Define row details)
+    .build();
+```
+
+**2. Consider Separate Test Data Builder Class (Optional):**
+- If `buildRowWithExtraColumn` is used extensively, you can create a separate test data builder class for better organization:
+
+```java
+// New class: TestPersonRowBuilder.java
+public class TestPersonRowBuilder {
+
+    private MockRowMetadata.Builder metadataBuilder;
+    private List<MockRow.Builder.IdentifiedValue> identifiedValues;
+
+    public TestPersonRowBuilder() {
+        this.metadataBuilder = MockRowMetadata.builder();
+        this.identifiedValues = new ArrayList<>();
+    }
+
+    public TestPersonRowBuilder withColumn(String name, Class<?> javaType) {
+        this.metadataBuilder.columnMetadata(MockColumnMetadata.builder().name(name).javaType(javaType).build());
+        return this;
+    }
+
+    public TestPersonRowBuilder withIdentifiedValue(String name, Class<?> identifiedClass, Object value) {
+        this.identifiedValues.add(MockRow.builder().identified(name, identifiedClass, value).build());
+        return this;
+    }
+
+    public MockRow build() {
+        return MockRow.builder()
+                .metadata(metadataBuilder.build())
+                .identifiedValues(identifiedValues)
+                .build();
+    }
+}
+
+// Usage in R2dbcBeanPropertyRowMapperTests.java
+private static final MockRow FULL_NAME_AND_AGE_ROW = new TestPersonRowBuilder()
+    .withColumn("firstName", String.class)
+    .withColumn("lastName", String.class)
+    .withColumn("age", Integer.class)
+    .withIdentifiedValue("firstName", String.class, "John")
+    .withIdentifiedValue("lastName", String.class, "Doe")
+    .withIdentifiedValue("age", int.class, 30)
+    .build();
+```
+
+These refactorings maintain the code's functionality while improving readability and potential maintainability. 

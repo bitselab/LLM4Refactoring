@@ -1,0 +1,232 @@
+In the provided code snippet from the `FileChannelDataBlock` class, several opportunities exist to apply the "extract method" refactoring pattern to improve code readability, maintainability, and potentially facilitate unit testing. Let's review potential refactorings:
+
+1. **Extracting buffer read logic:**
+   - The method `ManagedFileChannel.read` contains logic to handle buffer position checks and buffer reading that could be extracted into a separate method. This refactoring would encapsulate the buffer management logic, making the `read` method simpler and more focused.
+
+2. **Extracting channel opening logic:**
+   - The method `ManagedFileChannel.open` manages opening a file channel and initializing buffer properties. This logic could be extracted to ensure that channel opening and buffer initialization are modularized, improving the clarity of the `open` method.
+
+3. **Extracting channel closing logic:**
+   - The method `ManagedFileChannel.close` involves several steps to decrement the reference count, close the channel, and reset buffer-related properties. Extracting this into a method like `closeFileChannel` would make the `close` method more streamlined and easier to understand.
+
+Let's implement these refactorings:
+
+### Refactored Code
+```java
+package org.springframework.boot.loader.zip;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ClosedByInterruptException;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.function.Supplier;
+
+import org.springframework.boot.loader.log.DebugLogger;
+
+class FileChannelDataBlock implements CloseableDataBlock {
+
+    private static final DebugLogger debug = DebugLogger.get(FileChannelDataBlock.class);
+
+    static Tracker tracker;
+
+    private final ManagedFileChannel channel;
+
+    private final long offset;
+
+    private final long size;
+
+    FileChannelDataBlock(Path path) throws IOException {
+        this.channel = new ManagedFileChannel(path);
+        this.offset = 0;
+        this.size = Files.size(path);
+    }
+
+    FileChannelDataBlock(ManagedFileChannel channel, long offset, long size) {
+        this.channel = channel;
+        this.offset = offset;
+        this.size = size;
+    }
+
+    @Override
+    public long size() throws IOException {
+        return this.size;
+    }
+
+    @Override
+    public int read(ByteBuffer dst, long pos) throws IOException {
+        if (pos < 0) {
+            throw new IllegalArgumentException("Position must not be negative");
+        }
+        ensureOpen(ClosedChannelException::new);
+        return channel.readWithBufferManagement(dst, pos, this.size, this.offset);
+    }
+
+    void open() throws IOException {
+        channel.open();
+    }
+
+    @Override
+    public void close() throws IOException {
+        channel.close();
+    }
+
+    <E extends Exception> void ensureOpen(Supplier<E> exceptionSupplier) throws E {
+        channel.ensureOpen(exceptionSupplier);
+    }
+
+    FileChannelDataBlock slice(long offset) throws IOException {
+        return slice(offset, this.size - offset);
+    }
+
+    FileChannelDataBlock slice(long offset, long size) {
+        return this.channel.createSlice(offset, size, this);
+    }
+
+    static class ManagedFileChannel {
+
+        static final int BUFFER_SIZE = 1024 * 10;
+
+        private final Path path;
+
+        private int referenceCount;
+
+        private FileChannel fileChannel;
+
+        private ByteBuffer buffer;
+
+        private long bufferPosition = -1;
+
+        private int bufferSize;
+
+        private final Object lock = new Object();
+
+        ManagedFileChannel(Path path) {
+            if (!Files.isRegularFile(path)) {
+                throw new IllegalArgumentException(path + " must be a regular file");
+            }
+            this.path = path;
+        }
+
+        int readWithBufferManagement(ByteBuffer dst, long position, long size, long offset) throws IOException {
+            synchronized (lock) {
+                if (position < bufferPosition || position >= bufferPosition + bufferSize) {
+                    refreshBuffer(position);
+                }
+                return bufferToDestination(dst, position);
+            }
+        }
+
+        void open() throws IOException {
+            synchronized (lock) {
+                if (referenceCount == 0) {
+                    initiateFileChannel();
+                }
+                referenceCount++;
+                debug.log("Reference count for '%s' incremented to %s", path, referenceCount);
+            }
+        }
+
+        void close() throws IOException {
+            synchronized (lock) {
+                if (referenceCount == 0) {
+                    return;
+                }
+                referenceCount--;
+                if (referenceCount == 0) {
+                    closeFileChannel();
+                }
+                debug.log("Reference count for '%s' decremented to %s", path, referenceCount);
+            }
+        }
+
+        <E extends Exception> void ensureOpen(Supplier<E> exceptionSupplier) throws E {
+            synchronized (lock) {
+                if (referenceCount == 0 || !fileChannel.isOpen()) {
+                    throw exceptionSupplier.get();
+                }
+            }
+        }
+
+        private void refreshBuffer(long position) throws IOException {
+            for (int i = 0; i < 10; i++) {
+                boolean interrupted = (i != 0) ? Thread.interrupted() : false;
+                try {
+                    buffer.clear();
+                    bufferSize = fileChannel.read(buffer, position);
+                    bufferPosition = position;
+                    return;
+                } catch (ClosedByInterruptException ex) {
+                    repairFileChannel();
+                } finally {
+                    if (interrupted) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+            throw new ClosedByInterruptException();
+        }
+
+        private int bufferToDestination(ByteBuffer dst, long position) {
+            if (bufferSize <= 0) {
+                return bufferSize;
+            }
+            int offset = (int) (position - bufferPosition);
+            int length = Math.min(bufferSize - offset, dst.remaining());
+            dst.put(dst.position(), buffer, offset, length);
+            dst.position(dst.position() + length);
+            return length;
+        }
+
+        private void initiateFileChannel() throws IOException {
+            debug.log("Opening '%s'", path);
+            fileChannel = FileChannel.open(path, StandardOpenOption.READ);
+            buffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
+            if (tracker != null) {
+                tracker.openedFileChannel(path, fileChannel);
+            }
+        }
+
+        private void closeFileChannel() throws IOException {
+            debug.log("Closing '%s'", path);
+            buffer = null;
+            bufferPosition = -1;
+            bufferSize = 0;
+            fileChannel.close();
+            if (tracker != null) {
+                tracker.closedFileChannel(path, fileChannel);
+            }
+            fileChannel = null;
+        }
+
+        FileChannelDataBlock createSlice(long offset, long size, FileChannelDataBlock parent) {
+            if (offset == 0 && size == parent.size) {
+                return parent;
+            }
+            if (offset < 0) {
+                throw new IllegalArgumentException("Offset must not be negative");
+            }
+            if (size < 0 || offset + size > parent.size) {
+                throw new IllegalArgumentException("Size must not be negative and must be within bounds");
+            }
+            debug.log("Slicing %s at %s with size %s", fileChannel, offset, size);
+            return new FileChannelDataBlock(this, parent.offset + offset, size);
+        }
+
+        @Override
+        public String toString() {
+            return path.toString();
+        }
+    }
+
+    interface Tracker {
+        void openedFileChannel(Path path, FileChannel fileChannel);
+        void closedFileChannel(Path path, FileChannel fileChannel);
+    }
+}
+```
+
+This refactoring introduces new methods to manage buffer and channel operations more cleanly and makes the overall structure of the class easier to understand.

@@ -1,0 +1,149 @@
+In the provided code snippet, there are several opportunities for renaming variables to improve readability and understanding. Here are my suggestions for renaming:
+
+1. **`headerBlockParser` and `headerBlockFragments`**: These variables are quite descriptive. However, if they are specific to HTTP headers, they could be renamed to `httpHeaderBlockParser` and `httpHeaderBlockFragments` respectively for additional clarity.
+
+2. **`buffer`**: This variable is used throughout the code, but it's not clear what kind of buffer it is. A more descriptive name like `byteBuffer` could be helpful.
+
+3. **`state`**: The variable `state` is used to track the parsing state. A more descriptive name like `parsingState` could provide immediate context.
+
+4. **`length`**: This variable is used to track the length of something, but it's unclear what that something is. A more specific name like `frameLength` or `dataLength` could be more informative.
+
+5. **`frame`**: This variable is used in several places to refer to a `ContinuationFrame`. A more descriptive name like `continuationFrame` would be clearer.
+
+6. **`last`**: In the context of the `parse` method, this variable is used to determine if the current frame is the last one. Renaming it to `isLastFrame` would be more descriptive.
+
+7. **`metaData`**: While `metaData` is descriptive, it could be made more specific like `parsedMetaData` to indicate that it's the result of a parsing operation.
+
+8. **Method parameter `buffer`**: In methods like `emptyBody` and `onHeaders`, the parameter `buffer` could be renamed to `byteBuffer` for consistency and clarity.
+
+Now, I will refactor the code with these suggested variable name changes.
+
+Here is the refactored version of the code with improved variable names for enhanced readability:
+
+```java
+package org.eclipse.jetty.http2.parser;
+
+import java.nio.ByteBuffer;
+
+import org.eclipse.jetty.http.MetaData;
+import org.eclipse.jetty.http2.ErrorCode;
+import org.eclipse.jetty.http2.Flags;
+import org.eclipse.jetty.http2.frames.ContinuationFrame;
+import org.eclipse.jetty.http2.frames.HeadersFrame;
+
+public class ContinuationBodyParser extends BodyParser {
+    private final HeaderBlockParser httpHeaderBlockParser;
+    private final HeaderBlockFragments httpHeaderBlockFragments;
+    private State parsingState = State.PREPARE;
+    private int frameLength;
+
+    public ContinuationBodyParser(HeaderParser headerParser, Parser.Listener listener, HeaderBlockParser headerBlockParser, HeaderBlockFragments headerBlockFragments) {
+        super(headerParser, listener);
+        this.httpHeaderBlockParser = headerBlockParser;
+        this.httpHeaderBlockFragments = headerBlockFragments;
+    }
+
+    @Override
+    protected void emptyBody(ByteBuffer byteBuffer) {
+        if (hasFlag(Flags.END_HEADERS)) {
+            onHeaders(byteBuffer);
+        } else {
+            ContinuationFrame continuationFrame = new ContinuationFrame(getStreamId(), hasFlag(Flags.END_HEADERS));
+            if (!rateControlOnEvent(continuationFrame))
+                connectionFailure(byteBuffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+        }
+    }
+
+    @Override
+    public boolean parse(ByteBuffer byteBuffer) {
+        while (byteBuffer.hasRemaining()) {
+            switch (parsingState) {
+                case PREPARE:
+                    // SPEC: wrong streamId is treated as connection error.
+                    if (getStreamId() == 0)
+                        return connectionFailure(byteBuffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_frame");
+
+                    if (getStreamId() != httpHeaderBlockFragments.getStreamId())
+                        return connectionFailure(byteBuffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                    frameLength = getBodyLength();
+                    parsingState = State.FRAGMENT;
+                    break;
+
+                case FRAGMENT:
+                    int remaining = byteBuffer.remaining();
+                    boolean isLastFrame = hasFlag(Flags.END_HEADERS);
+                    if (remaining < frameLength) {
+                        ContinuationFrame continuationFrame = new ContinuationFrame(getStreamId(), false);
+                        if (!rateControlOnEvent(continuationFrame))
+                            return connectionFailure(byteBuffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+
+                        if (!httpHeaderBlockFragments.storeFragment(byteBuffer, remaining, false))
+                            return connectionFailure(byteBuffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                        frameLength -= remaining;
+                    } else {
+                        ContinuationFrame continuationFrame = new ContinuationFrame(getStreamId(), isLastFrame);
+                        if (!rateControlOnEvent(continuationFrame))
+                            return connectionFailure(byteBuffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+
+                        if (!httpHeaderBlockFragments.storeFragment(byteBuffer, frameLength, isLastFrame))
+                            return connectionFailure(byteBuffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                        reset();
+                        if (isLastFrame)
+                            return onHeaders(byteBuffer);
+                        return true;
+                    }
+                    break;
+
+                default:
+                    throw new IllegalStateException("Unknown parsing state: " + parsingState);
+            }
+        }
+        return false;
+    }
+
+    private boolean onHeaders(ByteBuffer byteBuffer) {
+        ByteBuffer headerBlock = httpHeaderBlockFragments.complete();
+        MetaData parsedMetaData = httpHeaderBlockParser.parse(headerBlock, headerBlock.remaining());
+        httpHeaderBlockFragments.getByteBufferPool().release(headerBlock);
+        HeadersFrame headersFrame = new HeadersFrame(getStreamId(), parsedMetaData, httpHeaderBlockFragments.getPriorityFrame(), httpHeaderBlockFragments.isEndStream());
+        httpHeaderBlockFragments.reset();
+
+        if (parsedMetaData == HeaderBlockParser.SESSION_FAILURE)
+            return false;
+
+        if (parsedMetaData != HeaderBlockParser.STREAM_FAILURE) {
+            notifyHeaders(headersFrame);
+        } else {
+            if (!rateControlOnEvent(headersFrame))
+                return connectionFailure(byteBuffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_headers_frame_rate");
+        }
+        return true;
+    }
+
+    private void reset() {
+        parsingState = State.PREPARE;
+        frameLength = 0;
+    }
+
+    private enum State {
+        PREPARE, FRAGMENT
+    }
+}
+```
+
+In this refactored version:
+
+- `headerBlockParser` and `headerBlockFragments` are renamed to `httpHeaderBlockParser` and `httpHeaderBlockFragments` respectively for additional clarity.
+- `buffer` is renamed to `byteBuffer` to specify the type of buffer.
+- `state` is changed to `parsingState` to clarify its purpose.
+- `length`
+
+ is renamed to `frameLength` to specify what it measures.
+- `frame` is changed to `continuationFrame` for clarity.
+- `last` is renamed to `isLastFrame` to indicate its boolean nature.
+- `metaData` is renamed to `parsedMetaData` to indicate the result of a parsing operation.
+
+These changes aim to enhance code readability and make the purpose of each variable more explicit.

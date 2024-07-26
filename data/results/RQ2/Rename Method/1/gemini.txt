@@ -1,0 +1,17 @@
+Absolutely, here's the refactored code with an improved method name:
+
+```java
+public static String calculateRelativePath(String baseDirectory, String path) {
+  String resultPath;
+  if (baseDirectory == null) {
+    resultPath = path;
+  } else {
+    final Path pathAbsolute = Paths.get(path);
+    final Path pathBase = Paths.get(baseDirectory);
+    resultPath = pathBase.relativize(pathAbsolute).toString();
+  }
+  return resultPath;
+}
+```
+
+The original method name `relativizeAndNormalizePath` was descriptive but contained two functionalities. By renaming it to `calculateRelativePath`, we focus on the core functionality of the method, which is to calculate the relative path between two paths. 

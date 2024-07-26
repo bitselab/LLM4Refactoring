@@ -1,0 +1,106 @@
+Based on the provided code snippet, a few refactoring opportunities can be identified to improve the code's readability, maintainability, and efficiency. I'll address these opportunities and present a refactored version of the code.
+
+### Refactoring Opportunities
+
+1. **Reduce Duplication**: There is repetitive code in the test methods, especially in setting up mock behavior and assertions. This can be extracted into helper methods.
+
+2. **Use Constants**: There are hardcoded timeout values (like `30_000L` and `1L`) used multiple times. These can be defined as constants.
+
+3. **Improve Readability**: Some methods are quite long and do multiple things, which can be broken down into smaller, more focused methods.
+
+4. **Consistent Naming**: Ensure consistent naming conventions for test methods to improve readability.
+
+5. **Optimize Imports**: Organize and possibly optimize imports.
+
+### Refactored Code
+
+```java
+package org.springframework.messaging.core;
+
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.messaging.*;
+import org.springframework.messaging.support.*;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.BDDMockito.willAnswer;
+
+class GenericMessagingTemplateTests {
+
+    private static final long SEND_TIMEOUT = 30_000L;
+    private static final long RECEIVE_TIMEOUT = 1L;
+
+    private GenericMessagingTemplate template;
+    private StubMessageChannel messageChannel;
+    private ThreadPoolTaskExecutor executor;
+
+    @BeforeEach
+    void setup() {
+        messageChannel = new StubMessageChannel();
+        template = new GenericMessagingTemplate();
+        template.setDefaultDestination(messageChannel);
+        template.setDestinationResolver(new TestDestinationResolver());
+        executor = new ThreadPoolTaskExecutor();
+        executor.afterPropertiesSet();
+    }
+
+    @Test
+    void shouldSendWithTimeout() {
+        SubscribableChannel channel = setupMockChannel();
+        Message<?> message = createMessageWithTimeouts();
+
+        template.send(channel, message);
+
+        verifySendBehavior(channel);
+        assertMessageHeaders(message);
+    }
+
+    // ... Other test methods ...
+
+    private SubscribableChannel setupMockChannel() {
+        SubscribableChannel channel = mock(SubscribableChannel.class);
+        final AtomicReference<Message<?>> sent = new AtomicReference<>();
+        willAnswer(invocation -> {
+            sent.set(invocation.getArgument(0));
+            return true;
+        }).given(channel).send(any(Message.class), eq(SEND_TIMEOUT));
+        return channel;
+    }
+
+    private Message<?> createMessageWithTimeouts() {
+        return MessageBuilder.withPayload("request")
+                             .setHeader(GenericMessagingTemplate.DEFAULT_SEND_TIMEOUT_HEADER, SEND_TIMEOUT)
+                             .setHeader(GenericMessagingTemplate.DEFAULT_RECEIVE_TIMEOUT_HEADER, RECEIVE_TIMEOUT)
+                             .build();
+    }
+
+    private void verifySendBehavior(SubscribableChannel channel) {
+        verify(channel).send(any(Message.class), eq(SEND_TIMEOUT));
+    }
+
+    private void assertMessageHeaders(Message<?> message) {
+        assertThat(message.getHeaders().containsKey(GenericMessagingTemplate.DEFAULT_SEND_TIMEOUT_HEADER)).isFalse();
+        assertThat(message.getHeaders().containsKey(GenericMessagingTemplate.DEFAULT_RECEIVE_TIMEOUT_HEADER)).isFalse();
+    }
+
+    // ... Rest of the methods and inner classes ...
+}
+```
+
+### Explanation
+- Extracted repeated code in tests into helper methods like `setupMockChannel`, `createMessageWithTimeouts`, `verifySendBehavior`, and `assertMessageHeaders`.
+- Introduced `SEND_TIMEOUT` and `RECEIVE_TIMEOUT` constants to replace the hardcoded timeout values.
+- Improved method names for clarity and consistency.
+- Removed some unnecessary comments and optimized imports for brevity.
+
+These changes aim to make the code more maintainable and easier to read, which is crucial for any collaborative project.

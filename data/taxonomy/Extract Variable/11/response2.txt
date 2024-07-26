@@ -1,0 +1,37 @@
+In the provided code snippet, an opportunity for the extract variable refactoring pattern can be identified for the repeated method call `exchange.getRequest()`. By extracting this expression into a variable, the code readability can be improved, making it easier to follow the logic and ensuring consistency in accessing the same object. This refactoring also ensures that if the implementation of `getRequest()` changes in the future, the refactoring point would be centralized to this new variable.
+
+Here's the refactored version of the code:
+
+```java
+public boolean associate(HttpExchange exchange)
+{
+    boolean result = false;
+    boolean abort = true;
+    HttpRequest request = exchange.getRequest(); // Extracted variable
+    try (AutoLock ignored = _lock.lock())
+    {
+        if (_exchange == null)
+        {
+            abort = false;
+            result = exchange.associate(this);
+            if (result)
+                _exchange = exchange;
+        }
+    }
+
+    if (abort)
+    {
+        request.abort(new UnsupportedOperationException("Pipelined requests not supported"));
+    }
+    else
+    {
+        request.setConnection(getConnection());
+        if (LOG.isDebugEnabled())
+            LOG.debug("{} associated {} to {}", exchange, result, this);
+    }
+
+    return result;
+}
+```
+
+In this version, `exchange.getRequest()` is called once and stored in the `request` variable. This variable is then used wherever `exchange.getRequest()` was originally called, thus adhering to the extract variable refactoring pattern to remove repeated expressions and improve code readability.

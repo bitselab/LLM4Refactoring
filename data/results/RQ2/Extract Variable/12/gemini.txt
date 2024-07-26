@@ -1,0 +1,62 @@
+Here's the refactored code with the extracted variable:
+
+```java
+private void writeCommitData(CancellableDigestOutputStream out)
+        throws IOException {
+    ProgressMonitor monitor = out.getWriteMonitor();
+    int[] generations = computeGenerationNumbers(monitor);
+    monitor.beginTask(JGitText.get().writingOutCommitGraph,
+            graphCommits.size());
+    int num = 0;
+    byte[] tmp = new byte[hashsz + COMMIT_DATA_WIDTH];
+    int i = 0;
+    for (RevCommit commit : graphCommits) {
+        int edgeValue;
+        int[] packedDate = new int[2];
+
+        ObjectId treeId = commit.getTree();
+        treeId.copyRawTo(tmp, 0);
+
+        RevCommit[] parents = commit.getParents();
+        if (parents.length == 0) {
+            edgeValue = GRAPH_NO_PARENT;
+        } else {
+            RevCommit parent = parents[0];
+            edgeValue = graphCommits.getOidPosition(parent);
+        }
+        NB.encodeInt32(tmp, hashsz, edgeValue);
+        if (parents.length == 1) {
+            edgeValue = GRAPH_NO_PARENT;
+        } else if (parents.length == 2) {
+            RevCommit parent = parents[1];
+            edgeValue = graphCommits.getOidPosition(parent);
+        } else if (parents.length > 2) {
+            edgeValue = GRAPH_EXTRA_EDGES_NEEDED | num;
+            num += parents.length - 1;
+        }
+
+        NB.encodeInt32(tmp, hashsz + 4, edgeValue);
+
+        packedDate[0] = 0; // commitTime is an int in JGit now
+        packedDate[0] |= generations[i] << 2;
+        packedDate[1] = commit.getCommitTime();
+        NB.encodeInt32(tmp, hashsz + 8, packedDate[0]);
+        NB.encodeInt32(tmp, hashsz + 12, packedDate[1]);
+
+        out.write(tmp);
+        monitor.update(1);
+        i++;
+    }
+    monitor.endTask();
+}
+```
+
+**Explanation:**
+
+1. **Extract Variable:** The repeated expression `out.getWriteMonitor()` has been extracted into a new variable named `monitor`. 
+2. **Replace with Variable:**  The original occurrences of `out.getWriteMonitor()` have been replaced with the new variable `monitor`.
+
+**Benefits of this refactoring:**
+
+- **Improved Readability:** The code is easier to read because the purpose of `monitor` is now clear.
+- **Reduced Redundancy:** Eliminating duplicate code makes the code more concise and less prone to errors.  

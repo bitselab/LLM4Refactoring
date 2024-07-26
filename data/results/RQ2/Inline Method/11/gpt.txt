@@ -1,0 +1,50 @@
+The `toString(String delim)` method in the `CommandLineBuilder` class is a clear candidate for inlining. This method is simply concatenating elements of the `args` list with a specified delimiter. We can streamline the code by removing this method and directly using `String.join` wherever `toString(String delim)` is called. This Java 8 method achieves the same result more efficiently and with less code.
+
+### Refactored Code
+```java
+package org.eclipse.jetty.start;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+public class CommandLineBuilder {
+    private final StringBuilder commandLine = new StringBuilder();
+    private final List<String> args = new ArrayList<>();
+    private final String separator;
+
+    public CommandLineBuilder() {
+        this(false);
+    }
+
+    public CommandLineBuilder(boolean multiline) {
+        separator = multiline ? (" \\" + System.lineSeparator() + "  ") : " ";
+    }
+
+    // Other methods remain unchanged
+
+    @Override
+    public String toString() {
+        return String.join(" ", args); // Replaced the call to toString(String delim) with String.join
+    }
+
+    // Removed the toString(String delim) method as it's redundant now
+
+    public String toCommandLine() {
+        return commandLine.toString();
+    }
+
+    // Other methods remain unchanged
+}
+```
+
+### Key Changes
+1. **Removed `toString(String delim)` Method**: This method is removed as its functionality is replaced by `String.join`, which is a standard and efficient way to join strings in Java.
+
+2. **Updated `toString()` Method**: The overridden `toString()` method now directly uses `String.join` to concatenate the arguments in `args` with spaces.
+
+### Considerations
+- Using `String.join` improves readability and efficiency.
+- Always ensure that refactoring does not change the expected behavior of the code. In this case, the behavior remains the same, but the implementation is more streamlined and readable.
+- It's essential to carefully evaluate the impact of inlining methods, especially in larger and more complex codebases.

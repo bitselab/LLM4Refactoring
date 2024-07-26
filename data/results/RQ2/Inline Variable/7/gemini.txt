@@ -1,0 +1,70 @@
+ **Here's the refactored code with the `selfExecutingMutation` variable inlined:**
+
+```java
+public MutationExecutorStandard(
+        MutationOperationGroup mutationOperationGroup,
+        BatchKeyAccess batchKeySupplier,
+        int batchSize,
+        SharedSessionContractImplementor session) {
+    this.mutationOperationGroup = mutationOperationGroup;
+    this.generatedValuesDelegate = mutationOperationGroup.asEntityMutationOperationGroup() != null ?
+            mutationOperationGroup.asEntityMutationOperationGroup().getMutationDelegate() :
+            null;
+
+    final BatchKey batchKey = batchKeySupplier.getBatchKey();
+
+    // split the table operations into batchable and non-batchable -
+    //    1. batchable statements are handle via Batch
+    //    2. non-batchable statements are handled locally
+
+    List<PreparableMutationOperation> batchedJdbcMutations = null;
+    List<PreparableMutationOperation> nonBatchedJdbcMutations = null;
+
+    boolean hasAnyNonBatchedJdbcOperations = false;
+
+    for (int i = mutationOperationGroup.getNumberOfOperations() - 1; i >= 0; i--) {
+        final MutationOperation operation = mutationOperationGroup.getOperation(i);
+        if (operation instanceof SelfExecutingUpdateOperation) {
+            if (nonBatchedJdbcMutations == null) {
+                nonBatchedJdbcMutations = new ArrayList<>();
+            }
+            nonBatchedJdbcMutations.add(0, (PreparableMutationOperation) operation); // Direct casting and addition
+        } else {
+            final PreparableMutationOperation preparableMutationOperation = (PreparableMutationOperation) operation;
+            final TableMapping tableDetails = operation.getTableDetails();
+            final boolean canBeBatched;
+
+            if (tableDetails.isIdentifierTable() && hasAnyNonBatchedJdbcOperations) {
+                canBeBatched = false;
+            } else {
+                canBeBatched = preparableMutationOperation.canBeBatched(batchKey, batchSize);
+            }
+
+            if (canBeBatched) {
+                if (batchedJdbcMutations == null) {
+                    batchedJdbcMutations = new ArrayList<>();
+                }
+                batchedJdbcMutations.add(0, preparableMutationOperation);
+                statementLocationMap.put(tableDetails.getTableName(), StatementLocation.BATCHED);
+            } else {
+                hasAnyNonBatchedJdbcOperations = true;
+                if (nonBatchedJdbcMutations == null) {
+                    nonBatchedJdbcMutations = new ArrayList<>();
+                }
+                nonBatchedJdbcMutations.add(0, preparableMutationOperation);
+                statementLocationMap.put(tableDetails.getTableName(), StatementLocation.NON_BATCHED);
+            }
+        }
+    }
+
+    // ... rest of the code remains the same ...
+}
+```
+
+**Key changes:**
+
+- Removed the `selfExecutingMutations` variable declaration and initialization.
+- Directly added `(PreparableMutationOperation) operation` to the `nonBatchedJdbcMutations` list within the `if (operation instanceof SelfExecutingUpdateOperation)` block.
+- Adjusted the conditional blocks using `nonBatchedJdbcMutations` accordingly.
+
+This refactoring makes the code more concise and reduces the number of variables to track, potentially improving readability.

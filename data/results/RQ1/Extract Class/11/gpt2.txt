@@ -1,0 +1,80 @@
+After reviewing the provided code for the `CircuitBreakerManager` class, there are definite opportunities for applying the Extract Class refactoring to improve modularity and maintainability. The class is currently handling multiple responsibilities, such as managing a list of circuit breakers, maintaining the state and thresholds for memory and CPU circuit breakers, and constructing error messages. These responsibilities can be separated into distinct classes.
+
+Here are the refactoring steps:
+
+1. **Extract Configuration Handling:**
+   Create a new class, `CircuitBreakerConfiguration`, to handle the configuration of memory and CPU circuit breakers. This class will encapsulate the logic related to enabling/disabling circuit breakers and setting their thresholds.
+
+2. **Extract Error Message Construction:**
+   The logic for constructing error messages can be moved to a separate utility class, `CircuitBreakerMessageBuilder`, enhancing the single responsibility principle.
+
+3. **Encapsulate Circuit Breaker Management:**
+   The management of the circuit breaker list (adding, removing, checking if any are tripped) can be encapsulated in a new class, `CircuitBreakerRegistry`.
+
+Refactored Code:
+
+```java
+// New class for handling configuration
+class CircuitBreakerConfiguration {
+    private boolean enabled;
+    private int threshold;
+
+    // ... Constructors, getters, setters, and other methods ...
+}
+
+// New class for managing circuit breakers
+class CircuitBreakerRegistry {
+    private final List<CircuitBreaker> circuitBreakerList = new ArrayList<>();
+
+    public void register(CircuitBreaker circuitBreaker) {
+        circuitBreakerList.add(circuitBreaker);
+    }
+
+    public void deregisterAll() {
+        circuitBreakerList.clear();
+    }
+
+    public List<CircuitBreaker> checkTripped() {
+        // ... Implementation ...
+    }
+
+    public boolean checkAnyTripped() {
+        // ... Implementation ...
+    }
+
+    public List<CircuitBreaker> getRegisteredCircuitBreakers() {
+        return circuitBreakerList;
+    }
+}
+
+// New class for building error messages
+class CircuitBreakerMessageBuilder {
+    public static String toErrorMessage(List<CircuitBreaker> circuitBreakerList) {
+        // ... Implementation ...
+    }
+}
+
+// Original class refactored
+@Deprecated(since = "9.4")
+public class CircuitBreakerManager extends CircuitBreaker {
+    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+    private CircuitBreakerConfiguration memConfig = new CircuitBreakerConfiguration();
+    private CircuitBreakerConfiguration cpuConfig = new CircuitBreakerConfiguration();
+    private MemoryCircuitBreaker memCB;
+    private CPUCircuitBreaker cpuCB;
+    private CircuitBreakerRegistry registry = new CircuitBreakerRegistry();
+
+    // ... Adjusted methods and other code ...
+
+    @Override
+    public void init(NamedList<?> args) {
+        super.init(args);
+        // ... Initialization logic using memConfig and cpuConfig ...
+    }
+
+    // ... Other overridden methods and logic ...
+}
+```
+
+These changes improve the structure of the `CircuitBreakerManager` class, making it more focused and easier to maintain. Each new class now has a clear, single responsibility, aligning with best practices in object-oriented design.

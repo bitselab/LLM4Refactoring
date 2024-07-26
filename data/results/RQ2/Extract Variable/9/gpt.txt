@@ -1,0 +1,24 @@
+Certainly! The goal of the extract variable refactoring is to enhance code readability and reduce redundancy by introducing a new variable to store the result of a repeated expression. In the given method `getSomeRoot`, the expression `getPathFromClass(klass)` is called multiple times. This can be refactored by extracting this repeated expression into a local variable. 
+
+Here's the refactored version of the `getSomeRoot` method:
+
+```java
+private static Path getSomeRoot(Class<?> klass) {
+    // Under jps-bootstrap home is already known, reuse it
+    String communityHome = System.getenv(JPS_BOOTSTRAP_COMMUNITY_HOME_ENV_NAME);
+    if (communityHome != null) {
+        return Path.of(communityHome).normalize();
+    }
+
+    Path classPath = getPathFromClass(klass); // Extracted variable
+
+    if (!classPath.toString().endsWith("class")) {
+        throw new IllegalArgumentException(
+                String.format("To guess idea home, you must provide class that resides in .class file inside of idea home dir. " +
+                        "But provided %s resides in %s", klass, classPath));
+    }
+    return classPath;
+}
+```
+
+In this refactored code, `getPathFromClass(klass)` is called only once, and its result is stored in a new variable `classPath`. This variable is then used in subsequent operations, which makes the code more readable and slightly more efficient.

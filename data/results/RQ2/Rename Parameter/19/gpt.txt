@@ -1,0 +1,49 @@
+In the provided code snippet, the parameter `authParams` in the `accept` method of the `AuthenticationConsumer` interface can be renamed to enhance readability and clarity. A more descriptive name will help other developers understand the purpose of the parameter more easily. Here's the refactored code with the renamed parameter:
+
+### Refactored Code
+
+```java
+package org.springframework.boot.autoconfigure.pulsar;
+
+// ... [Other import statements]
+
+final class PulsarPropertiesMapper {
+
+    // ... [Other class contents]
+
+    private void customizeAuthentication(AuthenticationConsumer authentication,
+                                         PulsarProperties.Authentication properties) {
+        if (!StringUtils.hasText(properties.getPluginClassName())) {
+            return;
+        }
+        try {
+            Map<String, String> params = new TreeMap<>(properties.getParam());
+            String authenticationParametersJson;
+            try {
+                authenticationParametersJson = ObjectMapperFactory.create().writeValueAsString(params);
+            }
+            catch (Exception ex) {
+                throw new IllegalStateException("Could not convert auth parameters to JSON string", ex);
+            }
+            authentication.accept(properties.getPluginClassName(), authenticationParametersJson);
+        }
+        catch (UnsupportedAuthenticationException ex) {
+            throw new IllegalStateException("Unable to configure Pulsar authentication", ex);
+        }
+    }
+
+    // ... [Rest of the class remains unchanged]
+
+    private interface AuthenticationConsumer {
+        void accept(String authPluginClassName, String authenticationParametersJson) throws UnsupportedAuthenticationException;
+    }
+
+    // ... [Rest of the class]
+}
+```
+
+### Summary of Refactoring:
+
+- Renamed the parameter `authParams` to `authenticationParametersJson` in the `accept` method of the `AuthenticationConsumer` interface. This new name is more descriptive, indicating that the parameter is expected to be a JSON representation of the authentication parameters.
+
+This refactoring enhances the readability of the code by making the purpose of the parameters clearer to anyone who reads or works with this code in the future.

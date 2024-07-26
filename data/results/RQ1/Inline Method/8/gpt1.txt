@@ -1,0 +1,73 @@
+Upon reviewing the provided code snippet, several refactoring opportunities can be identified to enhance readability, maintainability, and performance. Here are the key areas for improvement:
+
+1. **Duplication in Context Management:** The `withContext(EventContext context)` and `withContext(EventContextElement contextElement)` methods in `NonRootFailureCollector` and `RootFailureCollector` have similar logic. This can be refactored to reduce duplication.
+
+2. **Complex Method Structure:** The `checkNoFailure()` method in `RootFailureCollector` is complex and does too many things. It can be refactored into smaller, more focused methods.
+
+3. **Excessive Use of Public Visibility:** Some methods and classes could be made package-private or private if not used outside their package, reducing the API surface and improving encapsulation.
+
+4. **Commented Code and Documentation:** Some comments, like "// Nothing to do" in `appendContextTo`, are not very informative. Comments should be used to explain why certain decisions are made, not what the code is doing.
+
+5. **Improving Exception Handling:** The try-catch block in `withContext(EventContext context)` should be reviewed to ensure that it's handling exceptions in the best way possible.
+
+6. **Use of Concurrent Collections:** The use of `ConcurrentLinkedDeque` and `ConcurrentSkipListMap` suggests thread-safety concerns. It's important to ensure that the rest of the class is thread-safe and that the use of these collections is justified.
+
+Refactoring the entire code is extensive and may not be feasible within this response. However, I can demonstrate refactoring a specific part as an example. Let's refactor the `checkNoFailure()` method in `RootFailureCollector` to make it more readable and focused.
+
+Here's the refactored version of this method:
+
+```java
+public final class RootFailureCollector implements FailureCollector {
+    // ... other members remain the same ...
+
+    public void checkNoFailure() {
+        if (hasFailures()) {
+            throwCollectedFailures();
+        }
+    }
+
+    private boolean hasFailures() {
+        return failureCount.get() > 0;
+    }
+
+    private void throwCollectedFailures() {
+        List<Throwable> failures = new ArrayList<>();
+        ToStringTreeBuilder builder = createToStringTreeBuilder();
+        builder.startObject();
+
+        if (isFailureLimitExceeded()) {
+            builder.value(log.collectedFailureLimitReached(process, FAILURE_LIMIT, failureCount.get()));
+        }
+
+        if (delegate != null) {
+            delegate.appendChildrenFailuresTo(failures, builder);
+        }
+
+        builder.endObject();
+        throw log.collectedFailures(process, builder.toString(), failures);
+    }
+
+    private ToStringTreeBuilder createToStringTreeBuilder() {
+        ToStringStyle style = ToStringStyle.multilineIndentStructure(
+                EngineEventContextMessages.INSTANCE.failureReportContextFailuresSeparator(),
+                EngineEventContextMessages.INSTANCE.failureReportContextIndent(),
+                EngineEventContextMessages.INSTANCE.failureReportFailuresBulletPoint(),
+                EngineEventContextMessages.INSTANCE.failureReportFailuresNoBulletPoint()
+        );
+        return new ToStringTreeBuilder(style);
+    }
+
+    private boolean isFailureLimitExceeded() {
+        return failureCount.get() > FAILURE_LIMIT;
+
+
+    }
+
+    // ... rest of the class remains the same ...
+}
+
+```
+
+In this refactored version, the `checkNoFailure()` method is now more focused and readable. It delegates specific tasks to private helper methods (`hasFailures`, `throwCollectedFailures`, `createToStringTreeBuilder`, and `isFailureLimitExceeded`). This makes the code easier to understand and maintain.
+
+For the other refactoring opportunities mentioned, similar approaches can be applied: breaking down complex methods, reducing code duplication, and improving visibility and documentation. These changes would lead to a more robust and maintainable codebase.

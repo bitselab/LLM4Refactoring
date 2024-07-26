@@ -1,0 +1,153 @@
+Upon reviewing the code, I identified several inline variable refactoring opportunities. Here are the refactored code snippets with unnecessary variables removed:
+
+1. **Refactoring `testAddMountTable` method:**
+   ```java
+   @Test
+   public void testAddMountTable() throws IOException {
+       MountTable newEntry = MountTable.newInstance(
+               "/testpath", Collections.singletonMap("ns0", "/testdir"),
+               Time.now(), Time.now());
+
+       RouterClient client = routerContext.getAdminClient();
+       MountTableManager mountTable = client.getMountTableManager();
+
+       // Existing mount table size
+       assertEquals(getMountTableEntries(mountTable).size(), mockMountTable.size());
+
+       // Add
+       AddMountTableEntryRequest addRequest = AddMountTableEntryRequest.newInstance(newEntry);
+       assertTrue(mountTable.addMountTableEntry(addRequest).getStatus());
+
+       // New mount table size
+       assertEquals(getMountTableEntries(mountTable).size(), mockMountTable.size() + 1);
+   }
+   ```
+
+2. **Refactoring `testAddDuplicateMountTable` method:**
+   ```java
+   @Test
+   public void testAddDuplicateMountTable() throws IOException {
+       MountTable newEntry = MountTable.newInstance("/testpath",
+               Collections.singletonMap("ns0", "/testdir"), Time.now(), Time.now());
+
+       RouterClient client = routerContext.getAdminClient();
+       MountTableManager mountTable = client.getMountTableManager();
+
+       // Existing mount table size
+       assertEquals(getMountTableEntries(mountTable).size(), mockMountTable.size());
+
+       // Add
+       AddMountTableEntryRequest addRequest = AddMountTableEntryRequest.newInstance(newEntry);
+       assertTrue(mountTable.addMountTableEntry(addRequest).getStatus());
+
+       // New mount table size
+       assertEquals(getMountTableEntries(mountTable).size(), mockMountTable.size() + 1);
+
+       // Add again, should fail
+       assertFalse(mountTable.addMountTableEntry(addRequest).getStatus());
+   }
+   ```
+
+3. **Refactoring `testAddReadOnlyMountTable` method:**
+   ```java
+   @Test
+   public void testAddReadOnlyMountTable() throws IOException {
+       MountTable newEntry = MountTable.newInstance(
+               "/readonly", Collections.singletonMap("ns0", "/testdir"),
+               Time.now(), Time.now());
+       newEntry.setReadOnly(true);
+
+       RouterClient client = routerContext.getAdminClient();
+       MountTableManager mountTable = client.getMountTableManager();
+
+       // Existing mount table size
+       assertEquals(getMountTableEntries(mountTable).size(), mockMountTable.size());
+
+       // Add
+       AddMountTableEntryRequest addRequest = AddMountTableEntryRequest.newInstance(newEntry);
+       assertTrue(mountTable.addMountTableEntry(addRequest).getStatus());
+
+       // New mount table size
+       assertEquals(getMountTableEntries(mountTable).size(), mockMountTable.size() + 1);
+
+       // Check that we have the read only entry
+       MountTable record = getMountTableEntry("/readonly");
+       assertEquals("/readonly", record.getSourcePath());
+       assertTrue(record.isReadOnly());
+
+       // Removing the new entry
+       RemoveMountTableEntryRequest removeRequest = RemoveMountTableEntryRequest.newInstance("/readonly");
+       assertTrue(mountTable.removeMountTableEntry(removeRequest).getStatus());
+   }
+   ```
+
+4. **Refactoring `testRemoveMountTable` method:**
+   ```java
+   @Test
+   public void testRemoveMountTable() throws IOException {
+       RouterClient client = routerContext.getAdminClient();
+       MountTableManager mountTable = client.getMountTableManager();
+
+       // Existing mount table size
+       assertEquals(getMountTableEntries(mountTable).size(), mockMountTable.size());
+
+       // Remove an entry
+       RemoveMountTableEntryRequest removeRequest = RemoveMountTableEntryRequest.newInstance("/");
+       mountTable.removeMountTableEntry(removeRequest);
+
+       // New mount table size
+       assertEquals(getMountTableEntries(mountTable).size(), mockMountTable.size() - 1);
+   }
+   ```
+
+5. **Refactoring `testEditMountTable` method:**
+   ```java
+   @Test
+   public void testEditMountTable() throws IOException {
+       RouterClient client = routerContext.getAdminClient();
+       MountTableManager mountTable = client.getMountTableManager();
+
+       // Verify starting condition
+       MountTable entry = getMountTableEntry("/");
+       assertEquals(Collections.singletonList(new RemoteLocation("ns0", "/", "/")), entry.getDestinations());
+
+       // Edit the entry for /
+       MountTable updatedEntry = MountTable.newInstance(
+               "/", Collections.singletonMap("ns1", "/"), Time.now(), Time.now());
+       UpdateMountTableEntryRequest updateRequest = UpdateMountTableEntryRequest.newInstance(updatedEntry);
+       mountTable.updateMountTableEntry(updateRequest);
+
+       // Verify edited condition
+       entry = getMountTableEntry("/");
+       assertEquals(Collections.singletonList(new RemoteLocation("ns1", "/", "/")), entry.getDestinations());
+   }
+   ```
+
+6. **Refactoring `testNameserviceManager` method:**
+   ```java
+   @Test
+   public void testNameserviceManager() throws IOException {
+       RouterClient client = routerContext.getAdminClient();
+       NameserviceManager nsManager = client.getNameserviceManager();
+
+       // There shouldn't be any name service disabled
+       assertTrue(getDisabledNameservices(nsManager).isEmpty());
+
+       // Disable one and see it
+       DisableNameserviceRequest disableReq = DisableNameserviceRequest.newInstance("ns0");
+       assertTrue(nsManager.disableNameservice(disableReq).getStatus());
+       // Refresh the cache
+       assertTrue(getDisabledNameservices(nsManager).contains("ns0"));
+
+       // Enable one and we should have no disabled name services
+       EnableNameserviceRequest enableReq = EnableNameserviceRequest.newInstance("ns0");
+       assertTrue(nsManager.enableNameservice(enableReq).getStatus());
+       assertTrue(getDisabledNameservices(nsManager).isEmpty());
+
+       // Non existing name services should fail
+       disableReq = DisableNameserviceRequest.newInstance("nsunknown");
+       assertFalse(nsManager.disableNameservice(disableReq).getStatus());
+   }
+   ```
+
+These changes streamline the methods by removing intermediate variables that are only used once, thereby improving readability and maintaining the same functionality.

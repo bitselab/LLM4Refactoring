@@ -1,0 +1,117 @@
+The code snippet provided is a good candidate for the "Extract Variable" refactoring to enhance readability and reduce redundancy. This technique is particularly effective in cases where the same expression is evaluated multiple times. By extracting these expressions into variables, we can make the code more maintainable and easier to understand.
+
+Here's the refactored version of the code with extracted variables:
+
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.apache.commons.io.IOUtils;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests for {@link BoundedInputStream}.
+ */
+public class BoundedInputStreamTest {
+
+    private void compare(final String msg, final byte[] expected, final byte[] actual) {
+        assertEquals(expected.length, actual.length, msg + " length");
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], actual[i], msg + " byte[" + i + "]");
+        }
+    }
+
+    @Test
+    public void testOnMaxLength() throws Exception {
+        BoundedInputStream bounded;
+        final byte[] helloWorld = "Hello World".getBytes();
+        final byte[] hello = "Hello".getBytes();
+        final AtomicBoolean boolRef = new AtomicBoolean();
+
+        // Common expressions
+        ByteArrayInputStream helloWorldStream = new ByteArrayInputStream(helloWorld);
+        int helloWorldLength = helloWorld.length;
+        int helloLength = hello.length;
+
+        // limit = length
+        bounded = new BoundedInputStream(helloWorldStream, helloWorldLength) {
+            @Override
+            protected void onMaxLength(final long max, final long readCount) {
+                boolRef.set(true);
+            }
+        };
+
+        commonAssertions(bounded, helloWorldLength, boolRef);
+
+        // limit > length
+        boolRef.set(false);
+        bounded = new BoundedInputStream(helloWorldStream, helloWorldLength + 1) {
+            @Override
+            protected void onMaxLength(final long max, final long readCount) {
+                boolRef.set(true);
+            }
+        };
+
+        commonAssertions(bounded, helloWorldLength + 1, boolRef);
+
+        // limit < length
+        boolRef.set(false);
+        bounded = new BoundedInputStream(helloWorldStream, helloLength) {
+            @Override
+            protected void onMaxLength(final long max, final long readCount) {
+                boolRef.set(true);
+            }
+        };
+
+        commonAssertions(bounded, helloLength, boolRef);
+    }
+
+    private void commonAssertions(BoundedInputStream bounded, int expectedLength, AtomicBoolean boolRef) throws Exception {
+        assertEquals(expectedLength, bounded.getMaxLength());
+        assertEquals(0, bounded.getCount());
+        assertEquals(bounded.getMaxLength(), bounded.getRemaining());
+        assertFalse(boolRef.get());
+
+        int readCount = 0;
+        for (int i = 0; i < expectedLength; i++) {
+            assertEquals(bounded.read(), bounded.read(), "byte[" + i + "]");
+            readCount++;
+            assertEquals(expectedLength, bounded.getMaxLength());
+            assertEquals(readCount, bounded.getCount());
+            assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+        }
+
+        assertEquals(-1, bounded.read(), "end");
+        assertEquals(expectedLength, bounded.getMaxLength());
+        assertEquals(readCount, bounded.getCount());
+        assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+        if (expectedLength == bounded.getMaxLength()) {
+            assertTrue(boolRef.get());
+        }
+    }
+
+    @Test
+    public void testReadArray() throws Exception {
+        // ... (rest of the code remains the same)
+    }
+
+    @Test
+    public void testReadSingle() throws Exception {
+        // ... (rest of the code remains the same)
+    }
+}
+```
+
+In this refactoring:
+
+1. Extracted repeated expressions like `new ByteArrayInputStream(helloWorld)` and `helloWorld.length` into local variables.
+2. Created a new method `commonAssertions` to avoid redundancy in asserting conditions that are common across different test cases.
+3. Removed redundant assertions within the for-loop in `commonAssertions` to streamline the code.
+
+This refactoring makes the code more concise and improves readability, making it easier to maintain and understand.

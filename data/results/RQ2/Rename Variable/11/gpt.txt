@@ -1,0 +1,60 @@
+In the provided code snippet, the variable `last` in the `parse` method is a bit ambiguous and could be renamed for better clarity. This variable is used to indicate whether the current frame is the last one in the sequence. A more descriptive name would be `isLastFrame` or `isFinalFrame`. This name makes it clear that the variable is a boolean flag indicating the end of the frame sequence.
+
+Here's the refactored version of the `parse` method with the improved variable name:
+
+```java
+public boolean parse(ByteBuffer buffer) {
+    while (buffer.hasRemaining()) {
+        switch (state) {
+            case PREPARE: {
+                // SPEC: wrong streamId is treated as connection error.
+                if (getStreamId() == 0)
+                    return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_frame");
+
+                if (getStreamId() != headerBlockFragments.getStreamId())
+                    return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                length = getBodyLength();
+                state = State.FRAGMENT;
+                break;
+            }
+            case FRAGMENT: {
+                int remaining = buffer.remaining();
+                if (remaining < length) {
+                    ContinuationFrame frame = new ContinuationFrame(getStreamId(), false);
+                    if (!rateControlOnEvent(frame))
+                        return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+
+                    if (!headerBlockFragments.storeFragment(buffer, remaining, false))
+                        return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                    length -= remaining;
+                    break;
+                } else {
+                    boolean isLastFrame = hasFlag(Flags.END_HEADERS);
+                    ContinuationFrame frame = new ContinuationFrame(getStreamId(), isLastFrame);
+                    if (!rateControlOnEvent(frame))
+                        return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+
+                    if (!headerBlockFragments.storeFragment(buffer, length, isLastFrame))
+                        return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                    reset();
+                    if (isLastFrame)
+                        return onHeaders(buffer);
+                    return true;
+                }
+            }
+            default: {
+                throw new IllegalStateException();
+            }
+        }
+    }
+    return false;
+}
+```
+
+In this refactored version:
+- The variable `last` is renamed to `isLastFrame`.
+- The new name clearly indicates that this variable is a boolean flag checking if the current frame is the last in the sequence.
+- This change enhances the readability and understanding of the code, particularly for developers who might work on this code in the future.

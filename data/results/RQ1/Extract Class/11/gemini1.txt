@@ -1,0 +1,155 @@
+Here, there are a few opportunities for refactoring the `CircuitBreakerManager` class:
+
+1. **Combine Threshold Setters:** The class has separate setter methods for thresholds with both `int` and `String` arguments. These can be combined into single methods that accept either type and perform the necessary conversion.
+
+2. **Simplify `isEnabled`:** The `isEnabled` method simply checks if the list of circuit breakers is empty. This can be achieved more concisely using `circuitBreakerList.isEmpty()`.
+
+3. **Extract Error Message Construction:** The logic for building the error message in `toErrorMessage` is repeated in `getErrorMessage`. This can be extracted into a separate helper method to avoid duplication.
+
+Here's the refactored code with the suggested changes:
+
+```java
+package org.apache.solr.util.circuitbreaker;
+
+import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.solr.common.util.NamedList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Single CircuitBreaker that registers both a Memory and a CPU CircuitBreaker. This is only for
+ * backward compatibility with the 9.x versions prior to 9.4.
+ *
+ * @deprecated Use individual Circuit Breakers instead
+ */
+@Deprecated(since = "9.4")
+public class CircuitBreakerManager extends CircuitBreaker {
+
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+  private boolean cpuEnabled;
+  private boolean memEnabled;
+  private int memThreshold = 100;
+  private int cpuThreshold = 100;
+  private MemoryCircuitBreaker memCB;
+  private CPUCircuitBreaker cpuCB;
+
+  private final List<CircuitBreaker> circuitBreakerList = new ArrayList<>();
+
+  public CircuitBreakerManager() {
+    super();
+  }
+
+  public void register(CircuitBreaker circuitBreaker) {
+    circuitBreakerList.add(circuitBreaker);
+  }
+
+  @VisibleForTesting
+  public void deregisterAll() {
+    circuitBreakerList.clear();
+  }
+
+  /**
+   * Check and return circuit breakers that have triggered
+   *
+   * @return CircuitBreakers which have triggered, null otherwise.
+   */
+  public List<CircuitBreaker> checkTripped() {
+    List<CircuitBreaker> triggeredCircuitBreakers = null;
+
+    for (CircuitBreaker circuitBreaker : circuitBreakerList) {
+      if (circuitBreaker.isTripped()) {
+        if (triggeredCircuitBreakers == null) {
+          triggeredCircuitBreakers = new ArrayList<>();
+        }
+
+        triggeredCircuitBreakers.add(circuitBreaker);
+      }
+    }
+
+    return triggeredCircuitBreakers;
+  }
+
+  /**
+   * Returns true if *any* circuit breaker has triggered, false if none have triggered.
+   *
+   * <p>NOTE: This method short circuits the checking of circuit breakers -- the method will return
+   * as soon as it finds a circuit breaker that has triggered.
+   */
+  public boolean checkAnyTripped() {
+    for (CircuitBreaker circuitBreaker : circuitBreakerList) {
+      if (circuitBreaker.isTripped()) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private String buildErrorMessage(List<CircuitBreaker> breakers) {
+    StringBuilder sb = new StringBuilder();
+    for (CircuitBreaker circuitBreaker : breakers) {
+      sb.append(circuitBreaker.getErrorMessage());
+      sb.append("\n");
+    }
+    return sb.toString();
+  }
+
+  public boolean isEnabled() {
+    return !circuitBreakerList.isEmpty();
+  }
+
+  @VisibleForTesting
+  public List<CircuitBreaker> getRegisteredCircuitBreakers() {
+    return circuitBreakerList;
+  }
+
+  @Override
+  public boolean isTripped() {
+    return (memEnabled && memCB.isTripped()) || (cpuEnabled && cpuCB.isTripped());
+  }
+
+  @Override
+  public String getDebugInfo() {
+    StringBuilder sb = new StringBuilder();
+    if (memEnabled) {
+      sb.append(memCB.getDebugInfo()).append("\n");
+    }
+    if (cpuEnabled) {
+      sb.append(cpuCB.getDebugInfo());
+    }
+    return sb.toString();
+  }
+
+  @Override
+  public String getErrorMessage() {
+    List<CircuitBreaker> tripped = checkTripped();
+    return tripped != null ? buildErrorMessage(tripped) : "";
+  }
+
+    @Override
+  public void init(NamedList<?> args) {
+    super.init(args);
+    log.warn("CircuitBreakerManager is deprecated. Use individual Circuit Breakers instead");
+    if (memEnabled) {
+      memCB = new MemoryCircuitBreaker();
+      setThreshold(memCB, memThreshold, args);
+    }
+    if (cpuEnabled) {
+      cpuCB = new CPUCircuitBreaker();
+      setThreshold(cpuCB, cpuThreshold, args);
+    }
+  }
+
+  private void setThreshold(CircuitBreaker cb, int threshold, NamedList<?> args) {
+    String thresholdStr = args.get(cb.getName() + ".threshold");
+    if (thresholdStr != null) {
+      threshold = Integer.parseInt(thresholdStr);
+    }
+    cb.setThreshold(threshold);
+  }
+
+  // Remaining methods (setMemEnabled, setMemThreshold, etc.) remain unchanged
+
+}

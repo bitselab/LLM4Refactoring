@@ -1,0 +1,91 @@
+The provided code snippet is quite comprehensive and well-structured, adhering to good coding practices. However, there are a few opportunities for refactoring that can enhance the code's readability and maintainability. Here's a refactored version of the code:
+
+1. **Extract Duplicate Code**: The repeated instantiation of `PropertyMapper` in each `customize` method can be refactored into a private method to reduce duplication.
+
+2. **Consolidate Exception Handling**: The nested `try-catch` blocks within `customizeAuthentication` method could be simplified for better readability.
+
+3. **Use of Generics**: Generic types can be used to make the `customizeProducerBuilder`, `customizeConsumerBuilder`, and `customizeReaderBuilder` methods more consistent.
+
+4. **Improve Method Names**: Some method names can be made more descriptive to better convey their purpose.
+
+5. **Documentation**: Adding comments to explain the purpose of methods and complex logic can improve readability and maintainability.
+
+Here is the refactored code:
+
+```java
+package org.springframework.boot.autoconfigure.pulsar;
+
+// Import statements remain the same
+
+final class PulsarPropertiesMapper {
+
+    private final PulsarProperties properties;
+
+    PulsarPropertiesMapper(PulsarProperties properties) {
+        this.properties = properties;
+    }
+
+    void customizeClientBuilder(ClientBuilder clientBuilder, PulsarConnectionDetails connectionDetails) {
+        PropertyMapper map = createPropertyMapper();
+        // Remaining code stays the same
+    }
+
+    void customizeAdminBuilder(PulsarAdminBuilder adminBuilder, PulsarConnectionDetails connectionDetails) {
+        PropertyMapper map = createPropertyMapper();
+        // Remaining code stays the same
+    }
+
+    private void customizeAuthentication(AuthenticationConsumer authentication,
+                                         PulsarProperties.Authentication properties) {
+        if (StringUtils.hasText(properties.getPluginClassName())) {
+            try {
+                Map<String, String> sortedParams = new TreeMap<>(params);
+                String encodedParams = encodeAuthenticationParams(sortedParams);
+                authentication.accept(properties.getPluginClassName(), encodedParams);
+            } catch (UnsupportedAuthenticationException | IllegalStateException ex) {
+                throw new IllegalStateException("Unable to configure Pulsar authentication", ex);
+            }
+        }
+    }
+
+    private String encodeAuthenticationParams(Map<String, String> params) throws IllegalStateException {
+        try {
+            return ObjectMapperFactory.create().writeValueAsString(params);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Could not convert auth parameters to encoded string", ex);
+        }
+    }
+
+    <T> void customizeProducerBuilder(ProducerBuilder<T> producerBuilder) {
+        customizeBuilder(producerBuilder, this.properties.getProducer());
+        // Remaining code stays the same
+    }
+
+    <T> void customizeConsumerBuilder(ConsumerBuilder<T> consumerBuilder) {
+        customizeBuilder(consumerBuilder, this.properties.getConsumer());
+        // Remaining code stays the same
+    }
+
+    private <T, P> void customizeBuilder(T builder, P properties) {
+        PropertyMapper map = createPropertyMapper();
+        // Customization logic based on T and P
+    }
+
+    // Remaining methods stay mostly the same with similar refactoring applied
+
+    private Consumer<Duration> timeoutProperty(BiConsumer<Integer, TimeUnit> setter) {
+        return (duration) -> setter.accept((int) duration.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private PropertyMapper createPropertyMapper() {
+        return PropertyMapper.get().alwaysApplyingWhenNonNull();
+    }
+
+    private interface AuthenticationConsumer {
+        void accept(String authPluginClassName, String authParamString) throws UnsupportedAuthenticationException;
+    }
+
+}
+```
+
+In this refactored version, we've extracted repetitive code into separate methods (`createPropertyMapper` and `encodeAuthenticationParams`), simplified exception handling in `customizeAuthentication`, and added a generic method `customizeBuilder` for possible use in producer, consumer, and reader customizations. Additionally, adding comments and improving method names could further enhance the code.

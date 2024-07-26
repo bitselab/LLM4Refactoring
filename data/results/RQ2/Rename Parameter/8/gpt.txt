@@ -1,0 +1,45 @@
+In the provided code snippet, the parameter name `enableSkipping` in the constructor of `DoubleValuesSourceComparator` is somewhat vague and doesn't convey clear information about its purpose. A better name would describe its role more accurately. Assuming that `enableSkipping` refers to a strategy or approach for handling the pruning of search results in the context of sorting, a more descriptive name could be `pruningStrategy`.
+
+Here is the refactored code with the renamed parameter:
+
+```java
+package org.hibernate.search.backend.lucene.lowlevel.comparator.impl;
+
+import java.io.IOException;
+
+import org.hibernate.search.backend.lucene.lowlevel.docvalues.impl.DoubleMultiValuesToSingleValuesSource;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.search.LeafFieldComparator;
+import org.apache.lucene.search.Pruning;
+import org.apache.lucene.search.comparators.DoubleComparator;
+
+public class DoubleValuesSourceComparator extends DoubleComparator {
+
+    private final DoubleMultiValuesToSingleValuesSource source;
+
+    public DoubleValuesSourceComparator(int numHits, String field, Double missingValue, boolean reversed,
+                                        Pruning pruningStrategy, DoubleMultiValuesToSingleValuesSource source) {
+        super(numHits, field, missingValue, reversed, pruningStrategy);
+        this.source = source;
+    }
+
+    @Override
+    public LeafFieldComparator getLeafComparator(LeafReaderContext context) throws IOException {
+        return new DoubleValuesSourceLeafComparator(context);
+    }
+
+    private class DoubleValuesSourceLeafComparator extends DoubleLeafComparator {
+        DoubleValuesSourceLeafComparator(LeafReaderContext context) throws IOException {
+            super(context);
+        }
+
+        @Override
+        protected NumericDocValues getNumericDocValues(LeafReaderContext context, String field) throws IOException {
+            return source.getValues(context, null).getRawDoubleValues();
+        }
+    }
+}
+```
+
+The parameter `enableSkipping` has been renamed to `pruningStrategy` to more accurately describe its role in the context of the `DoubleValuesSourceComparator`. This change should improve the readability and clarity of the code.

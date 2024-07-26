@@ -1,0 +1,30 @@
+ **Here's the refactored code with the extracted variable:**
+
+```java
+private Builder(LuceneSearchIndexScope<?> scope, LuceneSearchIndexValueFieldContext<F> field) {
+    super(scope, field);
+
+    LuceneFieldCodec<F> codec = field.type().codec();
+    LuceneVectorFieldCodec<F> vectorCodec = (LuceneVectorFieldCodec<F>) codec;
+
+    if (vectorCodec != null) {
+        vectorElementsType = vectorCodec.vectorElementsType();
+        indexedVectorsDimension = vectorCodec.getConfiguredDimensions();
+    } else {
+        // shouldn't really happen as if someone tries this it should fail on `queryElementFactory` lookup.
+        throw new AssertionFailure("Attempting to use a knn predicate on a non-vector field.");
+    }
+}
+```
+
+**Explanation of the Refactoring:**
+
+1. **Identified the Repeated Expression:** The expression `(LuceneVectorFieldCodec<F>) codec` was used twice within the method, making it a good candidate for extraction.
+2. **Extracted the Variable:** The expression was extracted into a new variable named `vectorCodec` of type `LuceneVectorFieldCodec<F>`, placed before the conditional statement.
+3. **Replaced the Expression:** The original occurrences of the expression were replaced with the newly created variable.
+
+**Benefits of This Refactoring:**
+
+- **Improved Readability:** The code becomes more readable by removing redundancy and giving a descriptive name to the extracted value.
+- **Enhanced Maintainability:** The code becomes easier to understand and modify, as changes to the codec interaction can be made in one place.
+- **Potential for Reuse:** If the `vectorCodec` is needed elsewhere in the method, it's now readily available.

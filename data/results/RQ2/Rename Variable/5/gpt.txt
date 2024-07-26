@@ -1,0 +1,35 @@
+The variable name `stateRetentionTime` in the method `getMultiInputOperatorDefaultMeta` can be improved for better readability and consistency with other parts of the code. In the context of this method, it represents a default value for the state's time-to-live (TTL). Therefore, a more appropriate name might be `defaultStateTtl` or `defaultStateDuration`, which aligns better with the usage of `stateTtl` in the same method and is more descriptive of its purpose.
+
+Here's the refactored code with the renamed variable:
+
+```java
+package org.apache.flink.table.planner.plan.nodes.exec;
+
+// ... [imports remain unchanged]
+
+@Internal
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class StateMetadata {
+    // ... [class definition remains unchanged]
+
+    public static List<StateMetadata> getMultiInputOperatorDefaultMeta(
+            Map<Integer, Long> stateTtlFromHint,
+            ReadableConfig tableConfig,
+            String... stateNameList) {
+        Duration defaultStateTtl = tableConfig.get(ExecutionConfigOptions.IDLE_STATE_RETENTION); // Renamed from stateRetentionTime
+        List<StateMetadata> stateMetadataList = new ArrayList<>(stateNameList.length);
+        for (int i = 0; i < stateNameList.length; i++) {
+            Duration stateTtl =
+                    stateTtlFromHint.containsKey(i)
+                            ? Duration.ofMillis(stateTtlFromHint.get(i))
+                            : defaultStateTtl;
+            stateMetadataList.add(new StateMetadata(i, stateTtl, stateNameList[i]));
+        }
+        return stateMetadataList;
+    }
+
+    // ... [rest of the class remains unchanged]
+}
+```
+
+This refactoring improves the clarity of the variable's purpose, making the code more readable and maintainable.

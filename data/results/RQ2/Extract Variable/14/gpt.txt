@@ -1,0 +1,84 @@
+To improve the code's readability and efficiency, we can apply extract variable refactorings, especially to the `escapeIgnoringCase` method where the expression `string.toString().toLowerCase(locale)` is repeated multiple times. Extracting this expression into a separate variable would enhance readability and prevent redundant processing. Here's the refactored code:
+
+```java
+package org.apache.lucene.queryparser.flexible.standard.parser;
+
+import java.util.Locale;
+import org.apache.lucene.queryparser.flexible.core.messages.QueryParserMessages;
+import org.apache.lucene.queryparser.flexible.core.parser.EscapeQuerySyntax;
+import org.apache.lucene.queryparser.flexible.core.util.UnescapedCharSequence;
+import org.apache.lucene.queryparser.flexible.messages.MessageImpl;
+
+public class EscapeQuerySyntaxImpl implements EscapeQuerySyntax {
+    // Constant declarations remain the same
+
+    // Other methods remain the same
+
+    private static CharSequence escapeIgnoringCase(
+            CharSequence string, CharSequence sequence1, CharSequence escapeChar, Locale locale) {
+        if (escapeChar == null || sequence1 == null || string == null) {
+            throw new NullPointerException();
+        }
+
+        int count = string.length();
+        int sequence1Length = sequence1.length();
+        String lowerCaseString = string.toString().toLowerCase(locale);
+
+        if (sequence1Length == 0) {
+            return escapeEveryCharacter(string, escapeChar, count);
+        }
+
+        StringBuilder result = new StringBuilder();
+        char firstCharOfSequence1 = sequence1.charAt(0);
+        int start = 0, copyStart = 0, firstIndex;
+
+        while (start < count) {
+            firstIndex = lowerCaseString.indexOf(firstCharOfSequence1, start);
+            if (firstIndex == -1) break;
+
+            if (isSequenceFound(lowerCaseString, sequence1, firstIndex, sequence1Length)) {
+                result.append(string, copyStart, firstIndex)
+                      .append(escapeChar)
+                      .append(string, firstIndex, firstIndex + sequence1Length);
+                copyStart = start = firstIndex + sequence1Length;
+            } else {
+                start = firstIndex + 1;
+            }
+        }
+
+        return result.length() == 0 ? string : result.append(string, copyStart, string.length());
+    }
+
+    private static boolean isSequenceFound(String lowerCaseString, CharSequence sequence1, int startIndex, int sequenceLength) {
+        if (sequenceLength > 1 && (startIndex + sequenceLength > lowerCaseString.length())) {
+            return false;
+        }
+
+        for (int i = 1; i < sequenceLength; i++) {
+            if (lowerCaseString.charAt(startIndex + i) != sequence1.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static CharSequence escapeEveryCharacter(CharSequence string, CharSequence escapeChar, int count) {
+        StringBuilder result = new StringBuilder(count * (1 + escapeChar.length()));
+        for (int i = 0; i < count; i++) {
+            result.append(escapeChar).append(string.charAt(i));
+        }
+        return result;
+    }
+
+    // Remaining methods remain the same
+}
+```
+
+### Key Changes:
+1. **Extracted the Lowercase Conversion**: The repetitive expression `string.toString().toLowerCase(locale)` is extracted into the variable `lowerCaseString`, which is reused in the method.
+
+2. **Extracted Method for Sequence Checking**: The logic to check if the sequence is found in the string is moved to a new method `isSequenceFound`, improving readability.
+
+3. **Extracted Method for Escaping Every Character**: The logic for escaping every character when `sequence1Length` is zero is moved to a separate method `escapeEveryCharacter`.
+
+These refactorings make the code cleaner and more efficient by reducing redundancy and improving readability.

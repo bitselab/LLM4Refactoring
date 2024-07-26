@@ -1,0 +1,52 @@
+In the given code snippet, there are indeed opportunities to apply inline variable refactorings to improve the readability and conciseness of the code. Here’s a detailed analysis and the refactored code:
+
+### Refactoring Analysis
+
+1. **Variable `result`** - This variable is used only once in the subsequent `if` statement to check if the `executorService` shutdown properly. We can refactor this by inlining the `awaitTermination` method call directly in the `if` statement.
+
+2. **Logging Statements** - While the refactoring of log messages isn't strictly an "inline variable" change, it's notable that the log message creation for debugging purposes involves concatenating strings, which is done inline. Thus, there’s no refactoring needed for log statements as they serve a clear purpose and are already inlined where they are used.
+
+Here is the refactored code implementing the mentioned change:
+
+### Refactored Code
+```java
+@SuppressForbidden(reason = "This module does not need to deal with logging context")
+public Iterator<SolrInputDocument> preGenerate(int numDocs) throws InterruptedException {
+    log("preGenerate docs=" + numDocs + " ...");
+    docs.clear();
+    executorService =
+            Executors.newFixedThreadPool(
+                    Runtime.getRuntime().availableProcessors() + 1,
+                    new SolrNamedThreadFactory("SolrJMH DocMaker"));
+
+    for (int i = 0; i < numDocs; i++) {
+        executorService.submit(
+                () -> {
+                    SolrInputDocument doc = Docs.this.inputDocument();
+                    docs.add(doc);
+                });
+    }
+
+    executorService.shutdown();
+    if (!executorService.awaitTermination(10, TimeUnit.MINUTES)) {
+        throw new RuntimeException("Timeout waiting for doc adds to finish");
+    }
+    log(
+            "done preGenerateDocs docs="
+                    + docs.size()
+                    + " ram="
+                    + RamUsageEstimator.humanReadableUnits(RamUsageEstimator.sizeOfObject(docs)));
+
+    if (numDocs != docs.size()) {
+        throw new IllegalStateException("numDocs != " + docs.size());
+    }
+
+    return docs.iterator();
+}
+```
+
+### Summary
+- The variable `result` was inlined to make the code more direct and reduce the need for unnecessary variable tracking.
+- Other variables and operations in the code (such as `SolrInputDocument doc` in the lambda expression inside the loop) are necessary for the logical operation of the code and thus are not inlined. 
+
+This refactoring maintains the original functionality while enhancing the code's readability and compactness.

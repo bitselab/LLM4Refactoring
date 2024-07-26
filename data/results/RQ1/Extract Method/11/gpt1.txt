@@ -1,0 +1,91 @@
+Upon reviewing the provided code, which is a part of the Jetty project related to QUIC protocol implementation, several refactoring opportunities can be identified. The code is well-structured, but there are areas where improvements can be made for readability, maintainability, and efficiency. Below are some suggestions:
+
+1. **Extract Method for Repeated Code**: The methods `notifyOpened` and `notifyClosed` have similar structures. The repeated code for handling listeners can be extracted into a separate method to improve readability and reduce duplication.
+
+2. **Use Early Returns**: In methods like `getOrCreateStreamEndPoint`, using an early return can improve readability and reduce nesting.
+
+3. **Enhance Logging**: More informative logging can be added, especially in catch blocks, to aid in debugging and maintenance.
+
+4. **Simplify Null Checks**: In methods like `getRemoteCloseInfo`, the null check can be simplified using Java 8 Optional API.
+
+5. **Refactor Long Methods**: Methods like `process` are quite long and do multiple things. Breaking them down into smaller, single-responsibility methods would improve readability and maintainability.
+
+6. **Consolidate Exception Handling**: Exception handling is done in various places; it might be beneficial to have a more centralized way of handling exceptions, especially for similar operations.
+
+7. **Review and Refine Access Modifiers**: Some methods or member variables might have more restrictive access modifiers to encapsulate the class's internal workings better.
+
+8. **Improve Comments and Documentation**: While the code is well-commented, ensuring that all public methods have comprehensive JavaDoc comments would be beneficial, especially for complex methods.
+
+9. **Consider Design Patterns**: For some of the functionalities, design patterns (like Factory for stream endpoint creation) might be useful to make the code more flexible and easier to extend or modify in the future.
+
+10. **Optimize Imports**: It's always a good practice to keep the import statements clean and organized, removing any unused imports.
+
+Now, let's apply some of these refactoring principles to the given code. Due to the complexity and length of the code, only key sections will be refactored as examples.
+
+Here is the refactored code based on the identified opportunities. Note that due to the size and complexity of the original code, only key sections are refactored. The changes focus on improving readability, reducing duplication, and enhancing maintainability.
+
+### Refactored Code
+
+```java
+// ... [Other imports and class documentation]
+
+public abstract class QuicSession extends ContainerLifeCycle {
+    // ... [Other member variables]
+
+    // Constructor and other methods remain unchanged
+
+    @Override
+    protected void doStart() throws Exception {
+        super.doStart();
+        notifyListeners(EventType.OPENED);
+    }
+
+    @Override
+    protected void doStop() throws Exception {
+        super.doStop();
+        notifyListeners(EventType.CLOSED);
+    }
+
+    // Refactored method to handle listener notifications
+    private void notifyListeners(EventType eventType) {
+        getEventListeners().stream()
+                .filter(Listener.class::isInstance)
+                .map(Listener.class::cast)
+                .forEach(listener -> notifyListener(listener, eventType));
+    }
+
+    // New method to notify a single listener
+    private void notifyListener(Listener listener, EventType eventType) {
+        try {
+            if (eventType == EventType.OPENED) {
+                listener.onOpened(this);
+            } else if (eventType == EventType.CLOSED) {
+                listener.onClosed(this);
+            }
+        } catch (Throwable x) {
+            LOG.info("Failure notifying listener {}", listener, x);
+        }
+    }
+
+    // ... [Other methods remain unchanged]
+
+    // Enum for Listener Event Types
+    private enum EventType {
+        OPENED, CLOSED
+    }
+
+    // ... [Rest of the class]
+
+    // Listener interface remains unchanged
+}
+```
+
+### Explanation of Changes
+
+1. **Extract Method for Repeated Code**: The common logic in `notifyOpened` and `notifyClosed` is extracted into a new method `notifyListeners`, reducing code duplication.
+
+2. **New Method `notifyListener`**: This method simplifies the notification process and allows for easy handling of different event types.
+
+3. **Added `EventType` Enum**: This enum is used to distinguish between different types of events for listener notification.
+
+These changes focus on improving the maintainability and readability of the code while preserving its original functionality. Remember, refactoring is an ongoing process, and the needs may vary based on the project's specific requirements and context.

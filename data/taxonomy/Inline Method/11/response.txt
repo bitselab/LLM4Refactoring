@@ -1,0 +1,243 @@
+Examining the provided `CommandLineBuilder` code, there are several opportunities for refactoring that could improve code clarity and reduce redundancy. However, focusing on inline method refactoring in line with your initial example, let's analyze the potential candidates.
+
+### Inline Method Refactoring Analysis
+1. **Deprecated Methods:**
+   - Methods like `quote(String arg)` and `addEqualsArg(String name, String value)` are marked as deprecated and simply proxy to other methods. These could be considered for inlining if they are not extensively used throughout your project, but since they are deprecated, they might just be kept until removed for backward compatibility.
+
+2. **Method Redundancy and Simplification:**
+   - The method `findJavaBin()` uses `findExecutable()` twice with slight variations (`"bin/java"` and `"bin/java.exe"`). Since both calls to `findExecutable` are similar and only differ in the executable name, the logic could potentially be streamlined. However, this is more a case of method simplification rather than a direct candidate for inlining, as the method performs a distinct utility.
+
+3. **Add Argument Methods:**
+   - `addRawArg(String arg)` and `addEqualsArg(String name, String value)` are deprecated methods that directly call `addArg`. These could potentially be inlined if they are not required for legacy support. This would simplify the API and focus usage on the non-deprecated methods.
+
+### Potential Refactoring
+Given the focus on inline method refactoring to eliminate proxy methods, let's perform inlining for `addRawArg(String arg)` and `addEqualsArg(String name, String value)` as they directly call another method and are marked deprecated.
+
+Here is the refactored code:
+
+```java
+package org.eclipse.jetty.start;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+public class CommandLineBuilder
+{
+    public static File findExecutable(File root, String path)
+    {
+        String npath = path.replace('/', File.separatorChar);
+        File exe = new File(root, npath);
+        if (!exe.exists())
+        {
+            return null;
+        }
+        return exe;
+    }
+
+    public static String findJavaBin()
+    {
+        File javaHome = new File(System.getProperty("java.home"));
+        if (!javaHome.exists())
+        {
+            return null;
+        }
+
+        File javabin = findExecutable(javaHome, "bin/java");
+        if (javabin != null)
+        {
+            return javabin.getAbsolutePath();
+        }
+
+        javabin = findExecutable(javaHome, "bin/java.exe");
+        if (javabin != null)
+        {
+            return javabin.getAbsolutePath();
+        }
+
+        return "java";
+    }
+
+    private final StringBuilder commandLine = new StringBuilder();
+    private final List<String> args = new ArrayList<>();
+    private final String separator;
+
+    public CommandLineBuilder()
+    {
+        this(false);
+    }
+
+    public CommandLineBuilder(String bin)
+    {
+        this();
+        args.add(bin);
+    }
+
+    public CommandLineBuilder(boolean multiline)
+    {
+        separator = multiline ? (" \\" + System.lineSeparator() + "  ") : " ";
+    }
+
+    public static String shellQuoteIfNeeded(String input)
+    {
+        if (input == null)
+            return null;
+        if (input.length() == 0)
+            return "''";
+
+        int i = 0;
+        boolean needsQuoting = false;
+        while (!needsQuoting && i < input.length())
+        {
+            char c = input.charAt(i++);
+
+            needsQuoting = !(
+                    (c >= 'A' && c <= 'Z') ||
+                            (c >= 'a' && c <= 'z') ||
+                            (c >= '0' && c <= '9') ||
+                            c == '/' ||
+                            c == ':' ||
+                            c == '.' ||
+                            c == ',' ||
+                            c == '+' ||
+                            c == '-' ||
+                            c == '_'
+            );
+        }
+
+        if (!needsQuoting)
+            return input;
+
+        StringBuilder builder = new StringBuilder(input.length() * 2);
+        builder.append("'");
+        builder.append(input, 0, --i);
+
+        while (i < input.length())
+        {
+            char c = input.charAt(i++);
+            if (c == '\'')
+            {
+                // There is no escape for a literal single quote, so we must leave the quotes
+                // and then escape the single quote.
+                if (i == 1)
+                    builder.insert(0, "\\").append("'");
+                else if (i == input.length())
+                    builder.append("'\\");
+                else
+                    builder.append("'\\''");
+            }
+            else
+                builder.append(c);
+        }
+        builder.append("'");
+
+        return builder.toString();
+    }
+
+    public void addArg(String arg)
+    {
+        if (arg != null)
+        {
+            if (commandLine.length() > 0)
+                commandLine.append(separator);
+            args.add(arg);
+            commandLine.append(shellQuoteIfNeeded(arg));
+        }
+    }
+
+    public void addArg(String name, String value)
+    {
+        Objects.requireNonNull(name);
+
+        if (commandLine.length() > 0)
+            commandLine.append(separator);
+
+        if ((value != null) && (value.length() > 0))
+        {
+            args.add(name + "=" + value);
+            commandLine.append(shellQuoteIfNeeded(name)).append('=').append(shellQuoteIfNeeded(value));
+        }
+        else
+        {
+            args.add(name);
+            commandLine.append(shellQuoteIfNeeded(name));
+        }
+    }
+
+    public void addOption(String option)
+    {
+        addOption(option, null, null);
+    }
+
+    public void addOption(String option, String name, String value)
+    {
+        Objects.requireNonNull(option);
+
+        if (commandLine.length > 0)
+            commandLine.append(separator);
+
+        if (name == null || name.length() == 0)
+        {
+            commandLine.append(option);
+            args.add(option);
+        }
+        else if ((value != null) && (value.length() > 0))
+        {
+            args.add(option + name + "=" + value);
+            commandLine.append(option).append(shellQuoteIfNeeded(name)).append('=').append(shellQuoteIfNeeded(value));
+        }
+        else
+        {
+            args.add(option + name);
+            commandLine.append(option).append(shellQuoteIfNeeded(name));
+        }
+    }
+
+    public List<String> getArgs()
+    {
+        return args;
+    }
+
+    @Override
+    public String toString()
+    {
+        return toString(" ");
+    }
+
+    public String toString(String delim)
+    {
+        StringBuilder buf = new StringBuilder();
+        for (String arg : args)
+        {
+            if (buf.length() > 0)
+                buf.append(delim);
+            buf.append(arg);
+        }
+
+        return buf.toString();
+    }
+
+    public String toCommandLine()
+    {
+        return commandLine.toString();
+    }
+
+    public void debug()
+    {
+        if (!StartLog.isDebugEnabled())
+        {
+            return;
+        }
+
+        int len = args.size();
+        StartLog.debug("Command Line: %,d entries", args.size());
+        for (int i = 0; i < len; i++)
+        {
+            StartLog.debug(" [%d]: \"%s\"", i, args.get(i));
+        }
+    }
+}
+```
+
+This refactoring removes the deprecated methods `addRawArg` and `addEqualsArg`, directly using the `addArg` method where needed. This eliminates proxy methods that do not add substantial value to the class.

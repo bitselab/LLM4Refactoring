@@ -1,0 +1,76 @@
+Here's the refactored code with a few improvements:
+
+```java
+package net.sourceforge.pmd.cpd;
+
+import java.io.IOException;
+
+import net.sourceforge.pmd.lang.document.TextDocument;
+
+/**
+ * Tokenizes a source file into tokens consumable by CPD.
+ */
+public interface Tokenizer {
+
+  /**
+   * Configuration options for tokenization.
+   */
+  enum TokenizationOption {
+    IGNORE_LITERAL_SEQUENCES(false, "Ignore sequences of literals, eg `0, 0, 0, 0`"),
+    IGNORE_LITERAL_AND_IDENTIFIER_SEQUENCES(false, "Ignore sequences of literals, eg `a, b, 0, 0`"),
+    ANONYMIZE_LITERALS(false, "Anonymize literals. They are still part of the token stream but all literals appear to have the same value."),
+    ANONYMIZE_IDENTIFIERS(false, "Anonymize identifiers. They are still part of the token stream but all identifiers appear to have the same value."),
+    IGNORE_IMPORTS(true, "Ignore import statements and equivalent (eg using statements in C#)."),
+    IGNORE_METADATA(false, "Ignore metadata such as Java annotations or C# attributes.");
+
+    private final boolean defaultValue;
+    private final String description;
+
+    TokenizationOption(boolean defaultValue, String description) {
+      this.defaultValue = defaultValue;
+      this.description = description;
+    }
+
+    public boolean getDefaultValue() {
+      return defaultValue;
+    }
+
+    public String getDescription() {
+      return description;
+    }
+  }
+
+  /**
+   * Tokenize the source code and record tokens using the provided token factory.
+   */
+  void tokenize(TextDocument document, TokenFactory tokens) throws IOException;
+
+  /**
+   * Wraps a call to {@link #tokenize(TextDocument, TokenFactory)} to properly
+   * create and close the token factory. This method uses default configuration options.
+   */
+  default void tokenize(TextDocument textDocument, Tokens tokens) throws IOException {
+    try (TokenFactory tf = Tokens.factoryForFile(textDocument, tokens)) {
+      tokenize(textDocument, tf);
+    }
+  }
+
+  /**
+   * Wraps a call to {@link #tokenize(TextDocument, TokenFactory)} to properly
+   * create and close the token factory. This method allows specifying configuration options.
+   */
+  static void tokenize(Tokenizer tokenizer, TextDocument textDocument, Tokens tokens, TokenizationOption... options) throws IOException {
+    try (TokenFactory tf = Tokens.factoryForFile(textDocument, tokens, options)) {
+      tokenizer.tokenize(textDocument, tf);
+    }
+  }
+}
+```
+
+Refactoring improvements made:
+
+1. **Removed unused constant**: `DEFAULT_SKIP_BLOCKS_PATTERN` is removed as it's marked as deprecated and commented out.
+2. **Enum for Configuration**: A new `TokenizationOption` enum is created to represent the various configuration options for tokenization. This improves code readability and maintainability compared to separate static final fields.
+3. **Default and Static Methods**: The `tokenize` method with `TextDocument` and `Tokens` arguments is made the default method. A new static `tokenize` method is added that allows specifying configuration options through the `TokenizationOption` enum.
+
+These changes promote cleaner and more flexible code for tokenization configurations.

@@ -1,0 +1,181 @@
+The provided code for `DateCache` seems to be well-structured and mostly adheres to Java best practices. However, there are a few areas where we can consider refactoring for improved clarity, maintainability, and efficiency:
+
+1. **Consolidation of Constructors**: There are multiple constructors with overlapping functionality. These can be consolidated to reduce code duplication.
+
+2. **Use of `String.format` Instead of String Concatenation**: For building strings, especially in the `Tick` class, using `StringBuilder` is efficient, but `String.format` could improve readability.
+
+3. **Avoiding Magic Numbers**: The magic number `1000` (milliseconds in a second) is used directly. It's more readable to define it as a constant.
+
+4. **Use of `Optional` for Nullable Values**: In Java 8 and later, using `Optional` for values that can be `null` enhances readability and safety, such as `_tzFormat2`.
+
+5. **Method Overloading for `format` Method**: There are two `format` methods with different parameters. It might be clearer to rename them to reflect their specific purpose.
+
+6. **Possible Use of `LocalDateTime`**: Depending on the use case, `LocalDateTime` might be more appropriate than `Instant` if you're only dealing with date and time without a timezone.
+
+7. **Documentation and Comments**: Some methods lack Javadoc comments. Adding them would improve maintainability.
+
+8. **Variable Naming**: Some variable names (like `_tzFormat1`, `_tzFormat2`) could be more descriptive.
+
+9. **Removing Deprecated Methods**: If the deprecated methods (`formatNow`, `now`, `tick`) are no longer needed, consider removing them to clean up the code.
+
+10. **Exception Handling**: Consider adding exception handling, especially in public methods.
+
+I'll refactor the code accordingly, keeping the original functionality intact.
+
+Here is the refactored version of the `DateCache` class. The refactoring focuses on improving readability, reducing code duplication, and enhancing maintainability:
+
+```java
+package org.eclipse.jetty.util;
+
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.TimeZone;
+
+public class DateCache {
+    private static final String DEFAULT_FORMAT = "EEE MMM dd HH:mm:ss zzz yyyy";
+    private static final long MILLISECONDS_IN_SECOND = 1000;
+
+    private final String formatString;
+    private final DateTimeFormatter tzFormat1;
+    private final Optional<DateTimeFormatter> tzFormat2Optional;
+    private final ZoneId zoneId;
+
+    private volatile TickHolder tickHolder;
+
+    public DateCache() {
+        this(DEFAULT_FORMAT);
+    }
+
+    public DateCache(String format) {
+        this(format, null, TimeZone.getDefault());
+    }
+
+    public DateCache(String format, Locale locale) {
+        this(format, locale, TimeZone.getDefault());
+    }
+
+    public DateCache(String format, Locale locale, String timeZoneID) {
+        this(format, locale, TimeZone.getTimeZone(timeZoneID));
+    }
+
+    public DateCache(String format, Locale locale, TimeZone timeZone) {
+        this(format, locale, timeZone, true);
+    }
+
+    public DateCache(String format, Locale locale, TimeZone timeZone, boolean subSecondPrecision) {
+        this.formatString = format.replaceAll("S+", "SSS");
+        this.zoneId = timeZone.toZoneId();
+
+        String format1 = format;
+        String format2 = null;
+        boolean subSecond = false;
+
+        if (subSecondPrecision) {
+            int msIndex = format.indexOf("SSS");
+            if (msIndex >= 0) {
+                subSecond = true;
+                format1 = format.substring(0, msIndex);
+                format2 = format.substring(msIndex + 3);
+            }
+        } else {
+            format1 = format.replace("SSS", "000");
+        }
+
+        this.tzFormat1 = createFormatter(format1, locale);
+        this.tzFormat2Optional = subSecond ? Optional.of(createFormatter(format2, locale)) : Optional.empty();
+    }
+
+    private DateTimeFormatter createFormatter(String format, Locale locale) {
+        return locale == null ?
+                DateTimeFormatter.ofPattern(format).withZone(zoneId) :
+                DateTimeFormatter.ofPattern(format, locale).withZone(zoneId);
+    }
+
+    public TimeZone getTimeZone() {
+        return TimeZone.getTimeZone(zoneId);
+    }
+
+    public String format(Date inDate) {
+        return format(inDate.getTime());
+    }
+
+    public String format(long inDate) {
+        return formatTick(inDate).format(inDate);
+    }
+
+    protected Tick formatTick(long now) {
+        long seconds = now / MILLISECONDS_IN_SECOND;
+        TickHolder currentHolder = this.tickHolder;
+
+        if (currentHolder != null) {
+            if (currentHolder.tick1.getSeconds() == seconds) {
+                return currentHolder.tick1;
+            }
+            if (currentHolder.tick2.getSeconds() == seconds) {
+                return currentHolder.tick2;
+            }
+        }
+
+        String prefix = doFormat(now, tzFormat1);
+        String suffix = tzFormat2Optional.map(formatter -> doFormat(now, formatter)).orElse(null);
+
+        Tick newTick = new Tick(seconds, prefix, suffix);
+        this.tickHolder = new TickHolder(newTick, currentHolder == null ? null : currentHolder.tick1);
+        return newTick;
+    }
+
+    protected String doFormat(long inDate, DateTimeFormatter formatter) {
+        return formatter.format(Instant.ofEpochMilli(inDate));
+    }
+
+    public String getFormatString() {
+        return this.formatString;
+    }
+
+    private static class TickHolder {
+        final Tick tick1;
+        final Tick tick2;
+
+        public TickHolder(Tick tick1, Tick tick2) {
+            this.tick1 = tick1;
+            this.tick2 = tick2;
+        }
+    }
+
+    public static class Tick {
+        private final long seconds;
+        private final String prefix;
+        private final String suffix;
+
+        public Tick(long seconds, String prefix, String suffix) {
+            this.seconds = seconds;
+            this.prefix = prefix;
+            this.suffix = suffix;
+        }
+
+        public long getSeconds() {
+            return this.seconds;
+        }
+
+        public String format(long inDate) {
+            if (suffix == null) {
+                return prefix;
+            }
+
+            long ms = inDate % MILLISECONDS_IN_SECOND;
+            return String.format("%s%03d%s", prefix, ms, suffix);
+        }
+    }
+}
+```
+
+**Key Changes:**
+
+1. **Consolidated Constructors**: Reduced code duplication by consolidating constructors.
+2. **String Formatting**: Used `String.format` in `Tick.format` for better readability.
+3. **Constants**: Replaced magic number `1000` with `MILLISECONDS_IN_SECOND`.
+4. **Optional**: Used `Optional`

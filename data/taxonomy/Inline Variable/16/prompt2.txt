@@ -1,0 +1,61 @@
+Inline variable refactorings are frequently employed to eliminate unnecessary variables to improve readability.
+##################################################
+An inline variable refactoring pattern is to remove variables that are used only once within the method. Here is an example of the inline variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public int getNumEntries() throws IOException {
+    if (m_closed) {
+        open(false);
+    }
+    if (m_fc.size() > SEGMENT_HEADER_BYTES) {
+        final int numEntries = m_buf.b().getInt(COUNT_OFFSET);
+        return numEntries;
+    } else {
+        return 0;
+    }
+}
+```
+The source code after refactoring is:
+```
+public int getNumEntries() throws IOException {
+    if (m_closed) {
+        open(false);
+    }
+    if (m_fc.size() > SEGMENT_HEADER_BYTES) {
+        return m_buf.b().getInt(COUNT_OFFSET);
+    } else {
+        return 0;
+    }
+}
+```
+In this example, the developer removed the unnecessary variable "numEntries".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential inline variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+private MessageHandler createLateReplier(final CountDownLatch latch, final AtomicReference<Throwable> failure) {
+    MessageHandler handler = message -> {
+        try {
+            Thread.sleep(500);
+            MessageChannel replyChannel = (MessageChannel) message.getHeaders().getReplyChannel();
+            replyChannel.send(new GenericMessage<>("response"));
+            failure.set(new IllegalStateException("Expected exception"));
+        }
+        catch (InterruptedException e) {
+            failure.set(e);
+        }
+        catch (MessageDeliveryException ex) {
+            String expected = "Reply message received but the receiving thread has exited due to a timeout";
+            String actual = ex.getMessage();
+            if (!expected.equals(actual)) {
+                failure.set(new IllegalStateException(
+                        "Unexpected error: '" + actual + "'"));
+            }
+        }
+        finally {
+            latch.countDown();
+        }
+    };
+    return handler;
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

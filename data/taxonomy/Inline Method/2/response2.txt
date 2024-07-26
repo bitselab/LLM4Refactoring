@@ -1,0 +1,23 @@
+In the given code snippet for the class `CharSequenceInputStreamTest`, there is an opportunity to apply the inline method refactoring pattern, as the private method `testSkip` is only called once within the class. Here, inlining `testSkip` into `testSkip_RequiredCharsets` can simplify the structure by reducing the indirection of method calls, potentially improving code readability and maintainability.
+
+Here's the refactored code with the inline method refactoring applied:
+
+```java
+public class CharSequenceInputStreamTest {
+
+    @Test
+    public void testSkip_RequiredCharsets() throws Exception {
+        for (final String csName : getRequiredCharsetNames()) {
+            try (InputStream r = new CharSequenceInputStream("test", csName)) {
+                assertEquals(1, r.skip(1));
+                assertEquals(2, r.skip(2));
+                assertEquals('t', r.read(), csName);
+                r.skip(100);
+                assertEquals(-1, r.read(), csName);
+            }
+        }
+    }
+}
+```
+
+In this refactoring, the `testSkip` method's body is directly incorporated into the `testSkip_RequiredCharsets` method. The `testSkip` method is removed since it adds an additional layer of abstraction that may not be necessary given its singular usage. This refactoring makes the code simpler and reduces the number of methods in the class, aligning with the goal of making the method's functionality clearer within its only context of use.

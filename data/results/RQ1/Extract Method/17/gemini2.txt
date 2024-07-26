@@ -1,0 +1,87 @@
+There is a potential refactoring opportunity in the `IOUtils` class using the Extract Method technique. The logic for creating writers based on file paths and character encodings is spread across three methods:
+
+- `createWriter()`
+- `createWriter(String reportFile)`
+- `createWriter(Charset charset, String reportFile)`
+
+These methods share a significant amount of code for handling the creation of the writer object and ensuring the parent directory exists.  We can extract this common logic into a separate helper method to improve readability and reduce code duplication.
+
+Here's the refactored code:
+
+```java
+package net.sourceforge.pmd.internal.util;
+
+import java.io.Closeable;
+import java.io.File;
+import java.io.FilterOutputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
+
+import org.apache.commons.lang3.StringUtils;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+public final class IOUtil {
+  // ... other fields and methods
+
+  private static Writer createWriterInternal(Charset charset, String reportFile) throws IOException {
+    if (StringUtils.isBlank(reportFile)) {
+      return new OutputStreamWriter(new FilterOutputStream(System.out) {
+        @Override
+        public void close() throws IOException {
+          // avoid closing stdout, simply flush
+          try {
+            out.flush();
+          } catch (IOException ignored) {
+            // Nothing left to do
+          }
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+          /*
+          * FilterOutputStream iterates over each byte, asking subclasses to provide more efficient implementations
+          * It therefore negates any such optimizations that the underlying stream actually may implement.
+          */
+          out.write(b, off, len);
+        }
+      }, charset);
+    }
+    Path path = new File(reportFile).toPath().toAbsolutePath();
+    Files.createDirectories(path.getParent()); // ensure parent dir exists
+    // this will create the file if it doesn't exist
+    return Files.newBufferedWriter(path, charset);
+  }
+
+  public static Writer createWriter() {
+    return createWriter(null);
+  }
+
+  public static Writer createWriter(String reportFile) {
+    return createWriter(getDefaultCharset(), reportFile);
+  }
+
+  public static Writer createWriter(Charset charset, String reportFile) {
+    try {
+      return createWriterInternal(charset, reportFile);
+    } catch (IOException e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+
+  // ... other methods
+}
+```
+
+The `createWriterInternal` method encapsulates the logic for creating the writer object and handling file creation. This improves code organization and reduces redundancy in the original `createWriter`, `createWriter(String reportFile)`, and `createWriter(Charset charset, String reportFile)` methods. 

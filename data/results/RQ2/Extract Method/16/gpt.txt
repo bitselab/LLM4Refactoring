@@ -1,0 +1,47 @@
+To refactor the provided code snippet for better readability and reusability, the repeated code block can be extracted into a new method. This new method will centralize the logic of obtaining the first path from an array of paths while handling edge cases like empty arrays or logging when multiple paths are found.
+
+The duplicated code appears in two methods: `getClassMapping` and `getMethodMapping`. The common functionality can be extracted into a private static method, for instance, `getFirstPathMapping`.
+
+Here is how the refactored code would look:
+
+```java
+// Existing class code...
+
+private static String getClassMapping(Class<?> controllerType) {
+    Assert.notNull(controllerType, "'controllerType' must not be null");
+    RequestMapping mapping = AnnotatedElementUtils.findMergedAnnotation(controllerType, RequestMapping.class);
+    if (mapping == null) {
+        return "";
+    }
+    return getFirstPathMapping(mapping.path(), controllerType.getName());
+}
+
+private static String getMethodMapping(Method method) {
+    Assert.notNull(method, "'method' must not be null");
+    RequestMapping requestMapping = AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class);
+    if (requestMapping == null) {
+        throw new IllegalArgumentException("No @RequestMapping on: " + method.toGenericString());
+    }
+    return getFirstPathMapping(requestMapping.path(), method.toGenericString());
+}
+
+private static String getFirstPathMapping(String[] paths, String logContext) {
+    if (ObjectUtils.isEmpty(paths) || !StringUtils.hasLength(paths[0])) {
+        return "";
+    }
+    if (paths.length > 1 && logger.isTraceEnabled()) {
+        logger.trace("Using first of multiple paths on " + logContext);
+    }
+    return resolveEmbeddedValue(paths[0]);
+}
+
+// Rest of the existing class code...
+```
+
+In this refactoring:
+
+- The common logic for extracting the first path and handling edge cases is moved to the `getFirstPathMapping` method.
+- This method takes two parameters: `String[] paths`, which is the array of paths to process, and `String logContext`, which is used for logging context (like the class or method name).
+- Both `getClassMapping` and `getMethodMapping` methods now call `getFirstPathMapping` with their respective contexts.
+
+This refactoring reduces code duplication and centralizes the logic for path extraction, making the code easier to maintain and understand.

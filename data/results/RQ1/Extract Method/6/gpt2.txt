@@ -1,0 +1,44 @@
+Reviewing the provided code snippet, I identify a clear opportunity for the "Extract Method" refactoring. The repeated code snippet involved in creating a file in the Azure Blob File System is a prime candidate. This snippet appears in multiple methods and can be refactored into its own method to improve code readability and maintainability.
+
+The snippet to be refactored is:
+
+```java
+String fileName = methodName.getMethodName() + fileIdx;
+byte[] fileContent = getRandomBytesArray(fileSize);
+Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+```
+
+This snippet can be encapsulated into a private method, which I'll name `createTestFileWithPath`. Here's how the refactored code would look:
+
+Refactored Method:
+
+```java
+private Path createTestFileWithPath(AzureBlobFileSystem fs, String methodName, int fileIdx, int fileSize) throws IOException {
+    String fileName = methodName + fileIdx;
+    byte[] fileContent = getRandomBytesArray(fileSize);
+    return createFileWithContent(fs, fileName, fileContent);
+}
+```
+
+Refactoring in Context:
+
+I'll refactor one of the methods to demonstrate how this new method can be used. Due to the length of the code, I'll only refactor the `testNumBackendCalls` method as an example.
+
+```java
+private void testNumBackendCalls(boolean optimizeFooterRead) throws Exception {
+    int fileIdx = 0;
+    for (int i = 0; i <= 4; i++) {
+        for (int j = 0; j <= 2; j++) {
+            int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+            int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+            final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+            Path testFilePath = createTestFileWithPath(fs, methodName.getMethodName(), fileIdx++, fileSize);
+            // Rest of the method logic...
+        }
+    }
+}
+```
+
+This refactoring encapsulates the file creation process into a separate method, thereby adhering to the DRY (Don't Repeat Yourself) principle. You would apply the same refactoring to all other methods where this repeated code snippet appears.
+
+For a complete refactoring, you would need to replace all instances of the original snippet with calls to the new `createTestFileWithPath` method. This will make the code more maintainable and easier to understand.

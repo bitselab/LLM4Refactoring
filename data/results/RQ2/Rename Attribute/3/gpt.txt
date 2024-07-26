@@ -1,0 +1,38 @@
+To improve the readability and clarity of the code, we will focus on renaming the `objectsEquals` attribute. A more descriptive name would enhance understanding of its purpose in the code. The name `objectsEquals` suggests a state, but it's more appropriate to use a name that indicates this is a condition being checked.
+
+Suggested rename: `areObjectsEqual`
+
+This name change makes it clear that the attribute is used to store the result of an equality check between two objects. Here's the refactored code with this change:
+
+```java
+package org.apache.commons.lang3.builder;
+
+// ... [other imports remain unchanged]
+
+public class DiffBuilder<T> implements Builder<DiffResult<T>> {
+
+    // ... [other class members and methods remain unchanged]
+
+    private final boolean areObjectsEqual; // Renamed attribute
+
+    public DiffBuilder(final T lhs, final T rhs, final ToStringStyle style, final boolean testObjectsEquals) {
+        this.left = Objects.requireNonNull(lhs, "lhs");
+        this.right = Objects.requireNonNull(rhs, "rhs");
+        this.diffs = new ArrayList<>();
+        this.toStringFormat = DiffBuilder.TO_STRING_FORMAT;
+        this.style = style != null ? style : ToStringStyle.DEFAULT_STYLE;
+        this.areObjectsEqual = testObjectsEquals && Objects.equals(lhs, rhs); // Usage of renamed attribute
+    }
+
+    // ... [rest of the methods remain unchanged, applying the renamed variable where necessary]
+
+    @Override
+    public DiffResult<T> build() {
+        return new DiffResult<>(left, right, diffs, style, toStringFormat);
+    }
+
+    // ... [rest of the class remains unchanged]
+}
+```
+
+This simple renaming enhances the code's readability, making it easier for future developers to understand the role of this attribute in the context of `DiffBuilder`. Additionally, it aligns with common Java naming conventions for boolean variables and conditions.

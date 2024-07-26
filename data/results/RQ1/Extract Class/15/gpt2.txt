@@ -1,0 +1,56 @@
+In the provided code snippet, employing the Extract Class refactoring technique can improve its structure and readability. The primary candidates for extraction are the inner classes, each representing a distinct aspect of transaction configuration. By moving these inner classes to their own files, we separate concerns and enhance the maintainability of the code.
+
+Refactoring involves:
+
+1. **Extract `TransactionTemplateConfiguration`**: This class is specifically for configuring `TransactionTemplate`. It can be moved to its own file, making it more focused and easier to manage.
+
+2. **Extract `EnableTransactionManagementConfiguration`**: This class, along with its nested classes `JdkDynamicAutoProxyConfiguration` and `CglibAutoProxyConfiguration`, is responsible for enabling transaction management with different proxy configurations. Extracting it to a separate file improves modularity.
+
+The refactored `TransactionAutoConfiguration` class:
+
+```java
+package org.springframework.boot.autoconfigure.transaction;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.ReactiveTransactionManager;
+import org.springframework.transaction.reactive.TransactionalOperator;
+
+/**
+ * Auto-configuration for Spring transaction.
+ * @author Stephane Nicoll
+ * @since 1.3.0
+ */
+@AutoConfiguration
+@ConditionalOnClass(PlatformTransactionManager.class)
+@EnableConfigurationProperties(TransactionProperties.class)
+public class TransactionAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    TransactionManagerCustomizers platformTransactionManagerCustomizers(
+            ObjectProvider<PlatformTransactionManagerCustomizer<?>> customizers) {
+        return new TransactionManagerCustomizers(customizers.orderedStream().toList());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnSingleCandidate(ReactiveTransactionManager.class)
+    public TransactionalOperator transactionalOperator(ReactiveTransactionManager transactionManager) {
+        return TransactionalOperator.create(transactionManager);
+    }
+
+    // TransactionTemplateConfiguration and EnableTransactionManagementConfiguration 
+    // are moved to their own files.
+}
+```
+
+For the `TransactionTemplateConfiguration` and `EnableTransactionManagementConfiguration`, you would create separate files, each annotated with `@Configuration` and containing the respective methods and nested classes.
+
+Remember, after extraction, these new classes should be properly managed in terms of package structure and accessibility to ensure seamless integration with the rest of the application. This kind of refactoring mainly improves code readability and maintainability without altering the functionality.

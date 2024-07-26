@@ -1,0 +1,304 @@
+Rename variable refactorings are frequently employed to modify low-quality-identifiers to improve readability.
+##################################################
+A rename variable refactoring pattern is to rename variables to align with the naming convention in other variables. Here is an example of the rename variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public static TypeDeclarationNode convertTypeNodeAST(Node n) {
+    int token = n.getType();
+    switch (token) {
+        case Token.STAR:
+        case Token.EMPTY:
+            return anyType();
+        case Token.VOID:
+            return undefinedType();
+        case Token.BANG:
+            return convertTypeNodeAST(n.getFirstChild());
+        case Token.STRING:
+            String typeName = n.getString();
+            switch (typeName) {
+                case "boolean":
+                    return booleanType();
+                case "number":
+                    return numberType();
+                case "string":
+                    return stringType();
+                case "null":
+                case "undefined":
+                case "void":
+                    return null;
+                default:
+                    TypeDeclarationNode root = namedType(typeName);
+                    if (n.getChildCount() > 0 && n.getFirstChild().isBlock()) {
+                        Node block = n.getFirstChild();
+                        if ("Array".equals(typeName)) {
+                            return arrayType(convertTypeNodeAST(block.getFirstChild()));
+                        }
+                        return parameterizedType(root,
+                                Iterables.filter(
+                                        Iterables.transform(block.children(), CONVERT_TYPE_NODE),
+                                        Predicates.notNull()));
+                    }
+                    return root;
+            }
+        case Token.QMARK:
+            Node child = n.getFirstChild();
+            return child == null
+                    ? anyType()
+                    : convertTypeNodeAST(child);
+        case Token.LC:
+            LinkedHashMap<String, TypeDeclarationNode> properties = new LinkedHashMap<>();
+            for (Node field : n.getFirstChild().children()) {
+                boolean isFieldTypeDeclared = field.getType() == Token.COLON;
+                Node fieldNameNode = isFieldTypeDeclared ? field.getFirstChild() : field;
+                String fieldName = fieldNameNode.getString();
+                if (fieldName.startsWith("'") || fieldName.startsWith("\"")) {
+                    fieldName = fieldName.substring(1, fieldName.length() - 1);
+                }
+                TypeDeclarationNode fieldType = isFieldTypeDeclared
+                        ? convertTypeNodeAST(field.getLastChild()) : null;
+                properties.put(fieldName, fieldType);
+            }
+            return recordType(properties);
+        case Token.ELLIPSIS:
+            return arrayType(convertTypeNodeAST(n.getFirstChild()));
+        case Token.PIPE:
+            ImmutableList<TypeDeclarationNode> types = FluentIterable
+                    .from(n.children()).transform(CONVERT_TYPE_NODE)
+                    .filter(Predicates.notNull()).toList();
+            switch (types.size()) {
+                case 0:
+                    return null;
+                case 1:
+                    return types.get(0);
+                default:
+                    return unionType(types);
+            }
+        case Token.FUNCTION:
+            Node returnType = anyType();
+            LinkedHashMap<String, TypeDeclarationNode> parameters = new LinkedHashMap<>();
+            LinkedHashMap<String, TypeDeclarationNode> optionalParams = new LinkedHashMap<>();
+            String restName = null;
+            TypeDeclarationNode restType = null;
+            for (Node child2 : n.children()) {
+                if (child2.isParamList()) {
+                    int paramIdx = 1;
+                    for (Node param : child2.children()) {
+                        String paramName = "p" + paramIdx++;
+                        if (param.getType() == Token.ELLIPSIS) {
+                            if (param.getFirstChild() != null) {
+                                restType = arrayType(convertTypeNodeAST(param.getFirstChild()));
+                            }
+                            restName = paramName;
+                        } else {
+                            TypeDeclarationNode paramNode = convertTypeNodeAST(param);
+                            if (paramNode.getType() == Token.OPTIONAL_PARAMETER) {
+                                optionalParams.put(paramName,
+                                        (TypeDeclarationNode) paramNode.removeFirstChild());
+                            } else {
+                                parameters.put(paramName, convertTypeNodeAST(param));
+                            }
+                        }
+                    }
+                } else if (child2.isNew()) {
+                } else if (child2.isThis()) {
+                } else {
+                    returnType = convertTypeNodeAST(child2);
+                }
+            }
+            return functionType(returnType, parameters, optionalParams, restName, restType);
+        case Token.EQUALS:
+            TypeDeclarationNode optionalParam = convertTypeNodeAST(n.getFirstChild());
+            return optionalParam == null ? null : optionalParameter(optionalParam);
+        default:
+            throw new IllegalArgumentException(
+                    "Unsupported node type: " + Token.name(n.getType())
+                            + " " + n.toStringTree());
+    }
+}
+```
+The source code after refactoring is:
+```
+public static TypeDeclarationNode convertTypeNodeAST(Node n) {
+    int token = n.getType();
+    switch (token) {
+        case Token.STAR:
+        case Token.EMPTY:
+            return anyType();
+        case Token.VOID:
+            return undefinedType();
+        case Token.BANG:
+            return convertTypeNodeAST(n.getFirstChild());
+        case Token.STRING:
+            String typeName = n.getString();
+            switch (typeName) {
+                case "boolean":
+                    return booleanType();
+                case "number":
+                    return numberType();
+                case "string":
+                    return stringType();
+                case "null":
+                case "undefined":
+                case "void":
+                    return null;
+                default:
+                    TypeDeclarationNode root = namedType(typeName);
+                    if (n.getChildCount() > 0 && n.getFirstChild().isBlock()) {
+                        Node block = n.getFirstChild();
+                        if ("Array".equals(typeName)) {
+                            return arrayType(convertTypeNodeAST(block.getFirstChild()));
+                        }
+                        return parameterizedType(root,
+                                Iterables.filter(
+                                        Iterables.transform(block.children(), CONVERT_TYPE_NODE),
+                                        Predicates.notNull()));
+                    }
+                    return root;
+            }
+        case Token.QMARK:
+            Node child = n.getFirstChild();
+            return child == null
+                    ? anyType()
+                    : convertTypeNodeAST(child);
+        case Token.LC:
+            LinkedHashMap<String, TypeDeclarationNode> properties = new LinkedHashMap<>();
+            for (Node field : n.getFirstChild().children()) {
+                boolean isFieldTypeDeclared = field.getType() == Token.COLON;
+                Node fieldNameNode = isFieldTypeDeclared ? field.getFirstChild() : field;
+                String fieldName = fieldNameNode.getString();
+                if (fieldName.startsWith("'") || fieldName.startsWith("\"")) {
+                    fieldName = fieldName.substring(1, fieldName.length() - 1);
+                }
+                TypeDeclarationNode fieldType = isFieldTypeDeclared
+                        ? convertTypeNodeAST(field.getLastChild()) : null;
+                properties.put(fieldName, fieldType);
+            }
+            return recordType(properties);
+        case Token.ELLIPSIS:
+            return arrayType(convertTypeNodeAST(n.getFirstChild()));
+        case Token.PIPE:
+            ImmutableList<TypeDeclarationNode> types = FluentIterable
+                    .from(n.children()).transform(CONVERT_TYPE_NODE)
+                    .filter(Predicates.notNull()).toList();
+            switch (types.size()) {
+                case 0:
+                    return null;
+                case 1:
+                    return types.get(0);
+                default:
+                    return unionType(types);
+            }
+        case Token.FUNCTION:
+            Node returnType = anyType();
+            LinkedHashMap<String, TypeDeclarationNode> requiredParams = new LinkedHashMap<>();
+            LinkedHashMap<String, TypeDeclarationNode> optionalParams = new LinkedHashMap<>();
+            String restName = null;
+            TypeDeclarationNode restType = null;
+            for (Node child2 : n.children()) {
+                if (child2.isParamList()) {
+                    int paramIdx = 1;
+                    for (Node param : child2.children()) {
+                        String paramName = "p" + paramIdx++;
+                        if (param.getType() == Token.ELLIPSIS) {
+                            if (param.getFirstChild() != null) {
+                                restType = arrayType(convertTypeNodeAST(param.getFirstChild()));
+                            }
+                            restName = paramName;
+                        } else {
+                            TypeDeclarationNode paramNode = convertTypeNodeAST(param);
+                            if (paramNode.getType() == Token.OPTIONAL_PARAMETER) {
+                                optionalParams.put(paramName,
+                                        (TypeDeclarationNode) paramNode.removeFirstChild());
+                            } else {
+                                requiredParams.put(paramName, convertTypeNodeAST(param));
+                            }
+                        }
+                    }
+                } else if (child2.isNew()) {
+                } else if (child2.isThis()) {
+                } else {
+                    returnType = convertTypeNodeAST(child2);
+                }
+            }
+            return functionType(returnType, requiredParams, optionalParams, restName, restType);
+        case Token.EQUALS:
+            TypeDeclarationNode optionalParam = convertTypeNodeAST(n.getFirstChild());
+            return optionalParam == null ? null : optionalParameter(optionalParam);
+        default:
+            throw new IllegalArgumentException(
+                    "Unsupported node type: " + Token.name(n.getType())
+                            + " " + n.toStringTree());
+    }
+}
+```
+In this example, the developer renamed the variable "parameters" to "requiredParams".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+private void seekReadAndTest(final AzureBlobFileSystem fs,
+                             final Path testFilePath, final int seekPos, final int length,
+                             final byte[] fileContent, int footerReadBufferSize) throws Exception {
+    AbfsConfiguration conf = getAbfsStore(fs).getAbfsConfiguration();
+    long actualContentLength = fileContent.length;
+    FutureDataInputStreamBuilder builder = getParameterizedBuilder(
+            testFilePath, fs, footerReadBufferSize);
+    try (FSDataInputStream iStream = builder.build().get()) {
+        AbfsInputStream abfsInputStream = (AbfsInputStream) iStream.getWrappedStream();
+        verifyConfigValueInStream(iStream, footerReadBufferSize);
+        long bufferSize = abfsInputStream.getBufferSize();
+        seek(iStream, seekPos);
+        byte[] buffer = new byte[length];
+        long bytesRead = iStream.read(buffer, 0, length);
+
+        long footerStart = max(0,
+                actualContentLength - AbfsInputStream.FOOTER_SIZE);
+        boolean optimizationOn =
+                conf.optimizeFooterRead() && seekPos >= footerStart;
+
+        long actualLength = length;
+        if (seekPos + length > actualContentLength) {
+            long delta = seekPos + length - actualContentLength;
+            actualLength = length - delta;
+        }
+        long expectedLimit;
+        long expectedBCursor;
+        long expectedFCursor;
+        if (optimizationOn) {
+            if (actualContentLength <= footerReadBufferSize) {
+                expectedLimit = actualContentLength;
+                expectedBCursor = seekPos + actualLength;
+            } else {
+                expectedLimit = footerReadBufferSize;
+                long lastBlockStart = max(0, actualContentLength - footerReadBufferSize);
+                expectedBCursor = seekPos - lastBlockStart + actualLength;
+            }
+            expectedFCursor = actualContentLength;
+        } else {
+            if (seekPos + bufferSize < actualContentLength) {
+                expectedLimit = bufferSize;
+                expectedFCursor = bufferSize;
+            } else {
+                expectedLimit = actualContentLength - seekPos;
+                expectedFCursor = min(seekPos + bufferSize, actualContentLength);
+            }
+            expectedBCursor = actualLength;
+        }
+
+        assertEquals(expectedFCursor, abfsInputStream.getFCursor());
+        assertEquals(expectedFCursor, abfsInputStream.getFCursorAfterLastRead());
+        assertEquals(expectedLimit, abfsInputStream.getLimit());
+        assertEquals(expectedBCursor, abfsInputStream.getBCursor());
+        assertEquals(actualLength, bytesRead);
+        //  Verify user-content read
+        assertContentReadCorrectly(fileContent, seekPos, (int) actualLength, buffer, testFilePath);
+        //  Verify data read to AbfsInputStream buffer
+        int from = seekPos;
+        if (optimizationOn) {
+            from = (int) max(0, actualContentLength - footerReadBufferSize);
+        }
+        assertContentReadCorrectly(fileContent, from, (int) abfsInputStream.getLimit(),
+                abfsInputStream.getBuffer(), testFilePath);
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

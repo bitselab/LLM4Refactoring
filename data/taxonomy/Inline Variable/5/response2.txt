@@ -1,0 +1,51 @@
+Examining the provided code, we can identify opportunities for inline variable refactoring similar to the pattern described. The goal of such refactoring is to simplify the code by removing temporary variables that are used only once and are not necessary for clarity.
+
+Here is the refactored version of your provided code snippet, following the inline variable refactoring pattern:
+
+```java
+private static StateBackend loadFromApplicationOrConfigOrDefaultInternal(
+        @Nullable StateBackend fromApplication,
+        Configuration config,
+        ClassLoader classLoader,
+        @Nullable Logger logger)
+        throws IllegalConfigurationException, DynamicCodeLoadingException, IOException {
+
+    checkNotNull(config, "config");
+    checkNotNull(classLoader, "classLoader");
+
+    StateBackend backend;
+
+    // (1) the application defined state backend has precedence
+    if (fromApplication != null) {
+        // see if this is supposed to pick up additional configuration parameters
+        if (fromApplication instanceof ConfigurableStateBackend) {
+            // needs to pick up configuration
+            if (logger != null) {
+                logger.info(
+                        "Using job/cluster config to configure application-defined state backend: {}",
+                        fromApplication);
+            }
+
+            backend =
+                    ((ConfigurableStateBackend) fromApplication).configure(config, classLoader);
+        } else {
+            // keep as is!
+            backend = fromApplication;
+        }
+
+        if (logger != null) {
+            logger.info("Using application-defined state backend: {}", backend);
+        }
+    } else {
+        // (2) check if the config defines a state backend
+        backend = loadStateBackendFromConfig(config, classLoader, logger);
+    }
+
+    return backend;
+}
+```
+
+### Changes Made:
+1. The variable `fromConfig` was used only once to assign to `backend` in the else-block of the condition checking if `fromApplication` is not null. This variable was inlined directly with its only usage.
+
+This refactoring maintains the readability of the code while reducing the unnecessary use of temporary variables.

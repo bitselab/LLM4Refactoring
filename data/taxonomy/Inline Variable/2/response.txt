@@ -1,0 +1,144 @@
+After reviewing the provided code snippet, it appears that inline variable refactoring can be applied in several places to streamline the code by eliminating variables that are used only once. Here's the refactoring applied to the identified opportunities:
+
+### Original Code Segment:
+```java
+final String info = INFO.format(new Object[]{bomType, xmlType, prologEnc});
+return xml.format(new Object[]{streamEnc, prologEnc, info});
+```
+
+### Refactored Code:
+By removing the intermediate variable `info`, we can directly use its expression in the `return` statement:
+```java
+return xml.format(new Object[]{streamEnc, prologEnc, INFO.format(new Object[]{bomType, xmlType, prologEnc})});
+```
+
+### Original Code Segment:
+```java
+int[] bom = BOMs.get(bomType);
+if (bom == null) {
+    bom = new int[0];
+}
+```
+
+### Refactored Code:
+The `bom` variable can be removed by using the ternary operator directly in the loop that processes `bom`:
+```java
+for (final int element : BOMs.getOrDefault(bomType, new int[0])) {
+    baos.write(element);
+}
+```
+
+### Original Code Segment:
+```java
+final String enc = alternateEnc != null ? alternateEnc : streamEnc;
+assertEquals(xmlReader.getEncoding(), enc);
+```
+
+### Refactored Code:
+Inline the expression directly into the assertion statement:
+```java
+assertEquals(xmlReader.getEncoding(), alternateEnc != null ? alternateEnc : streamEnc);
+```
+
+Here's the refactored code, incorporating the changes:
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.net.URL;
+import java.net.URLConnection;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.text.MessageFormat;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.function.IOFunction;
+import org.junit.jupiter.api.Test;
+import org.junitpioneer.jupiter.DefaultLocale;
+
+public class XmlStreamReaderTest {
+
+    // Constants declarations remain unchanged...
+
+    // Static block and other member variable declarations remain unchanged...
+
+    /**
+     * Create the XML.
+     */
+    private String getXML(final String bomType, final String xmlType,
+                          final String streamEnc, final String prologEnc) {
+        final MessageFormat xml = XMLs.get(xmlType);
+        return xml.format(new Object[]{streamEnc, prologEnc, INFO.format(new Object[]{bomType, xmlType, prologEnc})});
+    }
+
+    /**
+     * @param bomType   no-bom, UTF-16BE-bom, UTF-16LE-bom, UTF-8-bom
+     * @param xmlType   xml, xml-prolog, xml-prolog-charset
+     * @param streamEnc encoding of the stream
+     * @param prologEnc encoding of the prolog
+     * @return XML stream
+     * @throws IOException If an I/O error occurs
+     */
+    protected InputStream getXmlInputStream(final String bomType, final String xmlType,
+                                            final String streamEnc, final String prologEnc) throws IOException {
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream(1024);
+        for (final int element : BOMs.getOrDefault(bomType, new int[0])) {
+            baos.write(element);
+        }
+        try (Writer writer = new OutputStreamWriter(baos, streamEnc)) {
+            final String xmlDoc = getXML(bomType, xmlType, streamEnc, prologEnc);
+            writer.write(xmlDoc);
+
+            // PADDING TO TEST THINGS WORK BEYOND PUSHBACK_SIZE
+            writer.write("<da>\n");
+            for (int i = 0; i < 10000; i++) {
+                writer.write("<do/>\n");
+            }
+            writer.write("</da>\n");
+
+        }
+        return new ByteArrayInputStream(baos.toByteArray());
+    }
+
+    public void testAlternateDefaultEncoding(final String contentType, final String bomEnc, final String streamEnc, final String prologEnc,
+                                             final String alternateEnc) throws Exception {
+        try (InputStream is = getXmlInputStream(bomEnc, prologEnc == null ? XML1 : XML3, streamEnc, prologEnc);
+             XmlStreamReader xmlReader = new XmlStreamReader(is, contentType, false, alternateEnc)) {
+            assertEquals(xmlReader.getDefaultEncoding(), alternateEnc);
+            assertEquals(xmlReader.getEncoding(), alternateEnc != null ? alternateEnc : streamEnc);
+        }
+        try (InputStream is = getXmlInputStream(bomEnc, prologEnc == null ? XML1 : XML3, streamEnc, prologEnc);
+             XmlStreamReader xmlReader = XmlStreamReader.builder()
+                     .setInputStream(is)
+                     .setHttpContentType(contentType)
+                     .setLenient(false)
+                     .setCharset(alternateEnc)
+                     .get()) {
+            assertEquals(xmlReader.getDefaultEncoding(), alternateEnc);
+            assertEquals(xmlReader.getEncoding(), alternateEnc != null ? alternateEnc : streamEnc);
+        }
+    }
+
+    // Test methods and other class members remain unchanged...
+}
+```
+
+This refactor focuses on eliminating unnecessary temporary variables where appropriate and using direct method calls or expressions where variables are only used once. These changes can help improve the readability and potentially the performance of the code by reducing the overhead of variable declaration and assignment.

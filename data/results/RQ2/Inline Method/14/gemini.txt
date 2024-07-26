@@ -1,0 +1,23 @@
+Sure, the provided code snippet contains an unnecessary method `introSort` that can be refactored using inline method refactoring. Here's the refactored code:
+
+```java
+public abstract class MSBRadixSorter extends Sorter {
+
+  // ... other code ...
+
+  protected void sort(int from, int to, int k, int l) {
+    if (shouldFallback(from, to, l)) {
+      // Inline the logic from introSort
+      getFallbackSorter(k).sort(from, to);
+    } else {
+      radixSort(from, to, k, l);
+    }
+  }
+
+  // ... other code ...
+}
+```
+
+The original `introSort` method called `getFallbackSorter(k).sort(from, to)`. This logic is now directly placed within the `sort` method where `introSort` was called. This eliminates the need for a separate method and improves code readability.
+
+By inlining the method, we reduce code duplication and make the code easier to understand. The sorting logic for the fallback scenario is now directly visible within the `sort` method.

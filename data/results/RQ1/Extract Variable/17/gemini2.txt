@@ -1,0 +1,41 @@
+## Refactoring Opportunity: Extract Variable for `Collections.unmodifiableSet`
+
+There's an opportunity to extract a variable for the repeated expression `Collections.unmodifiableSet(...)` used in the following places:
+
+* `getExplicitModifiers` method
+* `getEffectiveModifiers` method (when `explicitModifiers` is empty)
+
+Here's the refactored code with the extracted variable:
+
+```java
+public final class ASTModifierList extends AbstractJavaNode {
+
+  private static final Set<JModifier> UNMODIFIABLE_EMPTY_SET = Collections.unmodifiableSet(EnumSet.noneOf(JModifier.class));
+
+  // ... rest of the code ...
+
+  public Set<JModifier> getExplicitModifiers() {
+    assert explicitModifiers != null : "Parser should have set the explicit modifiers";
+    return UNMODIFIABLE_EMPTY_SET.isEmpty() ? explicitModifiers : Collections.unmodifiableSet(explicitModifiers);
+  }
+
+  public Set<JModifier> getEffectiveModifiers() {
+    assert explicitModifiers != null : "Parser should have set the explicit modifiers";
+
+    if (effectiveModifiers == null) {
+
+      Set<JModifier> mods = explicitModifiers.isEmpty() ? UNMODIFIABLE_EMPTY_SET : EnumSet.copyOf(explicitModifiers);
+
+      getOwner().acceptVisitor(EffectiveModifierVisitor.INSTANCE, mods);
+
+      this.effectiveModifiers = Collections.unmodifiableSet(mods);
+    }
+
+    return effectiveModifiers;
+  }
+
+  // ... rest of the code ...
+}
+```
+
+This refactoring improves code readability and maintainability by reducing code duplication and making the purpose of the expression clearer.

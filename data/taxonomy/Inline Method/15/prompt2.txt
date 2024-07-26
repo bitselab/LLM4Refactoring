@@ -1,0 +1,105 @@
+Inline method refactorings are frequently employed to eliminate unnecessay methods to improve readability.
+##################################################
+An inline method refactoring pattern is to remove methods that are only used as proxies in other methods. Here is an example of the inline method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public abstract class MetaAdapterFactory {
+
+    public static SLanguage getLanguage(@NotNull SLanguageId id, @NotNull String langName) {
+        return getLanguage(id, langName, -1);
+    }
+
+    @NotNull
+    public static SLanguage getLanguage(@NotNull SLanguageId id, @NotNull String langName, int version) {
+        SLanguageAdapterById l = new SLanguageAdapterById(id, langName);
+        LangKey p = new LangKey(id, langName);
+        ourLanguageIds.putIfAbsent(p, l);
+        return ourLanguageIds.get(p);
+    }
+    
+}
+```
+The source code after refactoring is:
+```
+public abstract class MetaAdapterFactory {
+
+    public static SLanguage getLanguage(@NotNull SLanguageId id, @NotNull String langName) {
+        SLanguageAdapterById l = new SLanguageAdapterById(id, langName);
+        LangKey p = new LangKey(id, langName);
+        ourLanguageIds.putIfAbsent(p, l);
+        return ourLanguageIds.get(p);
+    }
+    
+}
+```
+In this example, the developer removed the unnecessary method "getLanguage".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential inline method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+class BytesStore extends DataOutput implements FSTReader {
+
+    @Override
+    public FST.BytesReader getReverseBytesReader() {
+        return getReverseReader(true);
+    }
+    
+    FST.BytesReader getReverseReader(boolean allowSingle) {
+        if (blocks.size() == 1) {
+            return new ReverseBytesReader(blocks.get(0));
+        }
+        return new FST.BytesReader() {
+            private byte[] current = blocks.size() == 0 ? null : blocks.get(0);
+            private int nextBuffer = -1;
+            private int nextRead = 0;
+
+            @Override
+            public byte readByte() {
+                if (nextRead == -1) {
+                    current = blocks.get(nextBuffer--);
+                    nextRead = blockSize - 1;
+                }
+                return current[nextRead--];
+            }
+
+            @Override
+            public void skipBytes(long count) {
+                setPosition(getPosition() - count);
+            }
+
+            @Override
+            public void readBytes(byte[] b, int offset, int len) {
+                for (int i = 0; i < len; i++) {
+                    b[offset + i] = readByte();
+                }
+            }
+
+            @Override
+            public long getPosition() {
+                return ((long) nextBuffer + 1) * blockSize + nextRead;
+            }
+
+            @Override
+            public void setPosition(long pos) {
+                // NOTE: a little weird because if you
+                // setPosition(0), the next byte you read is
+                // bytes[0] ... but I would expect bytes[-1] (ie,
+                // EOF)...?
+                int bufferIndex = (int) (pos >> blockBits);
+                if (nextBuffer != bufferIndex - 1) {
+                    nextBuffer = bufferIndex - 1;
+                    current = blocks.get(bufferIndex);
+                }
+                nextRead = (int) (pos & blockMask);
+                assert getPosition() == pos : "pos=" + pos + " getPos()=" + getPosition();
+            }
+
+            @Override
+            public boolean reversed() {
+                return true;
+            }
+        };
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

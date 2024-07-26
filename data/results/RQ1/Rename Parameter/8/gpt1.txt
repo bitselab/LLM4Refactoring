@@ -1,0 +1,77 @@
+The provided code snippet is a custom implementation of a `DoubleComparator` for Lucene, designed for use with a specific `DoubleMultiValuesToSingleValuesSource`. Here are some refactoring opportunities that could improve the code:
+
+1. **Remove Redundant Imports:** Ensure that all imported classes are used. If any import statements are not needed, they should be removed to clean up the code.
+
+2. **Improve Constructor Parameter Alignment:** The constructor `DoubleValuesSourceComparator` has several parameters. These could be aligned better for readability.
+
+3. **Exception Handling:** The methods `getLeafComparator` and `getNumericDocValues` throw `IOException`. Depending on the broader context of the application, it might be beneficial to handle these exceptions more gracefully within the class.
+
+4. **Documentation:** Adding comments or JavaDoc to explain the purpose of the class and its methods would be beneficial, especially for complex implementations like this one.
+
+5. **Access Modifiers:** The inner class `DoubleValuesSourceLeafComparator` is private. Ensure this is the intended scope. If it's not used outside of the outer class, then it's correctly scoped. Otherwise, its access level might need adjustment.
+
+6. **Field Initialization:** The field `source` is initialized in the constructor. If this field is not supposed to change after construction, it should be marked as `final`.
+
+Let's refactor the code based on these points:
+
+```java
+package org.hibernate.search.backend.lucene.lowlevel.comparator.impl;
+
+import java.io.IOException;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.search.LeafFieldComparator;
+import org.apache.lucene.search.Pruning;
+import org.apache.lucene.search.comparators.DoubleComparator;
+import org.hibernate.search.backend.lucene.lowlevel.docvalues.impl.DoubleMultiValuesToSingleValuesSource;
+
+/**
+ * Custom comparator for handling double values from a specific values source.
+ */
+public class DoubleValuesSourceComparator extends DoubleComparator {
+    private final DoubleMultiValuesToSingleValuesSource source;
+
+    /**
+     * Constructs a DoubleValuesSourceComparator.
+     * 
+     * @param numHits       the number of hits
+     * @param field         the field name
+     * @param missingValue  the value to use for missing entries
+     * @param reversed      whether ordering is reversed
+     * @param enableSkipping whether skipping is enabled
+     * @param source        the source of double values
+     */
+    public DoubleValuesSourceComparator(int numHits, String field, Double missingValue, boolean reversed,
+                                        Pruning enableSkipping, DoubleMultiValuesToSingleValuesSource source) {
+        super(numHits, field, missingValue, reversed, enableSkipping);
+        this.source = source;
+    }
+
+    @Override
+    public LeafFieldComparator getLeafComparator(LeafReaderContext context) throws IOException {
+        return new DoubleValuesSourceLeafComparator(context);
+    }
+
+    /**
+     * Leaf comparator specific to DoubleValuesSource.
+     */
+    private class DoubleValuesSourceLeafComparator extends DoubleLeafComparator {
+        DoubleValuesSourceLeafComparator(LeafReaderContext context) throws IOException {
+            super(context);
+        }
+
+        @Override
+        protected NumericDocValues getNumericDocValues(LeafReaderContext context, String field) throws IOException {
+            return source.getValues(context, null).getRawDoubleValues();
+        }
+    }
+}
+```
+
+Changes made:
+- Added JavaDoc comments to classes and methods for better understanding.
+- Ensured the `source` field is final, assuming it's not meant to be modified after construction.
+- Checked for redundant imports and found none.
+- Improved the formatting of the constructor parameters for readability.
+- Kept exception handling as-is, assuming external handling is preferred.
+- The inner class `DoubleValuesSourceLeafComparator` remains private as it seems specific to the outer class.

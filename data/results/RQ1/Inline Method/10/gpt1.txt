@@ -1,0 +1,67 @@
+The goal of inline method refactoring is to increase code readability and maintainability by reducing unnecessary method calls and simplifying the code structure. This approach is particularly useful for deprecated methods that are marked for removal, as it can also aid in the transition towards cleaner and more efficient code.
+
+In the provided code snippet, the `chooseJdk(@NotNull Collection<? extends Module> modules)` method is deprecated and can be refactored. This method is currently being used in the `chooseJdk(@NotNull Project project, @NotNull Collection<? extends Module> modules)` method. By inlining `chooseJdk(@NotNull Collection<? extends Module> modules)`, we can simplify the flow and remove the deprecated method.
+
+Here's the refactored code:
+
+```java
+package com.intellij.openapi.projectRoots.ex;
+
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.JavaSdkType;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.ProjectRootManager;
+import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.lang.JavaVersion;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+
+/**
+ * @author Eugene Zhuravlev
+ */
+public final class PathUtilEx {
+
+    @Nullable
+    public static Sdk getAnyJdk(@NotNull Project project) {
+        return chooseJdk(project, Arrays.asList(ModuleManager.getInstance(project).getModules()));
+    }
+
+    /**
+     * @deprecated the meaning of this method is unclear, choose a JDK using explicit criteria instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
+    @Nullable
+    private static Sdk chooseJdk(@NotNull Project project, @NotNull Collection<? extends Module> modules) {
+        Sdk projectJdk = ProjectRootManager.getInstance(project).getProjectSdk();
+        if (projectJdk != null && projectJdk.getSdkType() instanceof JavaSdkType) {
+            return projectJdk;
+        }
+        // Inlined content from chooseJdk(@NotNull Collection<? extends Module> modules)
+        List<Sdk> jdks = ContainerUtil.mapNotNull(modules, module -> {
+            if (module == null) return null;
+            Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
+            if (sdk == null || !(sdk.getSdkType() instanceof JavaSdkType)) return null;
+            return sdk;
+        });
+        if (jdks.isEmpty()) {
+            return null;
+        }
+        return jdks.stream().max(Comparator.comparing(jdk -> JavaVersion.tryParse(jdk.getVersionString()), Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(null);
+    }
+}
+```
+
+Changes made:
+1. Removed the `chooseJdk(@NotNull Collection<? extends Module> modules)` method.
+2. Inlined the logic from the removed method into `chooseJdk(@NotNull Project project, @NotNull Collection<? extends Module> modules)`.
+
+This refactoring simplifies the code by removing the deprecated method and directly integrating its logic into the only place it's used, thereby making the code more straightforward and easier to maintain.

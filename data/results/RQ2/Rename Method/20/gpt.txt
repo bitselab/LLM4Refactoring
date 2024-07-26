@@ -1,0 +1,55 @@
+The method `getInterfaceParameterAnnotations` in the provided code is responsible for collecting parameter annotations from interfaces and superclasses. The name of this method could be more descriptive to better convey its purpose and functionality. A more appropriate name could be `collectInheritedParameterAnnotations`, as it not only gathers annotations from interfaces but also traverses the class hierarchy to include annotations from superclasses.
+
+Here is the refactored version of the `AnnotatedMethod` class with the renamed method:
+
+```java
+package org.springframework.core.annotation;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+// ... [other imports]
+
+public class AnnotatedMethod {
+    // ... [other fields and methods]
+
+    private List<Annotation[][]> collectInheritedParameterAnnotations() {
+        List<Annotation[][]> parameterAnnotations = this.inheritedParameterAnnotations;
+        if (parameterAnnotations == null) {
+            parameterAnnotations = new ArrayList<>();
+            Class<?> clazz = this.method.getDeclaringClass();
+            while (clazz != null) {
+                for (Class<?> ifc : clazz.getInterfaces()) {
+                    for (Method candidate : ifc.getMethods()) {
+                        if (isOverrideFor(candidate)) {
+                            parameterAnnotations.add(candidate.getParameterAnnotations());
+                        }
+                    }
+                }
+                clazz = clazz.getSuperclass();
+                if (clazz == Object.class) {
+                    clazz = null;
+                }
+                if (clazz != null) {
+                    for (Method candidate : clazz.getMethods()) {
+                        if (isOverrideFor(candidate)) {
+                            parameterAnnotations.add(candidate.getParameterAnnotations());
+                        }
+                    }
+                }
+            }
+            this.inheritedParameterAnnotations = parameterAnnotations;
+        }
+        return parameterAnnotations;
+    }
+
+    // ... [rest of the class]
+
+    // Nested classes remain unchanged
+}
+```
+
+This renaming makes the method's purpose clearer, indicating that it's not just fetching annotations but also collecting them from a hierarchy, which includes both interfaces and superclasses. This aligns better with the method's functionality and enhances the readability of the code.

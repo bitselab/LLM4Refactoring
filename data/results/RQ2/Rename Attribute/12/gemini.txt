@@ -1,0 +1,46 @@
+ **Here's the refactored code with a more descriptive attribute name:**
+
+```java
+package org.eclipse.jgit.revwalk;
+
+// ... (imports remain the same) ...
+
+public final class BitmapWalker {
+
+  // ... (other attributes remain the same) ...
+
+  /**
+   * An empty listener that does not perform any actions.
+   * Used when no events need to be tracked during the walk.
+   */
+  public static final BitmapWalkListener NOOP_LISTENER = new BitmapWalkListener() {
+    @Override
+    public void onCommitSeen(ObjectId oid) {
+      // Nothing to do
+    }
+
+    @Override
+    public void onCommitWithBitmap(ObjectId oid) {
+      // Nothing to do
+    }
+
+    @Override
+    public void onCommitWithoutBitmap(ObjectId oid) {
+      // Nothing to do
+    }
+  };
+
+  // ... (other methods remain the same) ...
+}
+```
+
+**Changes made:**
+
+- The attribute `NO_LISTENER` has been renamed to `NOOP_LISTENER`. This name clarifies that it's a listener that does not perform any operations (a "no-op" listener).
+
+**Benefits of this refactoring:**
+
+- **Improved readability:** The new name explicitly conveys the purpose of the attribute, making the code easier to understand.
+- **Consistency:** Using well-established naming conventions like "noop" (no operation) enhances code clarity and maintainability.
+
+While "NO_LISTENER" technically indicated inaction, "NOOP_LISTENER" aligns better with common practice and leaves no ambiguity about its role.

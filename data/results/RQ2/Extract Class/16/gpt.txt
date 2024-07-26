@@ -1,0 +1,88 @@
+Based on the provided code snippet, the most apparent candidate for an extract class refactoring is the handling of the equals and hashCode methods and the related functionality. The goal of this refactoring is to encapsulate the logic related to identifying and handling the equals and hashCode methods within the proxied interfaces. This will improve the overall readability and maintainability of the code by separating concerns. 
+
+We can extract the relevant fields and methods into a new class, perhaps named `ProxyMethodHandler`. This new class will be responsible for managing the identification and invocation of special methods (equals and hashCode) on the proxied interfaces. 
+
+Here is how the refactoring might look:
+
+### New Class: ProxyMethodHandler
+
+```java
+public class ProxyMethodHandler {
+
+    private boolean equalsDefined;
+    private boolean hashCodeDefined;
+    private Class<?>[] proxiedInterfaces;
+
+    public ProxyMethodHandler(Class<?>[] proxiedInterfaces) {
+        this.proxiedInterfaces = proxiedInterfaces;
+        findDefinedEqualsAndHashCodeMethods();
+    }
+
+    private void findDefinedEqualsAndHashCodeMethods() {
+        this.proxiedInterfaces = AopProxyUtils.completeProxiedInterfaces(this.advised, true);
+        for (Class<?> proxiedInterface : this.proxiedInterfaces) {
+            Method[] methods = proxiedInterface.getDeclaredMethods();
+            for (Method method : methods) {
+                if (AopUtils.isEqualsMethod(method)) {
+                    this.equalsDefined = true;
+                }
+                if (AopUtils.isHashCodeMethod(method)) {
+                    this.hashCodeDefined = true;
+                }
+                if (this.equalsDefined && this.hashCodeDefined) {
+                    return;
+                }
+            }
+        }
+    }
+
+    public boolean isEqualsDefined() {
+        return equalsDefined;
+    }
+
+    public boolean isHashCodeDefined() {
+        return hashCodeDefined;
+    }
+}
+```
+
+### Modified JdkDynamicAopProxy
+
+In `JdkDynamicAopProxy`, you would then create an instance of `ProxyMethodHandler` and use it as follows:
+
+```java
+final class JdkDynamicAopProxy implements AopProxy, InvocationHandler, Serializable {
+
+    // ... [rest of the fields and methods]
+
+    private final ProxyMethodHandler proxyMethodHandler;
+
+    public JdkDynamicAopProxy(AdvisedSupport config) throws AopConfigException {
+        Assert.notNull(config, "AdvisedSupport must not be null");
+        this.advised = config;
+        this.proxyMethodHandler = new ProxyMethodHandler(this.proxiedInterfaces);
+    }
+
+    // ... [rest of the methods]
+
+    @Override
+    @Nullable
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        // Replace direct field access with calls to proxyMethodHandler
+        if (!proxyMethodHandler.isEqualsDefined() && AopUtils.isEqualsMethod(method)) {
+            // ... [rest of the logic]
+        }
+        else if (!proxyMethodHandler.isHashCodeDefined() && AopUtils.isHashCodeMethod(method)) {
+            // ... [rest of the logic]
+        }
+        // ... [rest of the invoke method]
+    }
+
+    // ... [rest of the class]
+}
+```
+
+### Summary of Refactoring:
+- A new class `ProxyMethodHandler` is created to encapsulate the logic for handling equals and hashCode methods.
+- The `JdkDynamicAopProxy` class now uses an instance of `ProxyMethodHandler` to manage these concerns, improving the separation of concerns and making the `JdkDynamicAopProxy` class more focused and maintainable.
+- Be sure to test thoroughly after refactoring to ensure that the behavior of the system remains consistent.

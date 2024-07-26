@@ -1,0 +1,130 @@
+The provided code snippet, which is a test class for a custom class loader, seems well-structured and follows good coding practices overall. However, there are a few areas where refactoring could improve the code's readability, maintainability, and efficiency. Here are the suggested refactoring changes:
+
+1. **Extract Repeated Code into Helper Methods**: The pattern of loading a resource as an `InputStream`, wrapping it into a `DataInputStream`, and then performing assertions is repeated. This can be extracted into a helper method to reduce code duplication and improve readability.
+
+2. **Use Descriptive Constants**: The magic number `0xcafebabe` and the formula `44 + javaVersion` used in `assertClassFile` could be replaced with well-named constants for better readability and maintainability.
+
+3. **Improve Test Documentation**: While the tests have comments explaining their purpose, using more descriptive method names or adding Javadoc comments could further improve readability and understanding of each test's intention.
+
+4. **Check for Potential Resource Leaks**: Ensure all resources are properly closed to avoid resource leaks. The code appears to handle this correctly with try-with-resources, but it's always good to double-check.
+
+5. **Optimize Imports**: If there are any unused imports, they should be removed.
+
+Refactoring the code with these considerations results in the following:
+
+```java
+package net.sourceforge.pmd.internal.util;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+class ClasspathClassLoaderTest {
+    private static final int CLASS_FILE_MAGIC_NUMBER = 0xcafebabe;
+
+    @TempDir
+    private Path tempDir;
+
+    @Test
+    void loadEmptyClasspathWithParent() throws IOException {
+        testClassLoading("", ClasspathClassLoader.class.getClassLoader(), "java/lang/Object.class");
+    }
+
+    @Test
+    void loadEmptyClasspathNoParent() throws IOException {
+        testClassLoading("", null, "java/lang/Object.class");
+    }
+
+    @Test
+    void loadFromJar() throws IOException {
+        final String RESOURCE_NAME = "net/sourceforge/pmd/Sample.txt";
+        final String TEST_CONTENT = "Test\n";
+
+        Path jarPath = createJarWithResource(RESOURCE_NAME, TEST_CONTENT);
+        testResourceLoading(jarPath.toString(), RESOURCE_NAME, TEST_CONTENT);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {11, 17, 21})
+    void loadFromJava17(int javaVersion) throws IOException {
+        Path javaHome = Paths.get(System.getProperty("user.home"), "openjdk" + javaVersion);
+        assumeTrue(Files.isDirectory(javaHome), "Couldn't find java" + javaVersion + " installation at " + javaHome);
+
+        Path jrtfsPath = javaHome.resolve("lib/jrt-fs.jar");
+        assertTrue(Files.isRegularFile(jrtfsPath), "java" + javaVersion + " installation is incomplete. " + jrtfsPath + " not found!");
+        String classPath = jrtfsPath.toString();
+
+        testClassLoading(classPath, null, "java/lang/Object.class", javaVersion);
+        try (ClasspathClassLoader loader = new ClasspathClassLoader(classPath, null)) {
+            assertEquals(javaHome.toString(), loader.javaHome);
+
+            // should not fail for resources without a package
+            assertNull(loader.getResourceAsStream("ClassInDefaultPackage.class"));
+        }
+    }
+
+    private void testClassLoading(String classpath, ClassLoader parent, String resourceName) throws IOException {
+        testClassLoading(classpath, parent, resourceName, Integer.valueOf(System.getProperty("java.specification.version")));
+    }
+
+    private void testClassLoading(String classpath, ClassLoader parent, String resourceName, int javaVersion) throws IOException {
+        try (ClasspathClassLoader loader = new ClasspathClassLoader(classpath, parent)) {
+            try (InputStream resource = loader.getResourceAsStream(resourceName)) {
+                assertNotNull(resource);
+                assertClassFile(resource, javaVersion);
+            }
+        }
+    }
+
+    private void testResourceLoading(String classpath, String resourceName, String expectedContent) throws IOException {
+        try (ClasspathClassLoader loader = new ClasspathClassLoader(classpath, null)) {
+            try (InputStream in = loader.getResourceAsStream(resourceName)) {
+                assertNotNull(in);
+                String s = IOUtil.readToString(in, StandardCharsets.UTF_8);
+                assertEquals(expectedContent, s);
+            }
+        }
+    }
+
+    private Path createJarWithResource(String resourceName, String content) throws IOException {
+        Path jarPath = tempDir.resolve("custom.jar");
+        try (ZipOutputStream out = new ZipOutputStream(Files
+
+.newOutputStream(jarPath))) {
+            out.putNextEntry(new ZipEntry(resourceName));
+            out.write(content.getBytes(StandardCharsets.UTF_8));
+        }
+        return jarPath;
+    }
+
+    private void assertClassFile(InputStream resource, int javaVersion) throws IOException {
+        try (DataInputStream data = new DataInputStream(resource)) {
+            int magicNumber = data.readInt();
+            assertEquals(CLASS_FILE_MAGIC_NUMBER, magicNumber);
+            data.readUnsignedShort(); // minorVersion
+            int majorVersion = data.readUnsignedShort();
+            assertEquals(computeExpectedMajorVersion(javaVersion), majorVersion);
+        }
+    }
+
+    private int computeExpectedMajorVersion(int javaVersion) {
+        return 44 + javaVersion;
+    }
+}
+```
+
+This refactoring primarily focuses on reducing code duplication and improving readability. The core logic remains the same, ensuring that the refactored code should behave identically to the original.

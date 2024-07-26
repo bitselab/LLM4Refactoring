@@ -1,0 +1,84 @@
+Certainly! Here's the refactored code with a more descriptive name for the variable `last`:
+
+```java
+package org.eclipse.jetty.http2.parser;
+
+// ... other imports
+
+public class ContinuationBodyParser extends BodyParser
+{
+  // ... other fields and methods
+
+  @Override
+  public boolean parse(ByteBuffer buffer)
+  {
+    while (buffer.hasRemaining())
+    {
+      switch (state)
+      {
+        case PREPARE:
+        {
+          // SPEC: wrong streamId is treated as connection error.
+          if (getStreamId() == 0)
+            return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_frame");
+
+          if (getStreamId() != headerBlockFragments.getStreamId())
+            return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+          length = getBodyLength();
+          state = State.FRAGMENT;
+          break;
+        }
+        case FRAGMENT:
+        {
+          int remaining = buffer.remaining();
+          if (remaining < length)
+          {
+            ContinuationFrame frame = new ContinuationFrame(getStreamId(), false);
+            if (!rateControlOnEvent(frame))
+              return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+
+            if (!headerBlockFragments.storeFragment(buffer, remaining, false))
+              return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+            length -= remaining;
+            break;
+          }
+          else
+          {
+            boolean isEndOfHeaders = hasFlag(Flags.END_HEADERS);
+            ContinuationFrame frame = new ContinuationFrame(getStreamId(), isEndOfHeaders);
+            if (!rateControlOnEvent(frame))
+              return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+
+            if (!headerBlockFragments.storeFragment(buffer, length, isEndOfHeaders))
+              return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+            reset();
+            if (isEndOfHeaders)
+              return onHeaders(buffer);
+            return true;
+          }
+        }
+        default:
+        {
+          throw new IllegalStateException();
+        }
+      }
+    }
+    return false;
+  }
+
+  // ... other methods
+}
+```
+
+**Changes made:**
+
+* Renamed `last` to `isEndOfHeaders`. 
+  * This name explicitly conveys the meaning of the variable, indicating whether the current fragment is the last one containing headers.
+
+**Benefits of this change:**
+
+* **Improved readability:** The new name makes the code easier to understand by clearly stating the variable's purpose. 
+* **Enhanced maintainability:** The code becomes more self-documenting and easier for future developers to modify or debug.

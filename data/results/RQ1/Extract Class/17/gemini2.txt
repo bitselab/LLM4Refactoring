@@ -1,0 +1,55 @@
+There is a potential refactoring opportunity in this code using the Extract Class technique. The static method `tokenize(Tokenizer tokenizer, TextDocument textDocument, Tokens tokens)` can be extracted into a separate class. 
+
+Here's the refactored code:
+
+```java
+package net.sourceforge.pmd.cpd;
+
+import java.io.IOException;
+
+import net.sourceforge.pmd.lang.document.TextDocument;
+
+/**
+ * Tokenizes a source file into tokens consumable by CPD.
+ */
+public interface Tokenizer {
+
+  public static final PropertyDescriptor<Boolean> CPD_IGNORE_LITERAL_SEQUENCES =
+      PropertyFactory.booleanProperty("cpdIgnoreLiteralSequences")
+          .defaultValue(false)
+          .desc("Ignore sequences of literals, eg `0, 0, 0, 0`")
+          .build();
+  // ... other constants omitted for brevity ...
+
+  /**
+   * Tokenizes the source code and record tokens using the provided token factory.
+   */
+  void tokenize(TextDocument document, TokenFactory tokens) throws IOException;
+
+  /**
+   * A helper class to encapsulate tokenization logic with proper resource management.
+   */
+  static class TokenizerUtil {
+
+    /**
+     * Wraps a call to {@link #tokenize(TextDocument, TokenFactory)} to properly
+     * create and close the token factory.
+     */
+    public static void tokenize(Tokenizer tokenizer, TextDocument textDocument, Tokens tokens) throws IOException {
+      try (TokenFactory tf = Tokens.factoryForFile(textDocument, tokens)) {
+        tokenizer.tokenize(textDocument, tf);
+      }
+    }
+  }
+}
+```
+
+We've created a new static inner class named `TokenizerUtil` within the `Tokenizer` interface. This class holds the extracted method `tokenize`. This improves the code's organization by separating concerns and promoting better encapsulation. 
+
+Here's why this is a good refactoring:
+
+- Improves readability: By separating the logic into a dedicated class, the code becomes easier to understand and follow.
+- Encapsulation: The `TokenizerUtil` class encapsulates the resource management logic related to `TokenFactory`.
+- Reusability: If this functionality is needed elsewhere, the `TokenizerUtil.tokenize` method can be reused without duplicating code.
+
+It's important to note that using a static inner class keeps the new class closely associated with the `Tokenizer` interface. If this functionality becomes more complex or needs to be used independently in the future, it might be better to create a separate top-level class.

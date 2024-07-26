@@ -1,0 +1,32 @@
+To refactor the provided code snippet using inline method refactorings, we should focus on the `testSkip` method. This method is a candidate for inlining because it encapsulates a simple behavior that could be directly incorporated into the calling context, enhancing readability and reducing the abstraction level.
+
+The `testSkip` method is used within the `testSkip_RequiredCharsets` method. By inlining `testSkip`, we can place its logic directly into the `testSkip_RequiredCharsets` method. This makes the flow of the test more apparent and reduces the need to navigate between methods to understand what the test does.
+
+Here's how the refactored code would look after applying inline method refactorings:
+
+```java
+package org.apache.commons.io.input;
+
+// ... [other imports and class members] ...
+
+public class CharSequenceInputStreamTest {
+
+    // ... [other methods and members] ...
+
+    @Test
+    public void testSkip_RequiredCharsets() throws Exception {
+        for (final String csName : getRequiredCharsetNames()) {
+            try (InputStream r = new CharSequenceInputStream("test", csName)) {
+                assertEquals(1, r.skip(1));
+                assertEquals(2, r.skip(2));
+                r.skip(100);
+                assertEquals(-1, r.read(), csName);
+            }
+        }
+    }
+
+    // ... [other methods] ...
+}
+```
+
+In this refactored code, the `testSkip` method's logic is moved directly into `testSkip_RequiredCharsets`. This change improves the readability of the test, as it's now clear what the test does without needing to reference an external method. Additionally, since `testSkip` was only used in one place, its removal simplifies the class structure.

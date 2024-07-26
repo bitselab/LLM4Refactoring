@@ -1,0 +1,66 @@
+To improve the readability and clarity of the code snippet provided, we can focus on the attribute `values` within the `MapValueResolver` class. The name "values" is a bit generic and does not clearly convey the purpose or content of the map. A more descriptive name could be used to indicate that this map is used for resolving values based on a name key. A suitable name could be `nameToValueMap`, which clearly indicates that this map holds values associated with specific names.
+
+Here's the refactored code with the renamed attribute:
+
+```java
+package org.springframework.validation;
+
+import java.beans.ConstructorProperties;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import jakarta.validation.constraints.NotNull;
+import org.junit.jupiter.api.Test;
+
+import org.springframework.core.ResolvableType;
+import org.springframework.format.support.DefaultFormattingConversionService;
+import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+public class DataBinderConstructTests {
+
+    // Test methods remain the same
+
+    @SuppressWarnings("SameParameterValue")
+    private static DataBinder initDataBinder(Class<?> targetType) {
+        DataBinder binder = new DataBinder(null);
+        binder.setTargetType(ResolvableType.forClass(targetType));
+        binder.setConversionService(new DefaultFormattingConversionService());
+        return binder;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T getTarget(DataBinder dataBinder) {
+        assertThat(dataBinder.getBindingResult().getAllErrors()).isEmpty();
+        Object target = dataBinder.getTarget();
+        assertThat(target).isNotNull();
+        return (T) target;
+    }
+
+    // DataClass and NestedDataClass remain the same
+
+    private static class MapValueResolver implements DataBinder.ValueResolver {
+
+        private final Map<String, Object> nameToValueMap; // Renamed attribute
+
+        private MapValueResolver(Map<String, Object> nameToValueMap) {
+            this.nameToValueMap = nameToValueMap;
+        }
+
+        @Override
+        public Object resolveValue(String name, Class<?> type) {
+            return nameToValueMap.get(name);
+        }
+
+        @Override
+        public Set<String> getNames() {
+            return this.nameToValueMap.keySet();
+        }
+    }
+}
+```
+
+In this refactoring, the attribute `values` in `MapValueResolver` class has been renamed to `nameToValueMap`. This name is more descriptive and gives a clearer indication of the purpose of the map, which is to map string names to their respective values. The rest of the code remains unchanged.

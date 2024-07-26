@@ -1,0 +1,42 @@
+To improve the readability of the code snippet you provided, I will focus on renaming the parameter `joinHintNeedRemove` in the `ClearOuterQueryHintShuttle` constructor. A more descriptive and concise name could be `hintToRemove`. This name clearly conveys the purpose of the parameter and aligns well with the existing naming conventions in the code.
+
+Here's how the refactored code will look:
+
+```java
+package org.apache.flink.table.planner.hint;
+
+// ... [Other import statements remain the same]
+
+public class ClearQueryHintsWithInvalidPropagationShuttle extends QueryHintsRelShuttle {
+
+    // ... [Rest of the ClearQueryHintsWithInvalidPropagationShuttle class remains the same]
+
+    /**
+     * A shuttle to clean the query hints which are in outer query block and should not affect the
+     * query-block inside.
+     *
+     * <p>Only the nodes that query hints could attach may be cleared. See more at {@link
+     * FlinkHintStrategies}.
+     */
+    private static class ClearOuterQueryHintShuttle extends RelShuttleImpl {
+        private final Deque<Integer> currentInheritPath;
+        private final RelHint hintToRemove;
+
+        public ClearOuterQueryHintShuttle(RelHint hintToRemove) {
+            this.hintToRemove = hintToRemove;
+            this.currentInheritPath = new ArrayDeque<>();
+            this.currentInheritPath.addAll(hintToRemove.inheritPath);
+        }
+
+        // ... [Rest of the ClearOuterQueryHintShuttle class remains the same]
+
+        // The rest of the methods remain unchanged
+    }
+}
+```
+
+In this refactored version:
+- The parameter `joinHintNeedRemove` in the `ClearOuterQueryHintShuttle` constructor is renamed to `hintToRemove`.
+- The rest of the code remains unchanged.
+
+This renaming makes the purpose of the parameter clearer, enhancing the overall readability and maintainability of the code.

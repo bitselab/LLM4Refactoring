@@ -1,0 +1,39 @@
+Here's the refactored code with a more descriptive method name:
+
+```java
+package org.apache.flink.table.planner.hint;
+
+// ... (rest of the code remains the same)
+
+public abstract class FlinkHints {
+  // ... (other code remains the same)
+
+  /**
+   * Uppercases all join strategy hints within the relational expression tree.
+   * 
+   * @param root the root node of the relational expression tree
+   * @return a new relational expression tree with join strategy hints uppercased
+   */
+  public static RelNode convertJoinStrategyHintsToUppercase(RelNode root) {
+    return root.accept(new CapitalizeQueryHintsShuttle());
+  }
+
+  // ... (rest of the code remains the same)
+}
+```
+
+**Explanation of the refactoring:**
+
+- **Original method name:** `capitalizeJoinHints(RelNode root)`
+- **Refactored method name:** `convertJoinStrategyHintsToUppercase(RelNode root)`
+
+**Improvements:**
+
+- **Clarity:** The new name, `convertJoinStrategyHintsToUppercase`, explicitly describes the purpose of the method, which is to convert all join strategy hints in the relational expression tree to uppercase. This makes it clearer what the method does and avoids ambiguity regarding other types of query hints.
+- **Accuracy:** The original name, `capitalizeJoinHints`, could be interpreted to mean it capitalizes all characters in the hint, which is not the case. The new name mentions "uppercase" for better accuracy.
+- **Specificity:** The new name mentions "join strategy" hints, which are a specific type of query hint handled by this method.
+
+**Additional notes:**
+
+- The rest of the code remains unchanged.
+- Using more descriptive method names enhances code readability and maintainability.

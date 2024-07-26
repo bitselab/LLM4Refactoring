@@ -1,0 +1,89 @@
+Reviewing the `BrokenInputStreamTest` class from the code snippet, the class primarily focuses on testing various exceptions and error handling behaviors of the `BrokenInputStream`. Here's a breakdown of potential refactoring opportunities following the "Extract Class" pattern:
+
+### Analysis
+
+1. **Exception Handling Mechanism**: The class handles a variety of exceptions using parameterized tests. The methods related to handling these exceptions (`createBrokenInputStream`, parameter generation method `parameters`, and the parameterized tests) are tightly coupled with the specific exception handling.
+
+2. **Test Setup and Utilities**: The code includes repeated setup actions in several tests, specifically the instantiation and operation on instances of `BrokenInputStream` based on different exception types.
+
+### Refactoring Proposal: Extract Class for Exception Handling
+
+#### Rationale:
+- **Separation of Concerns**: By extracting the exception-related functionalities into a separate class, the main test class (`BrokenInputStreamTest`) can focus on the core functionalities, while the new class handles the setup and handling of different exception types.
+- **Reusability**: The new class can potentially be reused in other test classes that require similar setups for exception handling.
+
+#### New Class: `ExceptionTestHelper`
+- **Responsibilities**:
+  - Creating instances of `BrokenInputStream` based on different exceptions.
+  - Providing a method to generate parameters for exception types, which is currently handled by `parameters()`.
+
+#### Refactored `BrokenInputStreamTest`:
+- Utilizes `ExceptionTestHelper` for creating `BrokenInputStream` instances and for generating exception parameters.
+
+### Proposed Refactored Code:
+
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.io.InputStream;
+import java.io.IOException;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+/**
+ * Tests {@link BrokenInputStream}.
+ */
+public class BrokenInputStreamTest {
+    
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.input.ExceptionTestHelper#parameters")
+    public void testAvailable(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource")
+        final BrokenInputStream stream = ExceptionTestHelper.createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.available()));
+    }
+
+    // Similar refactoring for other parameterized tests
+
+    @Test
+    public void testInstance() {
+        assertNotNull(BrokenInputStream.INSTANCE);
+    }
+
+    // Other tests remain the same
+}
+
+/**
+ * Helper class to handle exception setup for tests.
+ */
+class ExceptionTestHelper {
+
+    static Stream<Class<? extends Throwable>> parameters() {
+        return Stream.of(
+            IOException.class,
+            FileNotFoundException.class,
+            FileSystemNotFoundException.class,
+            RuntimeException.class,
+            IllegalArgumentException.class,
+            IllegalStateException.class,
+            Error.class,
+            ExceptionInInitializerError.class,
+            CustomeException.class
+        );
+    }
+
+    static BrokenInputStream createBrokenInputStream(final Throwable exception) {
+        if (exception instanceof IOException) {
+            return new BrokenInputStream((IOException) exception);
+        }
+        return new BrokenInputStream(exception);
+    }
+}
+```
+
+This refactoring maintains the original functionalities while improving the structure and readability of the test class.

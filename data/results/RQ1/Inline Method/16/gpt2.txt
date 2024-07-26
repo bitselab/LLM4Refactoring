@@ -1,0 +1,24 @@
+Inline method refactoring is a process where methods with bodies that are as clear as their names are replaced with the method's content directly. This can improve readability when the method is overly simple or when it's used only in one place. Let's review the provided code snippet for potential inline method refactoring opportunities.
+
+1. **Method: `wrapAndSetZkHostFromSysPropIfNeeded`**:
+   - This method encapsulates logic that is specific and meaningful, making it easier to understand what it does from its name. Inlining it might reduce readability, so it seems best to leave it as is.
+
+2. **Method: `separateStrings` and `separatePaths`**:
+   - These methods are simple utility functions used to split a comma-separated string into a list or set. If they are used multiple times throughout the class for different purposes, it's better to keep them as separate methods for reusability. If used only once, they could be inlined for simplicity.
+
+3. **Method: `parseInt`**:
+   - This method is a wrapper around `Integer.parseInt` with added exception handling specific to the context. Its usage adds clarity to the code by handling `NumberFormatException`. It's a good candidate to remain as a separate method.
+
+4. **Method: `getPluginInfo`**:
+   - If this method is called in multiple places with different `ConfigNode` instances, it's better to keep it as a separate method for reusability and clarity. Inlining it would mean repeating the conditional logic wherever it's called, which can clutter the code.
+
+5. **Method: `loadProperties`**:
+   - If this method is only used once and the logic is simple enough, it could potentially be inlined. However, if it encapsulates complex logic or is used in multiple places, it should remain as a method.
+
+6. **Method: `failIfFound` and `assertSingleInstance`**:
+   - These methods encapsulate specific validation logic. Inlining them might make the calling method too bulky and harder to read. Their current form as separate methods adds clarity.
+
+7. **Deprecated Method (`getHiddenSysProps`)**:
+   - Since this method is deprecated, it's typically not advisable to inline it, as it's supposed to be removed in future versions. Keeping it separate ensures it can be easily identified and removed later.
+
+From the above analysis, it seems that most of the methods in the provided code snippet are there for clarity, reusability, and encapsulation of specific logic. Inline refactoring could potentially make the code harder to read and maintain, particularly for a large and complex system like Apache Solr. It's generally better to keep these methods separate unless there's a clear benefit to inlining them in terms of readability or performance, which doesn't seem to be the case here.

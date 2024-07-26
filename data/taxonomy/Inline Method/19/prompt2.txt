@@ -1,0 +1,63 @@
+Inline method refactorings are frequently employed to eliminate unnecessary methods to improve readability.
+##################################################
+An inline method refactoring pattern is to remove methods that are only used as proxies in other methods. Here is an example of the inline method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public abstract class MetaAdapterFactory {
+
+    public static SLanguage getLanguage(@NotNull SLanguageId id, @NotNull String langName) {
+        return getLanguage(id, langName, -1);
+    }
+
+    @NotNull
+    public static SLanguage getLanguage(@NotNull SLanguageId id, @NotNull String langName, int version) {
+        SLanguageAdapterById l = new SLanguageAdapterById(id, langName);
+        LangKey p = new LangKey(id, langName);
+        ourLanguageIds.putIfAbsent(p, l);
+        return ourLanguageIds.get(p);
+    }
+    
+}
+```
+The source code after refactoring is:
+```
+public abstract class MetaAdapterFactory {
+
+    public static SLanguage getLanguage(@NotNull SLanguageId id, @NotNull String langName) {
+        SLanguageAdapterById l = new SLanguageAdapterById(id, langName);
+        LangKey p = new LangKey(id, langName);
+        ourLanguageIds.putIfAbsent(p, l);
+        return ourLanguageIds.get(p);
+    }
+    
+}
+```
+In this example, the developer removed the unnecessary method "getLanguage".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential inline method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public final class WebServerSslBundle implements SslBundle {
+
+    public static SslBundle get(Ssl ssl, SslBundles sslBundles) throws NoSuchSslBundleException {
+        return get(ssl, sslBundles, null);
+    }
+
+    @Deprecated(since = "3.1.0", forRemoval = true)
+    @SuppressWarnings("removal")
+    public static SslBundle get(Ssl ssl, SslBundles sslBundles, SslStoreProvider sslStoreProvider) {
+        Assert.state(Ssl.isEnabled(ssl), "SSL is not enabled");
+        String keyPassword = ssl.getKeyPassword();
+        String bundleName = ssl.getBundle();
+        if (StringUtils.hasText(bundleName)) {
+            Assert.state(sslBundles != null,
+                    () -> "SSL bundle '%s' was requested but no SslBundles instance was provided"
+                            .formatted(bundleName));
+            return sslBundles.getBundle(bundleName);
+        }
+        SslStoreBundle stores = createStoreBundle(ssl);
+        return new WebServerSslBundle(stores, keyPassword, ssl);
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

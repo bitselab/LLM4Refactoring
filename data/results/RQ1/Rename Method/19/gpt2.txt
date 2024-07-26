@@ -1,0 +1,101 @@
+Reviewing the provided code, I see several opportunities for renaming methods to improve clarity and readability. Here are my suggestions for rename refactorings:
+
+1. **Rename `getFilters` to `findFiltersByType`**: The current name `getFilters` is too generic. A more descriptive name like `findFiltersByType` would better convey the purpose of the method, which is to filter and return a list of filters of a specific type.
+
+2. **Rename `isEqual` to `areClientRegistrationsEqual`**: The method name `isEqual` is vague. Renaming it to `areClientRegistrationsEqual` makes it clear that the method compares two `ClientRegistration` objects.
+
+3. **Rename `getClientRegistration` to `createClientRegistration`**: The method currently named `getClientRegistration` actually creates a new `ClientRegistration` object. Therefore, `createClientRegistration` would be a more appropriate name.
+
+4. **Rename `getSecurityFilterChain` to `retrieveSecurityFilterChain`**: The method `getSecurityFilterChain` retrieves the `SecurityFilterChain` from the context. Renaming it to `retrieveSecurityFilterChain` or `extractSecurityFilterChain` could better describe its functionality.
+
+5. **Rename `getFilterChainProxy` to `extractFilterChainProxy`**: Similar to the previous point, `getFilterChainProxy` is extracting a `FilterChainProxy` from a `Filter`, so a name like `extractFilterChainProxy` would be more descriptive.
+
+6. **Rename `testSecurityFilterChain` to `createSecurityFilterChain`**: In the `TestSecurityFilterChainConfiguration` class, the method `testSecurityFilterChain` actually creates and returns a `SecurityFilterChain`, so `createSecurityFilterChain` would be a more accurate name.
+
+7. **Rename `testAuthorizedClientService` and `testAuthorizedClientRepository`**: These methods in `OAuth2AuthorizedClientServiceConfiguration` and `OAuth2AuthorizedClientRepositoryConfiguration` classes create respective beans. Their names could be more descriptive, such as `createOAuth2AuthorizedClientService` and `createOAuth2AuthorizedClientRepository`.
+
+Let me refactor the code with these changes. I will focus on the methods where renaming is applicable.
+
+Here's the refactored code with the suggested method rename refactorings:
+
+```java
+class OAuth2WebSecurityConfigurationTests {
+
+    private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner();
+
+    // ... other test methods ...
+
+    private List<Filter> findFiltersByType(AssertableWebApplicationContext context, Class<? extends Filter> filter) {
+        return retrieveSecurityFilterChain(context).getFilters().stream().filter(filter::isInstance).toList();
+    }
+
+    private SecurityFilterChain retrieveSecurityFilterChain(AssertableWebApplicationContext context) {
+        Filter springSecurityFilterChain = context.getBean(BeanIds.SPRING_SECURITY_FILTER_CHAIN, Filter.class);
+        FilterChainProxy filterChainProxy = extractFilterChainProxy(springSecurityFilterChain);
+        SecurityFilterChain securityFilterChain = filterChainProxy.getFilterChains().get(0);
+        return securityFilterChain;
+    }
+
+    private FilterChainProxy extractFilterChainProxy(Filter filter) {
+        if (filter instanceof FilterChainProxy filterChainProxy) {
+            return filterChainProxy;
+        }
+        if (filter instanceof CompositeFilter) {
+            List<?> filters = (List<?>) ReflectionTestUtils.getField(filter, "filters");
+            return (FilterChainProxy) filters.stream()
+                    .filter(FilterChainProxy.class::isInstance)
+                    .findFirst()
+                    .orElseThrow();
+        }
+        throw new IllegalStateException("No FilterChainProxy found");
+    }
+
+    private boolean areClientRegistrationsEqual(ClientRegistration reg1, ClientRegistration reg2) {
+        boolean result = ObjectUtils.nullSafeEquals(reg1.getClientId(), reg2.getClientId());
+        // ... other equality checks ...
+        return result;
+    }
+
+    // ... configuration classes ...
+
+    @Configuration(proxyBeanMethods = false)
+    static class ClientRegistrationRepositoryConfiguration {
+
+        @Bean
+        ClientRegistrationRepository clientRegistrationRepository() {
+            List<ClientRegistration> registrations = new ArrayList<>();
+            registrations.add(createClientRegistration("first", "https://user-info-uri.com"));
+            registrations.add(createClientRegistration("second", "https://other-user-info"));
+            return new InMemoryClientRegistrationRepository(registrations);
+        }
+
+        private ClientRegistration createClientRegistration(String id, String userInfoUri) {
+            ClientRegistration.Builder builder = ClientRegistration.withRegistrationId(id);
+            // ... builder setup ...
+            return builder.build();
+        }
+
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @Import(ClientRegistrationRepositoryConfiguration.class)
+    static class TestSecurityFilterChainConfiguration {
+
+        @Bean
+        SecurityFilterChain createSecurityFilterChain(HttpSecurity http) throws Exception {
+            // ... configuration ...
+            return http.build();
+        }
+
+    }
+
+    // ... other configuration classes with renamed methods for creating beans ...
+}
+```
+
+In this refactored version:
+
+- The method names have been updated to be more descriptive and accurately reflect their functionality.
+- The changes help improve the readability and maintainability of the code by making the purpose of each method clearer.
+
+These changes assume that the rest of the codebase is adjusted accordingly to reflect the new method names. Remember that renaming methods can impact other parts of the code that use these methods, so thorough testing and validation are essential after such refactorings.

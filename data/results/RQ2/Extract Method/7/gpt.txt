@@ -1,0 +1,49 @@
+To refactor the provided code snippet from the `DefaultRefreshEventListener` class, we will focus on the duplicated code block and apply the Extract Method refactoring technique. This technique involves creating a new method that encapsulates the repeated logic, thereby reducing duplication and improving readability.
+
+Let's create a new method named `executeRefreshAndCheckResult` to encapsulate the repeated logic. This method will handle the refresh operation and check if the result is null, throwing an `UnresolvableObjectException` if necessary.
+
+Here is the refactored code with the new method:
+
+```java
+public class DefaultRefreshEventListener implements RefreshEventListener {
+    // ... [Other class members remain unchanged]
+
+    public void onRefresh(RefreshEvent event, RefreshContext refreshedAlready) {
+        // ... [Method implementation remains unchanged until the duplicated code]
+
+        if (persistenceContext.reassociateIfUninitializedProxy(object)) {
+            // ... [Code before the duplicated snippet remains unchanged]
+
+            // Refactored to use the extracted method
+            executeRefreshAndCheckResult(event, source, null, null, persister, lazyInitializer, id, persistenceContext);
+
+            // ... [Rest of the code in this block remains unchanged]
+        } else {
+            // ... [Code in the 'else' block remains unchanged until the duplicated code]
+
+            // Refactored to use the extracted method
+            executeRefreshAndCheckResult(event, source, object, entry, persister, null, id, persistenceContext);
+
+            // ... [Rest of the code in this block remains unchanged]
+        }
+    }
+
+    private static void executeRefreshAndCheckResult(
+            RefreshEvent event, EventSource source, Object object, EntityEntry entry,
+            EntityPersister persister, LazyInitializer lazyInitializer, Object id,
+            PersistenceContext persistenceContext) {
+
+        final Object result = source.getLoadQueryInfluencers().fromInternalFetchProfile(
+                CascadingFetchProfile.REFRESH,
+                () -> doRefresh(event, source, object, entry, persister, lazyInitializer, id, persistenceContext)
+        );
+        UnresolvableObjectException.throwIfNull(result, id, persister.getEntityName());
+    }
+
+    // ... [Rest of the class remains unchanged]
+}
+```
+
+This refactoring extracts the duplicated logic into a separate method, `executeRefreshAndCheckResult`, which is then called in two places within the `onRefresh` method. This approach reduces duplication and enhances the maintainability of the code. 
+
+Keep in mind that any refactoring should be followed by thorough testing to ensure that the behavior of the code remains consistent with its original functionality.

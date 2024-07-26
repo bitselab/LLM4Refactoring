@@ -1,0 +1,44 @@
+Here's the refactored code with the extracted variable:
+
+```java
+private AzureBlobFileSystem getFileSystem(final boolean optimizeFooterRead,
+                                           final int fileSize) throws IOException {
+  final AzureBlobFileSystem fs = getFileSystem();
+  AbfsBlobFileSystemStore abfsStore = getAbfsStore(fs);
+  abfsStore.getAbfsConfiguration().setOptimizeFooterRead(optimizeFooterRead);
+  if (fileSize <= abfsStore.getAbfsConfiguration().getReadBufferSize()) {
+    abfsStore.getAbfsConfiguration().setReadSmallFilesCompletely(false);
+  }
+  return fs;
+}
+
+private AzureBlobFileSystem getFileSystem(final boolean optimizeFooterRead,
+                                           final int fileSize, final int footerReadBufferSize) throws IOException {
+  final AzureBlobFileSystem fs = getFileSystem();
+  AbfsBlobFileSystemStore abfsStore = getAbfsStore(fs);
+  abfsStore.getAbfsConfiguration().setOptimizeFooterRead(optimizeFooterRead);
+  abfsStore.getAbfsConfiguration().setFooterReadBufferSize(footerReadBufferSize);
+  if (fileSize <= abfsStore.getAbfsConfiguration().getReadBufferSize()) {
+    abfsStore.getAbfsConfiguration().setReadSmallFilesCompletely(false);
+  }
+  return fs;
+}
+```
+
+**Explanation:**
+
+1. **Identify the repeated expression:** The expression `getAbfsStore(fs)` is used twice within the `getFileSystem` methods.
+
+2. **Extract the variable:**
+   - Declare a variable named `abfsStore` with the type `AbfsBlobFileSystemStore` before the calls to `getAbfsStore(fs)`.
+   - Assign the result of `getAbfsStore(fs)` to the `abfsStore` variable.
+
+3. **Replace occurrences:**
+   - Use the variable `abfsStore` instead of the repeated expression `getAbfsStore(fs)` within both methods.
+
+**Benefits of this refactoring:**
+
+- **Readability:** The code becomes more readable as the purpose of retrieving the `AbfsBlobFileSystemStore` is clearer with a descriptive variable name.
+- **Maintainability:** If changes are needed to how the `AbfsBlobFileSystemStore` is retrieved, it can be done in one place, affecting all uses.
+
+**Note:** I've assumed the actual type of `getAbfsStore(fs)` is `AbfsBlobFileSystemStore` based on the context. If it's a different type, you'll need to adjust the variable declaration accordingly.

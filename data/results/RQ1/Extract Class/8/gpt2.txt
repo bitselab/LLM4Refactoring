@@ -1,0 +1,80 @@
+Analyzing the provided code, a significant refactoring opportunity is evident in the repeated definition of the `IndexedEntity` class within each test method. This repeated inner class definition contributes to code duplication and decreases maintainability. The `IndexedEntity` class variations are primarily in the annotations and field types. 
+
+To address this, we can apply the Extract Class refactoring technique. We can create a more flexible `IndexedEntity` class that can be configured differently for each test. This approach will significantly reduce duplication and improve the code structure.
+
+Here's how the refactored code might look:
+
+1. **Create a Configurable `IndexedEntity` Class:** This class will have configurable fields and annotations to accommodate different test scenarios.
+2. **Refactor Test Methods:** Modify each test method to use the new `IndexedEntity` class appropriately.
+
+Let's implement these changes:
+
+```java
+// ... [Imports remain unchanged] ...
+
+class VectorFieldIT {
+    // ... [Unchanged code] ...
+
+    // New configurable IndexedEntity class
+    static class IndexedEntity {
+        @DocumentId
+        Integer id;
+
+        byte[] vector;
+        byte[] projectableYes;
+        byte[] projectableNo;
+        byte[] projectableDefault;
+        byte[] implicit;
+
+        float[] vectorSimilarityL2;
+        float[] vectorSimilarityCosine;
+        float[] vectorSimilarityInnerProduct;
+        float[] vectorSimilarityDefault;
+
+        List<Byte> bytes;
+        List<Float> floats;
+
+        Collection<Float> collectionFloats;
+        String property;
+
+        Optional<byte[]> optionalBytes;
+        Optional<float[]> optionalFloats;
+
+        // Constructor and other necessary methods
+    }
+
+    // Refactor the test methods to use the new IndexedEntity class
+
+    @Test
+    void defaultAttributes() {
+        backendMock.expectSchema(INDEX_NAME, b -> b.field("vector", byte[].class, f -> f.dimension(5)));
+        setupHelper.start().setup(IndexedEntity.class);
+        backendMock.verifyExpectationsMet();
+    }
+
+    // ... [Other test methods refactored similarly] ...
+
+    @Test
+    void customBridge_withParams_programmaticMapping() {
+        backendMock.expectSchema(INDEX_NAME, b -> b.field("floats", float[].class, f -> f.dimension(2)));
+        SearchMapping mapping = setupHelper.start().withConfiguration(builder -> {
+            builder.addEntityType(IndexedEntity.class);
+            TypeMappingStep indexedEntity = builder.programmaticMapping().type(IndexedEntity.class);
+            indexedEntity.indexed().index(INDEX_NAME);
+            indexedEntity.property("id").documentId();
+            indexedEntity.property("floats").vectorField(2).valueBinder(
+                    new ValidImplicitTypeBridge.ValidImplicitTypeBinder(),
+                    Collections.emptyMap());
+        }).expectCustomBeans().setup(IndexedEntity.class);
+        backendMock.verifyExpectationsMet();
+
+        // ... [Rest of the test method] ...
+    }
+
+    // ... [Continue refactoring other methods] ...
+}
+```
+
+In this refactoring, the `IndexedEntity` class is made more generic, and test methods are modified to interact with this unified class. The exact implementation details will depend on how annotations and fields are used in your specific context, especially concerning Hibernate Search's capabilities and limitations.
+
+This refactoring approach will lead to more maintainable and readable code, as it eliminates redundant class definitions and centralizes the configuration of the test entity.

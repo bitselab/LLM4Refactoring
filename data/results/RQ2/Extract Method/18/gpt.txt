@@ -1,0 +1,95 @@
+To refactor the code and improve its readability and maintainability, we can extract the repeated snippet into a private method. This method will handle the common logic of determining the MIME type from a `ContentInfo` object.
+
+Here's the refactored code:
+
+```java
+package org.apache.solr.util;
+
+import com.j256.simplemagic.ContentInfo;
+import com.j256.simplemagic.ContentInfoUtil;
+import com.j256.simplemagic.ContentType;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+import org.apache.solr.common.SolrException;
+
+/** Utility class to guess the mime type of file based on its magic number. */
+public class FileTypeMagicUtil implements ContentInfoUtil.ErrorCallBack {
+    private final ContentInfoUtil util;
+    private static final Set<String> SKIP_FOLDERS = new HashSet<>(Arrays.asList(".", ".."));
+    private static final Set<String> forbiddenTypes = new HashSet<>(
+        Arrays.asList(
+            System.getProperty(
+                "solr.configset.upload.mimetypes.forbidden",
+                "application/x-java-applet,application/zip,application/x-tar,text/x-shellscript")
+            .split(",")));
+
+    public static FileTypeMagicUtil INSTANCE = new FileTypeMagicUtil();
+
+    FileTypeMagicUtil() {
+        try {
+            util = new ContentInfoUtil("/magic/executables", this);
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Error parsing magic file", e);
+        }
+    }
+
+    // ... Other methods ...
+
+    public String guessMimeType(Path file) {
+        try {
+            return determineMimeType(util.findMatch(file.toFile()));
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+        }
+    }
+
+    String guessMimeType(InputStream stream) {
+        try {
+            return determineMimeType(util.findMatch(stream));
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+        }
+    }
+
+    public String guessMimeType(byte[] bytes) {
+        return determineMimeType(util.findMatch(bytes));
+    }
+
+    private String determineMimeType(ContentInfo contentInfo) {
+        if (contentInfo == null) {
+            return ContentType.OTHER.getMimeType();
+        } else {
+            return contentInfo.getContentType().getMimeType();
+        }
+    }
+
+    // ... Other methods ...
+
+    @Override
+    public void error(String line, String details, Exception e) {
+        throw new SolrException(
+                SolrException.ErrorCode.SERVER_ERROR,
+                String.format(Locale.ROOT, "%s: %s", line, details),
+                e);
+    }
+
+    // Methods for isFileForbiddenInConfigset remain the same
+}
+```
+
+In this refactoring:
+
+1. A new private method `determineMimeType` is introduced. This method takes a `ContentInfo` object and returns the corresponding MIME type string.
+
+2. The `guessMimeType` methods for `Path`, `InputStream`, and `byte[]` now call this new method, reducing code duplication and improving clarity.
+
+3. The logic for determining the MIME type from `ContentInfo` is centralized, which will make future changes or bug fixes easier to manage in one place.

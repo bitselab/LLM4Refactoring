@@ -1,0 +1,88 @@
+Reviewing the provided code snippet, there are a few refactoring opportunities to improve the code quality, readability, and maintainability. Here are the changes I would suggest:
+
+1. **Extracting Method for Vector Type Checks**: The `doToQuery` method in `LuceneKnnPredicate` class has checks for the type of `vector` object. These checks could be extracted into a separate method to improve readability and reusability.
+
+2. **Use of Generics for Vector Type**: Instead of using `Object` for the `vector` field in `Builder<F>` class, consider using a generic type to provide type safety.
+
+3. **Handling Unsupported Vector Types**: Currently, an `UnsupportedOperationException` is thrown for unsupported vector types. This handling could be improved by moving this check to the `vector` method in the `Builder` class, thereby failing early and providing more contextual information to the user.
+
+4. **Improving Exception Messages**: The error messages in the exception handling could be made more informative, providing more context or suggestions for possible fixes.
+
+5. **Code Comments and Documentation**: Adding comments and documentation, especially for public methods and classes, can improve the understandability of the code for future maintainers.
+
+6. **Consistent Error Handling**: Ensure that error handling is consistent throughout the code. For instance, both `AssertionFailure` and `IllegalArgumentException` are used for argument validation in different parts of the code.
+
+Now, I'll refactor the code based on these suggestions.
+
+The code snippet provided earlier was truncated, which prevented a full review and refactoring. However, I will refactor the available portion based on the suggested opportunities. For the sections where the code is incomplete, I'll make assumptions to demonstrate the refactoring principles.
+
+Refactored Code:
+```java
+package org.hibernate.search.backend.lucene.search.predicate.impl;
+
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Array;
+import org.hibernate.search.backend.lucene.logging.impl.Log;
+import org.hibernate.search.backend.lucene.search.common.impl.AbstractLuceneValueFieldSearchQueryElementFactory;
+import org.hibernate.search.backend.lucene.search.common.impl.LuceneSearchIndexScope;
+import org.hibernate.search.backend.lucene.search.common.impl.LuceneSearchIndexValueFieldContext;
+import org.hibernate.search.backend.lucene.types.codec.impl.LuceneFieldCodec;
+import org.hibernate.search.backend.lucene.types.codec.impl.LuceneVectorFieldCodec;
+import org.hibernate.search.engine.search.predicate.SearchPredicate;
+import org.hibernate.search.engine.search.predicate.spi.KnnPredicateBuilder;
+import org.hibernate.search.util.common.AssertionFailure;
+import org.hibernate.search.util.common.logging.impl.LoggerFactory;
+import org.apache.lucene.search.KnnByteVectorQuery;
+import org.apache.lucene.search.KnnFloatVectorQuery;
+import org.apache.lucene.search.Query;
+
+public class LuceneKnnPredicate extends AbstractLuceneSingleFieldPredicate implements LuceneSearchPredicate {
+
+    private static final Log log = LoggerFactory.make(Log.class, MethodHandles.lookup());
+
+    private final int k;
+    private final Object vector;
+    private final LuceneSearchPredicate filter;
+
+    private LuceneKnnPredicate(Builder<?> builder) {
+        super(builder);
+        this.k = builder.k;
+        this.vector = builder.vector;
+        this.filter = builder.filter;
+    }
+
+    @Override
+    protected Query doToQuery(PredicateRequestContext context) {
+        return createVectorQuery(vector, context);
+    }
+
+    private Query createVectorQuery(Object vector, PredicateRequestContext context) {
+        if (vector instanceof byte[]) {
+            return new KnnByteVectorQuery(absoluteFieldPath, (byte[]) vector, k, 
+                   filter == null ? null : filter.toQuery(context));
+        }
+        if (vector instanceof float[]) {
+            return new KnnFloatVectorQuery(absoluteFieldPath, (float[]) vector, k, 
+                   filter == null ? null : filter.toQuery(context));
+        }
+        throw new UnsupportedOperationException("Unsupported vector type: " + vector.getClass() + 
+                                                ". Supported types: byte[], float[].");
+    }
+
+    public static class DefaultFactory<F>
+            extends AbstractLuceneValueFieldSearchQueryElementFactory<KnnPredicateBuilder, F> {
+        @Override
+        public KnnPredicateBuilder create(LuceneSearchIndexScope<?> scope, LuceneSearchIndexValueFieldContext<F> field) {
+            return new Builder<>(scope, field);
+        }
+    }
+
+    // Assuming the rest of the Builder class remains unchanged
+}
+```
+
+Changes Made:
+1. Extracted the vector type check logic into a separate method `createVectorQuery`.
+2. Improved the exception message in `createVectorQuery` for clarity.
+
+Note: Due to the incomplete original code, some assumptions were made. For a comprehensive refactoring, the complete code would be necessary. If more of the code is available, I can continue the refactoring process.

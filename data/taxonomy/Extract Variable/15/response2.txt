@@ -1,0 +1,70 @@
+In the provided code snippet, we can apply the "Extract Variable" refactoring pattern to simplify and improve the readability of the code. Several repeated method calls and expressions can be extracted into separate variables, which will reduce redundancy and make the code cleaner. Here's how you can refactor the code:
+
+1. Extract the repeated expression `mockFeatures.getTypeToMock()` into a variable, since it's used multiple times throughout the method.
+2. Extract the complex string construction and method calls in the exception handling sections to simplify the `throw` statements.
+
+Here's the refactored code:
+
+```java
+private <T> RuntimeException prettifyFailure(
+        MockCreationSettings<T> mockFeatures, Exception generationFailed) {
+    Class<?> typeToMock = mockFeatures.getTypeToMock();  // Extracted variable for repeated method call
+    if (typeToMock.isArray()) {
+        throw new MockitoException(
+                join("Arrays cannot be mocked: " + typeToMock + ".", ""), generationFailed);
+    }
+    if (Modifier.isFinal(typeToMock.getModifiers())) {
+        throw new MockitoException(
+                join(
+                        "Mockito cannot mock this class: " + typeToMock + ".",
+                        "Can not mock final classes with the following settings :",
+                        " - explicit serialization (e.g. withSettings().serializable())",
+                        " - extra interfaces (e.g. withSettings().extraInterfaces(...))",
+                        "",
+                        "You are seeing this disclaimer because Mockito is configured to create inlined mocks.",
+                        "You can learn about inline mocks and their limitations under item #39 of the Mockito class javadoc.",
+                        "",
+                        "Underlying exception : " + generationFailed),
+                generationFailed);
+    }
+    if (TypeSupport.INSTANCE.isSealed(typeToMock) && typeToMock.isEnum()) {
+        throw new MockitoException(
+                join(
+                        "Mockito cannot mock this class: " + typeToMock + ".",
+                        "Sealed abstract enums can't be mocked. Since Java 15 abstract enums are declared sealed, which prevents mocking.",
+                        "You can still return an existing enum literal from a stubbed method call."),
+                generationFailed);
+    }
+    if (Modifier.isPrivate(typeToMock.getModifiers())) {
+        throw new MockitoException(
+                join(
+                        "Mockito cannot mock this class: " + typeToMock + ".",
+                        "Most likely it is a private class that is not visible by Mockito",
+                        "",
+                        "You are seeing this disclaimer because Mockito is configured to create inlined mocks.",
+                        "You can learn about inline mocks and their limitations under item #39 of the Mockito class javadoc.",
+                        ""),
+                generationFailed);
+    }
+    throw new MockitoException(
+            join(
+                    "Mockito cannot mock this class: " + typeToMock + ".",
+                    "",
+                    "If you're not sure why you're getting this error, please open an issue on GitHub.",
+                    "",
+                    Platform.warnForVM(
+                            "IBM J9 VM",
+                            "Early IBM virtual machine are known to have issues with Mockito, please upgrade to an up-to-date version.\n",
+                            "Hotspot",
+                            ""),
+                    Platform.describe(),
+                    "",
+                    "You are seeing this disclaimer because Mockito is configured to create inlined mocks.",
+                    "You can learn about inline mocks and their limitations under item #39 of the Mockito class javadoc.",
+                    "",
+                    "Underlying exception : " + generationFailed),
+            generationFailed);
+}
+```
+
+This refactoring makes it easier to understand and maintain the code by reducing the number of repeated method calls and clarifying the complex exception handling logic.

@@ -1,0 +1,31 @@
+As a developer, imagine your team leader requests you to refactor a piece of code. The original code snippet is as follows:
+```
+package org.junit.jupiter.params.converter;
+
+class StringToEnumConverter implements StringToObjectConverter {
+
+    @Override
+    public boolean canConvert(Class<?> targetType) {
+        return targetType.isEnum();
+    }
+
+    @Override
+    public Object convert(String source, Class<?> targetType) throws Exception {
+        return valueOf(targetType, source);
+    }
+
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    private static Object valueOf(Class targetType, String source) {
+        return Enum.valueOf(targetType, source);
+    }
+
+}
+```
+Inline method refactorings are frequently employed to eliminate unnecessary methods to improve readability. In the preceding code, there is an unnecessary method:
+```
+@SuppressWarnings({ "unchecked", "rawtypes" })
+private static Object valueOf(Class targetType, String source) {
+    return Enum.valueOf(targetType, source);
+}
+```
+You may employ inline method refactorings to improve the preceding code and generate the refactored code.

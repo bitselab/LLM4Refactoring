@@ -1,0 +1,54 @@
+Examining the given code for the `OracleNestedTableJdbcType` class, the purpose of inline method refactoring would be to remove methods that are only used once and don't significantly simplify the code structure. Let's analyze the method `getCreateArrayTypeCommand` and decide if it should be inlined.
+
+### Analysis of `getCreateArrayTypeCommand` Method
+- **Usage**: This method is called exactly once in the `addAuxiliaryDatabaseObjects` method.
+- **Complexity**: The method creates a string array containing a single string that constructs a SQL command. This is a straightforward operation.
+- **Clarity and Maintenance**: Inlining this method might reduce the abstraction slightly but will reduce the overall size of the class and eliminate the overhead of an additional method call. Since the method's operation is tightly coupled with the SQL construction and used only once, its abstraction does not add significant clarity or maintainability.
+
+Given this analysis, it seems reasonable to apply the inline method refactoring pattern to `getCreateArrayTypeCommand`.
+
+### Refactored Code
+```java
+public class OracleNestedTableJdbcType implements JdbcType {
+
+    @Override
+    public void addAuxiliaryDatabaseObjects(
+            JavaType<?> javaType,
+            Size columnSize,
+            Database database,
+            TypeConfiguration typeConfiguration) {
+        final Dialect dialect = database.getDialect();
+        final BasicPluralJavaType<?> pluralJavaType = (BasicPluralJavaType<?>) javaType;
+        final JavaType<?> elementJavaType = pluralJavaType.getElementJavaType();
+        final String arrayTypeName = typeName==null ? getTypeName( elementJavaType, dialect ) : typeName;
+        final String elementType =
+                typeConfiguration.getDdlTypeRegistry().getTypeName(
+                        getElementJdbcType().getDdlTypeCode(),
+                        dialect.getSizeStrategy().resolveSize(
+                                getElementJdbcType(),
+                                elementJavaType,
+                                columnSize.getPrecision(),
+                                columnSize.getScale(),
+                                columnSize.getLength()
+                        ),
+                        new BasicTypeImpl<>( elementJavaType, getElementJdbcType() )
+                );
+        String[] createArrayTypeCommand = new String[]{
+                "create or replace type " + arrayTypeName
+                        + " as table of " + elementType
+        };
+        database.addAuxiliaryDatabaseObject(
+                new NamedAuxiliaryDatabaseObject(
+                        arrayTypeName,
+                        database.getDefaultNamespace(),
+                        createArrayTypeCommand,
+                        new String[] { "drop type " + arrayTypeName + " force" },
+                        emptySet(),
+                        true
+                )
+        );
+    }
+}
+```
+
+This refactoring removes the `getCreateArrayTypeCommand` method and includes its logic directly where it's used. This change should make the class slightly simpler without sacrificing readability or maintainability.

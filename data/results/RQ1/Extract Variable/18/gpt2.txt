@@ -1,0 +1,85 @@
+After reviewing the provided code snippet, I identified some opportunities for the Extract Variable refactoring. This refactoring is applied to improve readability and to avoid repetitive computations or method calls. Here's the refactored version of the code:
+
+1. Extracting the result of `inputStream.readAllBytes()` into a variable to avoid multiple reads.
+2. Extracting error messages into variables for better readability and maintainability.
+3. Extracting other repeated expressions into variables where applicable.
+
+Here's the refactored code:
+
+```java
+package org.apache.solr.handler.configsets;
+
+import static org.apache.solr.client.solrj.SolrRequest.METHOD.PUT;
+import static org.apache.solr.security.PermissionNameProvider.Name.CONFIG_EDIT_PERM;
+
+import java.io.InputStream;
+import org.apache.solr.api.EndPoint;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.cloud.ZkMaintenanceUtils;
+import org.apache.solr.common.params.ConfigSetParams;
+import org.apache.solr.core.CoreContainer;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.util.FileTypeMagicUtil;
+
+public class UploadConfigSetFileAPI extends ConfigSetAPIBase {
+
+    public static final String CONFIGSET_NAME_PLACEHOLDER = UploadConfigSetAPI.CONFIGSET_NAME_PLACEHOLDER;
+    public static final String FILEPATH_PLACEHOLDER = "*";
+
+    private static final String API_PATH = "/cluster/configs/{" + CONFIGSET_NAME_PLACEHOLDER + "}/" + FILEPATH_PLACEHOLDER;
+    private static final String INVALID_FILE_PATH_MSG = "The file path provided for upload, '%s', is not valid.";
+    private static final String FORBIDDEN_FILE_TYPE_MSG = "The file type provided for upload, '%s', is forbidden for use in configSets.";
+    private static final String CLEANUP_NOT_ALLOWED_MSG = "ConfigSet uploads do not allow cleanup=true when file path is used.";
+
+    public UploadConfigSetFileAPI(CoreContainer coreContainer) {
+        super(coreContainer);
+    }
+
+    @EndPoint(method = PUT, path = API_PATH, permission = CONFIG_EDIT_PERM)
+    public void updateConfigSetFile(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
+        ensureConfigSetUploadEnabled();
+
+        final String configSetName = req.getPathTemplateValues().get("name");
+        boolean overwritesExisting = configSetService.checkConfigExists(configSetName);
+        boolean requestIsTrusted = isTrusted(req.getUserPrincipal(), coreContainer.getAuthenticationPlugin());
+
+        // Get upload parameters
+        String singleFilePath = req.getPathTemplateValues().getOrDefault(FILEPATH_PLACEHOLDER, "");
+        boolean allowOverwrite = req.getParams().getBool(ConfigSetParams.OVERWRITE, true);
+        boolean cleanup = req.getParams().getBool(ConfigSetParams.CLEANUP, false);
+        final InputStream inputStream = ensureNonEmptyInputStream(req);
+        byte[] fileContent = inputStream.readAllBytes();
+
+        String fixedSingleFilePath = normalizeFilePath(singleFilePath);
+        validateUploadParameters(fixedSingleFilePath, fileContent, singleFilePath, cleanup);
+
+        createBaseNode(configSetService, overwritesExisting, requestIsTrusted, configSetName);
+        configSetService.uploadFileToConfig(configSetName, fixedSingleFilePath, fileContent, allowOverwrite);
+    }
+
+    private String normalizeFilePath(String filePath) {
+        return filePath.startsWith("/") ? filePath.substring(1) : filePath;
+    }
+
+    private void validateUploadParameters(String filePath, byte[] fileContent, String originalFilePath, boolean cleanup) throws Exception {
+        if (filePath.isEmpty()) {
+            throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, String.format(INVALID_FILE_PATH_MSG, originalFilePath));
+        }
+
+        if (ZkMaintenanceUtils.isFileForbiddenInConfigSets(filePath) || FileTypeMagicUtil.isFileForbiddenInConfigset(fileContent)) {
+            throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, String.format(FORBIDDEN_FILE_TYPE_MSG, originalFilePath));
+        }
+
+        if (cleanup) {
+            throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, CLEANUP_NOT_ALLOWED_MSG);
+        }
+    }
+}
+```
+
+In this refactored version:
+- The `fileContent` variable is extracted from `inputStream.readAllBytes()`.
+- Error message templates are extracted as static final strings.
+- `normalizeFilePath` and `validateUploadParameters` methods are used for specific tasks, improving the readability of `updateConfigSetFile` method.
+- The repetitive check for file path and file content in `validateUploadParameters` is simplified by passing the extracted variables.

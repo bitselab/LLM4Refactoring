@@ -1,0 +1,78 @@
+To refactor the provided code snippet, we can extract the logic into a new method that builds the coverage report string. This will make the `generateBriefReport` method more concise and improve its readability. The new method can handle the construction of the report string, while the original method will focus on initializing necessary variables and calling this new method.
+
+Here's how the refactored code would look:
+
+**Refactored Method in `JavaCoverageEngine` class:**
+
+```java
+@Override
+public String generateBriefReport(@NotNull Editor editor,
+                                  @NotNull PsiFile psiFile,
+                                  int lineNumber,
+                                  int startOffset,
+                                  int endOffset,
+                                  @Nullable LineData lineData) {
+    if (lineData == null) {
+        return CoverageBundle.message("hits.title", 0);
+    }
+
+    TextRange range = TextRange.create(startOffset, endOffset);
+    List<SwitchCoverageExpression> switches = JavaCoveragePsiUtilsKt.getSwitches(psiFile, range);
+    List<ConditionCoverageExpression> conditions = JavaCoveragePsiUtilsKt.getConditions(psiFile, range);
+
+    return buildCoverageReportString(lineData, switches, conditions);
+}
+
+private String buildCoverageReportString(LineData lineData, 
+                                         List<SwitchCoverageExpression> switches, 
+                                         List<ConditionCoverageExpression> conditions) {
+    StringBuilder buf = new StringBuilder();
+    String defaultResult = CoverageBundle.message("hits.title", lineData.getHits());
+    buf.append(defaultResult).append("\n");
+    int idx = 0;
+    int hits = 0;
+
+    if (lineData.getJumps() != null) {
+        for (JumpData jumpData : lineData.getJumps()) {
+            if (idx >= conditions.size()) {
+                LOG.info("Cannot map coverage report data with PSI: there are more branches in report than in PSI");
+                return defaultResult;
+            }
+            ConditionCoverageExpression expression = conditions.get(idx++);
+            addJumpDataInfo(buf, jumpData, expression);
+            hits += jumpData.getTrueHits() + jumpData.getFalseHits();
+        }
+    }
+
+    if (lineData.getSwitches() != null) {
+        for (SwitchData switchData : lineData.getSwitches()) {
+            if (idx >= switches.size()) {
+                LOG.info("Cannot map coverage report data with PSI: there are more switches in report than in PSI");
+                return defaultResult;
+            }
+            SwitchCoverageExpression expression = switches.get(idx++);
+            addSwitchDataInfo(buf, switchData, expression, lineData.getStatus());
+            hits += IntStream.of(switchData.getHits()).sum() + switchData.getDefaultHits();
+        }
+    }
+    if (lineData.getHits() > hits && hits > 0) {
+        buf.append(JavaCoverageBundle.message("report.unknown.outcome", lineData.getHits() - hits));
+    }
+
+    return buf.toString();
+}
+```
+
+In this refactoring:
+
+- The logic for building the report string is extracted into the `buildCoverageReportString` method.
+- The `generateBriefReport` method now calls `buildCoverageReportString`, making its purpose clearer and its content more concise.
+- This refactoring enhances the readability and maintainability of the code by separating concerns and
+
+reducing the complexity of the `generateBriefReport` method.
+
+The `buildCoverageReportString` method focuses solely on constructing the report string based on the given `LineData`, `SwitchCoverageExpression`, and `ConditionCoverageExpression` objects. It builds the string by iterating over the jumps and switches in the line data and appending relevant information to the `StringBuilder`.
+
+This approach follows the principle of single responsibility, where each method has a clear and distinct purpose. The `generateBriefReport` method is responsible for initializing necessary data and delegating the string building process to the `buildCoverageReportString` method. This makes the code easier to understand and maintain. 
+
+Additionally, it's important to test the refactored code thoroughly to ensure that it maintains the same functionality as before.

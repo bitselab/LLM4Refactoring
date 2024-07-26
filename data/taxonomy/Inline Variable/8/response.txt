@@ -1,0 +1,84 @@
+The given code snippet from the `DatabaseContainer` class contains several opportunities for inline variable refactoring to improve readability and conciseness. I'll review the code and apply the inline variable refactoring where appropriate.
+
+### Analysis and Refactoring
+
+#### 1. Configuration method refactoring
+In the `configuration()` method, there are local variables that are used only once to store values temporarily before they are returned. These variables can be inlined.
+
+##### Before Refactoring:
+```java
+Configuration configuration = DATABASE.configuration( DATABASE_CONTAINER );
+if ( DATABASE_CONTAINER != null && !DATABASE_CONTAINER.isRunning() ) {
+    synchronized (DATABASE_CONTAINER) {
+        if ( !DATABASE_CONTAINER.isRunning() ) {
+            DATABASE_CONTAINER.start();
+        }
+    }
+}
+return configuration;
+```
+
+##### After Refactoring:
+```java
+if (DATABASE_CONTAINER != null && !DATABASE_CONTAINER.isRunning()) {
+    synchronized (DATABASE_CONTAINER) {
+        if (!DATABASE_CONTAINER.isRunning()) {
+            DATABASE_CONTAINER.start();
+        }
+    }
+}
+return DATABASE.configuration(DATABASE_CONTAINER);
+```
+
+#### 2. The usage of optional properties in `Configuration` builder methods
+The methods in the `Configuration` class that set optional properties (e.g., `withDialect`, `withDriver`, etc.) are using intermediate variables that are unnecessary since they are returning the new `Configuration` directly.
+
+##### Before Refactoring:
+```java
+private Configuration withDialect(String dialect) {
+    if ( dialect == null ) {
+        return this;
+    }
+    return new Configuration( dialect, driver, url, user, pass, isolation );
+}
+```
+
+##### After Refactoring:
+These methods are already efficiently designed with minimal inline-able variables, mostly due to their conditional nature which precludes further simplification.
+
+### Conclusion
+The most significant refactoring is found within the `configuration()` method. Other methods within the `Configuration` class use conditional logic which does not allow for further inlining without compromising the clarity or functionality of the method.
+
+Here is the complete refactored code snippet for the `configuration()` method, incorporating the suggested changes:
+
+```java
+public static Configuration configuration() {
+    // Let's see if an external DB connection was provided:
+    String url = System.getProperty("jdbc.url");
+    if (url != null && !url.trim().isEmpty()) {
+        // -Dhibernate.dialect=${db.dialect}
+        // -Dhibernate.connection.driver_class=${jdbc.driver}
+        // -Dhibernate.connection.url=${jdbc.url}
+        // -Dhibernate.connection.username=${jdbc.user}
+        // -Dhibernate.connection.password=${jdbc.pass}
+        // -Dhibernate.connection.isolation=${jdbc.isolation}
+        return DATABASE.configuration(url, DATABASE_CONTAINER)
+                .withDialect(System.getProperty("db.dialect"))
+                .withDriver(System.getProperty("jdbc.driver"))
+                .withUser(System.getProperty("jdbc.user"))
+                .withPass(System.getProperty("jdbc.pass"))
+                .withIsolation(System.getProperty("jdbc.isolation"));
+    } else {
+        if (DATABASE_CONTAINER != null && !DATABASE_CONTAINER.isRunning()) {
+            synchronized (DATABASE_CONTAINER) {
+                if (!DATABASE_CONTAINER.isRunning()) {
+                    DATABASE_CONTAINER.start();
+                }
+            }
+        }
+        return DATABASE.configuration(DATABASE_CONTAINER);
+    }
+}
+```
+
+This refactoring cleans up the unnecessary variable in the `configuration()` method, making the code easier to read and maintain.

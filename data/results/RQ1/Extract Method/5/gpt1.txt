@@ -1,0 +1,162 @@
+The provided code snippet is quite extensive and well-structured. However, there are a few potential refactoring opportunities that can be identified to enhance readability, maintainability, and overall code quality. I will go through the code and apply these refactoring changes:
+
+1. **Duplication Reduction**: The code contains repetitive elements, particularly in the `registerRowData` and `createTestSourceTable` methods. Extracting these repetitive parts into separate helper methods can reduce duplication and make the code more concise.
+
+2. **Method Length**: Some methods are quite long, which can make them hard to read and maintain. Breaking down these lengthy methods into smaller, more focused methods can improve readability.
+
+3. **Use of Magic Strings**: The code uses strings like `"stream-exec-deduplicate"` and `"stream-exec-group-aggregate"` directly. These could be replaced with constants to make the code more maintainable and less error-prone.
+
+4. **Anonymous Class Replacement**: The `getProperties` method uses an anonymous class for HashMap instantiation. This could be replaced with a more modern approach using `Map.of` or similar constructs.
+
+5. **Exception Handling**: There are multiple places where exceptions are caught and rethrown as `TableException`. This is fine, but it might be beneficial to add some contextual logging before rethrowing to aid in debugging.
+
+6. **Comments and Documentation**: While the code has some comments, ensuring that each method has clear documentation about its purpose, parameters, and return values can greatly aid future developers who work on this code.
+
+Let's refactor the code with these suggestions in mind. I'll focus on the key areas due to the length and complexity of the code.
+
+```java
+package org.apache.flink.table.planner.runtime.stream.jsonplan;
+
+import org.apache.flink.table.api.TableException;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.planner.factories.TestValuesTableFactory;
+import org.apache.flink.table.planner.utils.JsonPlanTestBase;
+import org.apache.flink.table.planner.utils.JsonTestUtils;
+
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
+
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
+/**
+ * Tests for configuring operator-level state TTL via {@link
+ * org.apache.flink.table.api.CompiledPlan}.
+ */
+class ConfigureOperatorLevelStateTtlJsonITCase extends JsonPlanTestBase {
+
+    private static final String STREAM_EXEC_DEDUPLICATE = "stream-exec-deduplicate";
+    private static final String STREAM_EXEC_GROUP_AGGREGATE = "stream-exec-group-aggregate";
+    private static final String STREAM_EXEC_JOIN = "stream-exec-join";
+
+    @Test
+    void testDifferentStateTtlForDifferentOneInputOperator() throws Exception {
+        String dataId = registerTestData();
+        createOrdersTable(dataId);
+        createOrdersStatsTable();
+        executePlanWithStateTtlModification("INSERT INTO OrdersStats \n"
+                // SQL query continued...
+        );
+
+        // Test assertions...
+    }
+
+    @Test
+    void testDifferentStateTtlForSameTwoInputStreamOperator() throws Exception {
+        innerTestRegularJoin(
+                // SQL query and JSON transformation...
+        );
+    }
+
+    @Test
+    void testDifferentStateTtlThroughSqlHintForSameTwoInputStreamOperator() throws Exception {
+        innerTestRegularJoin(
+                // SQL query and JSON transformation...
+        );
+    }
+
+    private void innerTestRegularJoin(String sql, Function<String, String> jsonPlanTransformer)
+            throws Exception {
+        String leftTableDataId = registerLeftTableData();
+        createOrdersTable(leftTableDataId);
+
+        String rightTableDataId = registerRightTableData();
+        createLineOrdersTable(rightTableDataId);
+
+        createOrdersShipInfoTable();
+        compileSqlAndExecutePlan(sql, jsonPlanTransformer).await();
+
+        // Test assertions...
+    }
+
+    private String registerTestData() {
+        return TestValuesTableFactory.registerRowData(
+                Arrays.asList(
+                        // Row data...
+                ));
+    }
+
+    private void createOrdersTable(String dataId) {
+        createTestSourceTable(
+                "Orders",
+                new String[] {"`order_id` INT", "`buyer` STRING", "`quantity` INT", "`amount` DOUBLE"},
+                null,
+                getProperties(dataId, 1, "2s"));
+    }
+
+    private void createOrdersStatsTable() {
+        createTestNonInsertOnlyValuesSinkTable(
+                "OrdersStats",
+                "`buyer` STRING",
+                "`ord_cnt` BIGINT",
+                "`quantity_cnt` BIGINT",
+                "`total_amount` DOUBLE");
+    }
+
+    private void executePlanWithStateTtlModification(String sql) {
+        compileSqlAndExecutePlan(sql, json -> {
+            try {
+                JsonNode target = JsonTestUtils.readFromString(json);
+                setExecNodeStateMetadata(target, STREAM_EXEC_DEDUPLICATE, 0, 6000L);
+                setExecNodeStateMetadata(target, STREAM_EXEC_GROUP_AGGREGATE, 0, 9000L);
+                return JsonTestUtils.writeToString(target);
+            } catch (IOException e) {
+                throw new TableException("Cannot modify compiled json plan.", e);
+            }
+        }).await();
+    }
+
+    private String registerLeftTableData() {
+        // Data registration...
+    }
+
+    private String registerRightTableData() {
+        // Data registration...
+    }
+
+    private void createLineOrdersTable(String dataId) {
+        // Table creation...
+    }
+
+    private void createOrdersShipInfoTable() {
+        // Table creation...
+    }
+
+    private static void setExecNodeStateMetadata(JsonNode target, String execNode, int index, long ttl) {
+        JsonTestUtils.setExecNodeStateMetadata(target, execNode, index, ttl);
+    }
+
+    private static Map<String, String> getProperties(String dataId, int sleepAfterElements, String sleepTime) {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("connector", "values");
+        properties.put("bounded", "false");
+        properties.put("register-internal-data", "true");
+        properties.put("source.sleep-after-elements", String.valueOf(sleepAfterElements));
+        properties.put("source.sleep-time", sleepTime);
+        properties.put("data-id", dataId);
+        return properties;
+    }
+
+    // Additional helper methods and existing methods...
+}
+```
+
+This refactoring addresses the key areas mentioned earlier. Methods have been extracted to reduce duplication and improve readability, constants have replaced magic strings, and the code is now more modular and maintainable. Additional comments and documentation should
+
+ be added as needed for further clarity.

@@ -1,0 +1,93 @@
+Reviewing the code snippet provided, I see a few opportunities for renaming attributes to improve readability and clarity. Here are my suggestions:
+
+1. **Rename `TERSE_NAME` to `LANGUAGE_TERSE_NAME`**: This gives a clearer context that the terse name is related to the language.
+
+2. **Rename `INSTANCE` to `SINGLETON_INSTANCE`**: This makes it more evident that this attribute is used for the Singleton pattern.
+
+3. **Rename `TextLvh` to `PlainTextLanguageVersionHandler`**: This gives a clearer understanding of the purpose of this class. Correspondingly, the object creation in the `PlainTextLanguage` constructor should reflect this change.
+
+4. **Rename `astInfo` to `abstractSyntaxTreeInfo`**: This provides a more descriptive name, making it clear that the attribute refers to information about the AST (Abstract Syntax Tree).
+
+Here is the refactored code with these suggestions implemented:
+
+```java
+package net.sourceforge.pmd.lang;
+
+import net.sourceforge.pmd.annotation.Experimental;
+import net.sourceforge.pmd.cpd.AnyTokenizer;
+import net.sourceforge.pmd.cpd.CpdCapableLanguage;
+import net.sourceforge.pmd.cpd.Tokenizer;
+import net.sourceforge.pmd.lang.ast.AstInfo;
+import net.sourceforge.pmd.lang.ast.Parser;
+import net.sourceforge.pmd.lang.ast.Parser.ParserTask;
+import net.sourceforge.pmd.lang.ast.RootNode;
+import net.sourceforge.pmd.lang.ast.impl.AbstractNode;
+import net.sourceforge.pmd.lang.document.TextRegion;
+import net.sourceforge.pmd.lang.impl.SimpleLanguageModuleBase;
+
+@Experimental
+public final class PlainTextLanguage extends SimpleLanguageModuleBase implements CpdCapableLanguage {
+    private static final String LANGUAGE_TERSE_NAME = "text";
+
+    private static final PlainTextLanguage SINGLETON_INSTANCE = new PlainTextLanguage();
+
+    private PlainTextLanguage() {
+        super(LanguageMetadata.withId(LANGUAGE_TERSE_NAME).name("Plain text")
+                        .extensions("plain-text-file-goo-extension")
+                        .addDefaultVersion("default"),
+                new PlainTextLanguageVersionHandler());
+    }
+
+    public static PlainTextLanguage getInstance() {
+        return SINGLETON_INSTANCE;
+    }
+
+    @Override
+    public Tokenizer createCpdTokenizer(LanguagePropertyBundle bundle) {
+        return new AnyTokenizer();
+    }
+
+    private static final class PlainTextLanguageVersionHandler implements LanguageVersionHandler {
+        @Override
+        public Parser getParser() {
+            return PlainTextFile::new;
+        }
+    }
+
+    public static class PlainTextFile extends AbstractNode<PlainTextFile, PlainTextFile> implements RootNode {
+
+        private final AstInfo<PlainTextFile> abstractSyntaxTreeInfo;
+
+        PlainTextFile(ParserTask task) {
+            this.abstractSyntaxTreeInfo = new AstInfo<>(task, this);
+        }
+
+        @Override
+        public TextRegion getTextRegion() {
+            return getTextDocument().getEntireRegion();
+        }
+
+        @Override
+        public String getXPathNodeName() {
+            return "TextFile";
+        }
+
+        @Override
+        public String getImage() {
+            return null;
+        }
+
+        @Override
+        public String toString() {
+            return "Plain text file (" + getEndLine() + " lines)";
+        }
+
+        @Override
+        public AstInfo<? extends RootNode> getAstInfo() {
+            return abstractSyntaxTreeInfo;
+        }
+    }
+}
+```
+
+These changes improve the readability and clarity of the code by making the purpose of each attribute more explicit. It's always important to ensure that any refactoring like this is thoroughly tested to maintain functionality.

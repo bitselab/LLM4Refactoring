@@ -1,0 +1,32 @@
+## Refactoring Opportunities in WeightedSpanTermExtractor
+
+Here are some refactoring opportunities in the provided code:
+
+1. **Extract method for common logic:**
+    - The `getLeafContext` method retrieves the LeafReaderContext and performs several checks based on the `tokenStream` type. This logic can be extracted into a separate method with a descriptive name like `createLeafReaderContext`.
+
+2. **Simplify logic with helper methods:**
+    - The `extract` method performs different operations depending on the type of the `query` parameter. This can be improved by introducing helper methods for each query type (e.g., `extractWeightedTermsFromPhraseQuery`, `extractWeightedTermsFromSpanTermQuery`).
+
+3. **Use Optional for field name:**
+    - The code uses a separate string variable (`defaultField`) to handle cases where the field name is not provided. Consider using an `Optional<String>` to represent the field name instead.
+
+4. **Descriptive variable names:**
+    - Some variable names could be more descriptive (e.g., `nonWeightedTerms` could be `extractedTerms`).
+
+5. **Consider using a visitor pattern:**
+    - The current approach iterates through different query types in the `extract` method. Implementing a visitor pattern for queries could improve readability and maintainability. 
+
+Here's an example of refactoring the `getLeafContext` method:
+
+```java
+private LeafReaderContext createLeafReaderContext() throws IOException {
+  if (internalReader == null) {
+    boolean cacheIt = wrapToCaching && !(tokenStream instanceof CachingTokenFilter);
+    // ... rest of the logic from getLeafContext ...
+  }
+  return internalReader.getContext();
+}
+```
+
+These are just some suggestions, and the specific refactoring approach might depend on your coding style and project conventions. 

@@ -1,0 +1,54 @@
+Rename parameter refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename parameter refactoring pattern is to rename parameters that are inconsistent with attributes within the enclosing class. Here is an example of the rename parameter refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public class KeyStoreInformation {
+
+    private final char[] keyStorePassword;
+    private final char[] keyPassword;
+    private final KeyStore keyStore;
+
+    public KeyStoreInformation(KeyStore keyStorePath, char[] keyStorePassword, char[] keyPassword)
+    {
+        this.keyStore = keyStorePath;
+        this.keyStorePassword = keyStorePassword;
+        this.keyPassword = keyPassword;
+    }
+}
+```
+The source code after refactoring is:
+```
+public class KeyStoreInformation {
+
+    private final char[] keyStorePassword;
+    private final char[] keyPassword;
+    private final KeyStore keyStore;
+
+    public KeyStoreInformation(KeyStore keyStore, char[] keyStorePassword, char[] keyPassword)
+    {
+        this.keyStore = keyStore;
+        this.keyStorePassword = keyStorePassword;
+        this.keyPassword = keyPassword;
+    }
+}
+```
+In this example, the developer renamed the parameter "keyStorePath" to "keyStore".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename parameter refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+private static class ClearOuterQueryHintShuttle extends RelShuttleImpl {
+    // the current inheritPath about the query hint that need be removed
+    private final Deque<Integer> currentInheritPath;
+
+    // the query hint that need be removed
+    private final RelHint queryHintNeedRemove;
+
+    public ClearOuterQueryHintShuttle(RelHint joinHintNeedRemove) {
+        this.queryHintNeedRemove = joinHintNeedRemove;
+        this.currentInheritPath = new ArrayDeque<>();
+        this.currentInheritPath.addAll(joinHintNeedRemove.inheritPath);
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

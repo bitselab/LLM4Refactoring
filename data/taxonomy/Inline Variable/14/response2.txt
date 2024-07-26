@@ -1,0 +1,38 @@
+In the provided code snippet, there is an opportunity to apply inline variable refactoring to enhance readability by reducing the usage of temporary variables that are immediately returned or used only once. Here's how you could refactor the given code:
+
+**Original Code:**
+```java
+public void testMergedFieldInfos_empty() throws IOException {
+    Directory dir = newDirectory();
+    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
+
+    IndexReader reader = DirectoryReader.open(writer);
+    FieldInfos actual = FieldInfos.getMergedFieldInfos(reader);
+    FieldInfos expected = FieldInfos.EMPTY;
+    
+    assertSame(expected, actual);
+
+    reader.close();
+    writer.close();
+    dir.close();
+}
+```
+
+**Refactored Code:**
+```java
+public void testMergedFieldInfos_empty() throws IOException {
+    Directory dir = newDirectory();
+    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
+
+    IndexReader reader = DirectoryReader.open(writer);
+    assertSame(FieldInfos.EMPTY, FieldInfos.getMergedFieldInfos(reader));
+
+    reader.close();
+    writer.close();
+    dir.close();
+}
+```
+
+### Refactoring Explanation
+- The variables `actual` and `expected` were used only to pass values directly into the `assertSame` method. These variables were therefore inlined directly into the method call.
+- This refactoring reduces the number of lines and variables, making the code easier to read and understand at a glance, as it focuses directly on the assertion without intermediate steps.

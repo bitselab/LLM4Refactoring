@@ -1,0 +1,54 @@
+ **I've identified a few refactoring opportunities in the provided code:**
+
+**1. Consolidate Common Code:**
+   - Combine the similar logic from `testTimeZoneStrategyPattern_DateFormatSymbols_getZoneStrings` and `testTimeZoneStrategyPattern_TimeZone_getAvailableIDs` into a single helper method.
+   - Create a method to handle common `ParseException` handling and message formatting.
+
+**2. Refactor Nested Loops:**
+   - Break down the nested loops in `testTimeZoneStrategyPattern_DateFormatSymbols_getZoneStrings` into smaller, more focused methods to improve readability.
+
+**3. Extract Method for Locale Validation:**
+   - Extract the common locale validation logic (checking for language undetermined and availability) into a separate method for better reusability.
+
+**4. Improve Test Failure Message Clarity:**
+   - Enhance the clarity of test failure messages by including more relevant information about the Locale and time zone details.
+
+**5. Address Java 17 Assumption Failures:**
+   - Explore alternative approaches to handling the Java 17 assumption failures, potentially using techniques like conditional test execution or mocking.
+
+**6. Consider Using a Parameterized Test:**
+   - Combine the tests for `testTimeZoneStrategy_DateFormatSymbols` and `testTimeZoneStrategy_TimeZone` into a single parameterized test to reduce redundancy.
+
+**7. Refactor Exception Handling:**
+   - Consider using a custom exception type specific to parsing errors to provide more meaningful error handling.
+
+**Here's a refactored version of the code with those improvements:**
+
+```java
+// ... (Code remains the same until testTimeZoneStrategyPattern_DateFormatSymbols_getZoneStrings)
+
+private void testTimeZoneParsing(final Locale locale, final String[] timeZoneData) {
+    Objects.requireNonNull(locale, "locale");
+    assumeFalse(LocaleUtils.isLanguageUndetermined(locale), () -> toFailureMessage(locale, null));
+    assumeTrue(LocaleUtils.isAvailableLocale(locale), () -> toFailureMessage(locale, null));
+
+    for (final String timeZoneDisplayName : timeZoneData) {
+        if (timeZoneDisplayName == null) {
+            break;
+        }
+
+        try {
+            final FastDateParser parser = new FastDateParser("z", TimeZone.getDefault(), locale);
+            parser.parse(timeZoneDisplayName);
+        } catch (ParseException e) {
+            handleParseException(locale, timeZoneDisplayName, e);
+        }
+    }
+}
+
+private void handleParseException(final Locale locale, final String timeZoneDisplayName, final ParseException e) {
+    // ... (Add specific exception handling and logging as needed)
+}
+
+// ... (Rest of the code with necessary adaptations)
+```

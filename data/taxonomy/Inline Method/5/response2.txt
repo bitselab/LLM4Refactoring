@@ -1,0 +1,27 @@
+The given code in `IntermediateResultPartition` class presents an opportunity for inline method refactoring. The `computeNumberOfSubpartitions()` method is only called once within the class and can be directly integrated into the `getNumberOfSubpartitions()` method. This will simplify the class by removing the unnecessary indirection of the private method, while also keeping the code straightforward and enhancing readability, aligning with the refactoring pattern you've described.
+
+Here's how the refactored code would look:
+
+```java
+public class IntermediateResultPartition {
+
+    public int getNumberOfSubpartitions() {
+        if (!getProducer().getExecutionGraphAccessor().isDynamic()) {
+            List<ConsumerVertexGroup> consumerVertexGroups = getConsumerVertexGroups();
+            checkState(!consumerVertexGroups.isEmpty());
+
+            // The produced data is partitioned among a number of subpartitions, one for each
+            // consuming sub task. All vertex groups must have the same number of consumers
+            // for non-dynamic graph.
+            return consumerVertexGroups.get(0).size();
+        } else {
+            return numberOfSubpartitionsForDynamicGraph;
+        }
+    }
+
+}
+```
+
+In this version:
+- The private method `computeNumberOfSubpartitions()` has been eliminated.
+- The logic of computing the number of subpartitions based on whether the execution graph is dynamic or not is directly incorporated into the `getNumberOfSubpartitions()` method. This maintains the original functionality while streamlining the class structure.

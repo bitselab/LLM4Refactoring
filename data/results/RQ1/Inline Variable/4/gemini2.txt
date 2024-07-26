@@ -1,0 +1,27 @@
+Yes, there is an opportunity for inline variable refactoring in the provided code snippet.
+
+**Original Code:**
+
+```java
+final var resultsBuilder = new ResultsBuilder();
+try (var refs = new RefCountingRunnable(() -> listener.onResponse(resultsBuilder.getResponse()))) {
+  for (final var repositoryName : request.repositories()) {
+    // ...
+  }
+}
+```
+
+**Refactored Code:**
+
+```java
+final RefCountingRunnable refs = new RefCountingRunnable(() -> listener.onResponse(new ResultsBuilder().getResponse()));
+try (refs) {
+  for (final var repositoryName : request.repositories()) {
+    // ...
+  }
+}
+```
+
+**Explanation:**
+
+The variable `resultsBuilder` is assigned an instance of `ResultsBuilder` and then used within the `try` block. Since it's only used once and its purpose is clear, it can be inlined by calling `new ResultsBuilder().getResponse()` directly within the `RefCountingRunnable` constructor. This reduces the number of lines and improves readability.

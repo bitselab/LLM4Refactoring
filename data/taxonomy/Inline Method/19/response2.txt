@@ -1,0 +1,29 @@
+In the provided code snippet for the class `WebServerSslBundle`, there is an opportunity for inline method refactoring similar to the pattern described previously. Here's an assessment of the scenario:
+
+The `get(Ssl ssl, SslBundles sslBundles)` method is a proxy method that simply calls the more detailed `get(Ssl ssl, SslBundles sslBundles, SslStoreProvider sslStoreProvider)` method with `null` as the third parameter. This pattern matches the one where a method that merely forwards parameters to another method can be inlined if it doesn't add significant clarity or utility.
+
+Here is the refactored code with the inline method refactoring applied:
+```java
+public final class WebServerSslBundle implements SslBundle {
+
+    @Deprecated(since = "3.1.0", forRemoval = true)
+    @SuppressWarnings("removal")
+    public static SslBundle get(Ssl ssl, SslBundles sslBundles) throws NoSuchSslBundleException {
+        Assert.state(Ssl.isEnabled(ssl), "SSL is not enabled");
+        String keyPassword = ssl.getKeyPassword();
+        String bundleName = ssl.getBundle();
+        if (StringUtils.hasText(bundleName)) {
+            Assert.state(sslBundles != null,
+                    () -> "SSL bundle '%s' was requested but no SslBundles instance was provided"
+                            .formatted(bundleName));
+            return sslBundles.getBundle(bundleName);
+        }
+        SslStoreBundle stores = createStoreBundle(ssl);
+        return new WebServerSslBundle(stores, keyPassword, ssl);
+    }
+
+}
+```
+In this refactored code:
+- The overloaded `get(Ssl ssl, SslBundles sslBundles, SslStoreProvider sslStoreProvider)` method is removed, consolidating its functionality into `get(Ssl ssl, SslBundles sslBundles)`.
+- Since the original overloaded method was marked as deprecated and for removal, consolidating it simplifies the class interface and aligns with the deprecation plan, potentially eliminating a source of confusion or error in future development.

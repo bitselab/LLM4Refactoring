@@ -1,0 +1,193 @@
+Upon reviewing the code for potential rename variable refactoring opportunities, I've identified a few variables that could benefit from more descriptive names. This will enhance the readability and maintainability of the code. Here are my suggestions:
+
+1. In the `basicAssertions` method:
+   - Rename `localeAttribute` to `localeAttributeMapping` to more accurately describe what it represents.
+   - Rename `yearsAttribute` to `localesAttributeMapping` as it maps to "locales", not "years".
+   - Rename `elementDescriptor` to `localesElementDescriptor` for clarity.
+   - Rename `countByLocaleAttribute` to `countByLocaleAttributeMapping` for consistency.
+   - Rename `keyDescriptor` to `countByLocaleKeyDescriptor` for better context understanding.
+
+2. In the `testUsage` method:
+   - Rename `entity` to `englishLocaleEntity` to reflect the specific locale it represents.
+   - Rename `entity2` to `frenchLocaleEntity` for the same reason.
+
+3. In the `LocaleMappingTestEntity` class:
+   - Rename `id` to `entityId` to avoid confusion with other potential identifiers.
+   - Rename `locale` to `entityLocale` for clarity.
+   - Rename `name` to `entityName` for consistency.
+   - Rename `locales` to `entityLocales` to better describe its purpose.
+   - Rename `countByLocale` to `localeCountMap` to reflect its functionality.
+
+Let's apply these renaming changes to the code.
+
+Here is the refactored code with the suggested variable renaming for improved readability:
+
+```java
+package org.hibernate.orm.test.mapping.type.java;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import java.sql.Types;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.metamodel.mapping.PluralAttributeMapping;
+import org.hibernate.metamodel.mapping.internal.BasicAttributeMapping;
+import org.hibernate.metamodel.mapping.internal.BasicValuedCollectionPart;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.type.descriptor.jdbc.spi.JdbcTypeRegistry;
+import org.hibernate.testing.orm.junit.DomainModel;
+import org.hibernate.testing.orm.junit.JiraKey;
+import org.hibernate.testing.orm.junit.SessionFactory;
+import org.hibernate.testing.orm.junit.SessionFactoryScope;
+import org.junit.jupiter.api.Test;
+
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.MapKeyColumn;
+import jakarta.persistence.Table;
+
+@DomainModel(annotatedClasses = LocaleMappingTests.LocaleMappingTestEntity.class)
+@SessionFactory
+@JiraKey("HHH-17466")
+public class LocaleMappingTests {
+
+    @Test
+    public void basicAssertions(SessionFactoryScope scope) {
+        final SessionFactoryImplementor sessionFactory = scope.getSessionFactory();
+        final JdbcTypeRegistry jdbcTypeRegistry = sessionFactory.getTypeConfiguration().getJdbcTypeRegistry();
+        final EntityPersister entityDescriptor = sessionFactory.getMappingMetamodel().getEntityDescriptor(LocaleMappingTestEntity.class);
+
+        {
+            final BasicAttributeMapping localeAttributeMapping = (BasicAttributeMapping) entityDescriptor.findAttributeMapping("locale");
+            assertThat(localeAttributeMapping.getJdbcMapping().getJdbcType())
+                    .isEqualTo(jdbcTypeRegistry.getDescriptor(Types.VARCHAR));
+            assertThat(localeAttributeMapping.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass()).isEqualTo(Locale.class);
+        }
+
+        {
+            final PluralAttributeMapping localesAttributeMapping = (PluralAttributeMapping) entityDescriptor.findAttributeMapping("locales");
+            final BasicValuedCollectionPart localesElementDescriptor = (BasicValuedCollectionPart) localesAttributeMapping.getElementDescriptor();
+            assertThat(localesElementDescriptor.getJdbcMapping().getJdbcType())
+                    .isEqualTo(jdbcTypeRegistry.getDescriptor(Types.VARCHAR));
+            assertThat(localesElementDescriptor.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass()).isEqualTo(Locale.class);
+        }
+
+        {
+            final PluralAttributeMapping countByLocaleAttributeMapping = (PluralAttributeMapping) entityDescriptor.findAttributeMapping("countByLocale");
+            final BasicValuedCollectionPart countByLocaleKeyDescriptor = (BasicValuedCollectionPart) countByLocaleAttributeMapping.getIndexDescriptor();
+            assertThat(countByLocaleKeyDescriptor.getJdbcMapping().getJdbcType())
+                    .isEqualTo(jdbcTypeRegistry.getDescriptor(Types.VARCHAR));
+            assertThat(countByLocaleKeyDescriptor.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass()).isEqualTo(Locale.class);
+        }
+    }
+
+    @Test
+    public void testUsage(SessionFactoryScope scope) {
+        final Locale
+
+MappingTestEntity englishLocaleEntity = new LocaleMappingTestEntity(1, Locale.ENGLISH, "Hello");
+        final LocaleMappingTestEntity frenchLocaleEntity = new LocaleMappingTestEntity(2, Locale.FRENCH, "Salut");
+
+        scope.inTransaction(session -> {
+            session.save(englishLocaleEntity);
+            session.save(frenchLocaleEntity);
+        });
+
+        try {
+            scope.inTransaction(session -> assertThat(session.createQuery(
+                            "from LocaleMappingTestEntity where locale = ?1",
+                            LocaleMappingTestEntity.class)
+                    .setParameter(1, Locale.FRENCH)
+                    .list())
+                    .extracting(LocaleMappingTestEntity::getId)
+                    .containsExactly(2));
+        } finally {
+            scope.inTransaction(session -> {
+                session.delete(englishLocaleEntity);
+                session.delete(frenchLocaleEntity);
+            });
+        }
+    }
+
+    @Entity(name = "LocaleMappingTestEntity")
+    @Table(name = "locale_map_test_entity")
+    public static class LocaleMappingTestEntity {
+        private Integer entityId;
+        private Locale entityLocale;
+        private String entityName;
+
+        private Set<Locale> entityLocales = new HashSet<>();
+        private Map<Locale, Integer> localeCountMap = new HashMap<>();
+
+        public LocaleMappingTestEntity() {
+        }
+
+        public LocaleMappingTestEntity(Integer entityId, Locale entityLocale, String entityName) {
+            this.entityId = entityId;
+            this.entityLocale = entityLocale;
+            this.entityName = entityName;
+        }
+
+        @Id
+        public Integer getId() {
+            return entityId;
+        }
+
+        public void setId(Integer entityId) {
+            this.entityId = entityId;
+        }
+
+        public String getName() {
+            return entityName;
+        }
+
+        public void setName(String entityName) {
+            this.entityName = entityName;
+        }
+
+        public Locale getLocale() {
+            return entityLocale;
+        }
+
+        public void setLocale(Locale entityLocale) {
+            this.entityLocale = entityLocale;
+        }
+
+        @ElementCollection
+        @CollectionTable(
+                name = "entity_locale",
+                joinColumns = @JoinColumn(name = "entity_id")
+        )
+        @Column(name = "locales")
+        public Set<Locale> getLocales() {
+            return entityLocales;
+        }
+
+        public void setLocales(Set<Locale> entityLocales) {
+            this.entityLocales = entityLocales;
+        }
+
+        @ElementCollection
+        @CollectionTable(name = "count_by_locale", joinColumns = @JoinColumn(name = "entity_id"))
+        @MapKeyColumn(name = "locl")
+        @Column(name = "cnt")
+        public Map<Locale, Integer> getCountByLocale() {
+            return localeCountMap;
+        }
+
+        public void setCountByLocale(Map<Locale, Integer> localeCountMap) {
+            this.localeCountMap = localeCountMap;
+        }
+    }
+}
+```
+
+These changes improve the clarity of the code by providing more descriptive and context-relevant variable names, which can be particularly helpful for new developers or when revisiting the code after some time.

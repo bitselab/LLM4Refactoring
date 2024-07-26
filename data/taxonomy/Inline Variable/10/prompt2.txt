@@ -1,0 +1,85 @@
+Inline variable refactorings are frequently employed to eliminate unnecessary variables to improve readability.
+##################################################
+An inline variable refactoring pattern is to remove variables that are only used as references to other objects. Here is an example of the inline variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+RemoteBlockOutStream(TachyonFile file, WriteType opType, int blockIndex, long initialBytes,
+                     TachyonConf tachyonConf) throws IOException {
+    super(file, opType, tachyonConf);
+    if (!opType.isCache()) {
+        throw new IOException("RemoteBlockOutStream only support WriteType.CACHE");
+    }
+    mBlockIndex = blockIndex;
+    mBlockCapacityBytes = mFile.getBlockSizeByte();
+    mBlockId = mFile.getBlockId(mBlockIndex);
+    mCloser = Closer.create();
+    mBufferBytes = mTachyonConf.getBytes(Constants.USER_FILE_BUFFER_BYTES, Constants.MB);
+    long allocateBytes = mBufferBytes;
+    mBuffer = ByteBuffer.allocate(Ints.checkedCast(allocateBytes));
+    mRemoteWriter =
+            mCloser.register(RemoteBlockWriter.Factory.createRemoteBlockWriter(tachyonConf));
+    mRemoteWriter.open(mTachyonFS.getWorkerDataServerAddress(), mBlockId, mTachyonFS.getUserId());
+    mClosed = false;
+}
+```
+The source code after refactoring is:
+```
+RemoteBlockOutStream(TachyonFile file, WriteType opType, int blockIndex, long initialBytes,
+                     TachyonConf tachyonConf) throws IOException {
+    super(file, opType, tachyonConf);
+    if (!opType.isCache()) {
+        throw new IOException("RemoteBlockOutStream only support WriteType.CACHE");
+    }
+    mBlockIndex = blockIndex;
+    mBlockCapacityBytes = mFile.getBlockSizeByte();
+    mBlockId = mFile.getBlockId(mBlockIndex);
+    mCloser = Closer.create();
+    mBufferBytes = mTachyonConf.getBytes(Constants.USER_FILE_BUFFER_BYTES, Constants.MB);
+    mBuffer = ByteBuffer.allocate(Ints.checkedCast(mBufferBytes));
+    mRemoteWriter =
+            mCloser.register(RemoteBlockWriter.Factory.createRemoteBlockWriter(tachyonConf));
+    mRemoteWriter.open(mTachyonFS.getWorkerDataServerAddress(), mBlockId, mTachyonFS.getUserId());
+    mClosed = false;
+}
+```
+In this example, the developer removed the unnecessary variable "allocateBytes".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential inline variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public ResolvedType getType(Node node, boolean solveLambdas) {
+    if (solveLambdas) {
+        if (!node.containsData(TYPE_WITH_LAMBDAS_RESOLVED)) {
+
+            if (node instanceof MethodCallExpr) {
+                MethodCallExpr methodCallExpr = (MethodCallExpr) node;
+                for (Node arg : methodCallExpr.getArguments()) {
+                    if (!arg.containsData(TYPE_WITH_LAMBDAS_RESOLVED)) {
+                        getType(arg, true);
+                    }
+                }
+            }
+            ResolvedType res = getTypeConcrete(node, solveLambdas);
+            node.setData(TYPE_WITH_LAMBDAS_RESOLVED, res);
+            Log.trace("getType on %s  -> %s", () -> node, () -> res);
+        }
+        return node.getData(TYPE_WITH_LAMBDAS_RESOLVED);
+    }
+
+    // Try to return a value from the cache of resolved types using lambda expressions
+    Optional<ResolvedType> res = node.findData(TYPE_WITH_LAMBDAS_RESOLVED);
+    if (res.isPresent()) {
+        return res.get();
+    }
+
+    // else try to return a value from the cache of resolved types without lambda expressions
+    // Or resolves the node type without resolving the lambda expressions
+    return node.findData(TYPE_WITHOUT_LAMBDAS_RESOLVED).orElseGet(() -> {
+        ResolvedType resType = getTypeConcrete(node, solveLambdas);
+        node.setData(TYPE_WITHOUT_LAMBDAS_RESOLVED, resType);
+        Optional<ResolvedType> finalRes = res;
+        Log.trace("getType on %s (no solveLambdas) -> %s", () -> node, () -> finalRes);
+        return resType;
+    });
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

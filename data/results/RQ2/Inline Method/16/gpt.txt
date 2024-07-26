@@ -1,0 +1,39 @@
+To refactor the provided code snippet by employing inline method refactorings, we'll focus on the `fromInputStream` method. This method is an overload of the `fromInputStream` method with an additional `fromZookeeper` parameter. However, this parameter is not used in the method body, indicating that this method might be redundant or that the parameter is no longer needed.
+
+Since the `fromZookeeper` parameter is not used, we can simplify the code by removing this overload and updating calls to this method to use the version without the `fromZookeeper` parameter.
+
+Here's how the refactored code will look:
+
+```java
+public static NodeConfig fromInputStream(
+        Path solrHome, InputStream is, Properties substituteProps) {
+    SolrResourceLoader loader = new SolrResourceLoader(solrHome);
+    if (substituteProps == null) {
+        substituteProps = new Properties();
+    }
+    try {
+        byte[] buf = is.readAllBytes();
+        try (ByteArrayInputStream dup = new ByteArrayInputStream(buf)) {
+            XmlConfigFile config =
+                    new XmlConfigFile(loader, null, new InputSource(dup), null, substituteProps);
+            return fromConfig(
+                    solrHome,
+                    substituteProps,
+                    new DataConfigNode(new DOMConfigNode(config.getDocument().getDocumentElement())),
+                    loader);
+        }
+    } catch (SolrException exc) {
+        throw exc;
+    } catch (Exception e) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+    }
+}
+```
+
+In this refactoring:
+1. The `fromInputStream` method now only has one version, which does not include the `fromZookeeper` parameter.
+2. Anywhere in the code where the old version of `fromInputStream` was called with the `fromZookeeper` parameter, it should be updated to call this refactored version.
+
+This refactoring simplifies the method without changing its functionality, as the `fromZookeeper` parameter was not utilized within the method. The removal of this parameter should not impact the method's behavior but does make the code cleaner and more maintainable. 
+
+Make sure to test thoroughly after this change to ensure that the removal of the method overload does not inadvertently affect other parts of the application.

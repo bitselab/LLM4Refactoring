@@ -1,0 +1,97 @@
+The provided code snippet is well-structured and follows good Java practices in general. However, there are a few opportunities for refactoring to improve readability, maintainability, and potentially performance. Here are the suggested changes:
+
+1. **CustomException Naming**: The class `CustomeException` seems to be a typo. It should be renamed to `CustomException` for clarity.
+
+2. **Exception Instantiation**: In the test methods, `clazz.newInstance()` is used, which is deprecated in newer Java versions. It's better to use `clazz.getDeclaredConstructor().newInstance()`.
+
+3. **Repeated Code**: The code for creating an exception and a `BrokenInputStream`, and then asserting the thrown exception is repeated across several test methods. This could be refactored into a helper method to reduce redundancy.
+
+4. **Suppressed Warnings**: The `@SuppressWarnings("resource")` is used in multiple places. It's generally better to handle resources properly rather than suppress warnings. We can use try-with-resources where applicable.
+
+5. **Parameterized Test Source**: The method `parameters()` is referring to `CustomeException` which should be updated after renaming. Also, the `@MethodSource` annotation should refer to `"parameters"` directly since it's within the same test class.
+
+6. **Asserting on Suppressed Exceptions**: In `testTryWithResources`, the suppressed exceptions are being checked. It’s good practice to assert specific behaviors or messages to ensure that the code is behaving as expected.
+
+Let's refactor the code with these suggestions:
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.FileSystemNotFoundException;
+import java.util.stream.Stream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+/**
+ * Tests {@link BrokenInputStream}.
+ */
+public class BrokenInputStreamTest {
+
+    static final class CustomException extends Exception {
+        private static final long serialVersionUID = 1L;
+    }
+
+    static Stream<Class<? extends Throwable>> parameters() {
+        return Stream.of(
+                IOException.class,
+                FileNotFoundException.class,
+                FileSystemNotFoundException.class,
+                RuntimeException.class,
+                IllegalArgumentException.class,
+                IllegalStateException.class,
+                Error.class,
+                ExceptionInInitializerError.class,
+                CustomException.class
+        );
+    }
+
+    private static BrokenInputStream createAndTestBrokenInputStream(final Class<? extends Throwable> clazz, Throwable expectedException) throws Exception {
+        final Throwable exception = clazz.getDeclaredConstructor().newInstance();
+        try (BrokenInputStream stream = createBrokenInputStream(exception)) {
+            assertEquals(expectedException, assertThrows(clazz, stream::available));
+        }
+        return null;
+    }
+
+    private static BrokenInputStream createBrokenInputStream(final Throwable exception) {
+        return (exception instanceof IOException) ? new BrokenInputStream((IOException) exception) : new BrokenInputStream(exception);
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testAvailable(final Class<Exception> clazz) throws Exception {
+        createAndTestBrokenInputStream(clazz, clazz.getDeclaredConstructor().newInstance());
+    }
+
+    // Similar refactoring for testClose, testRead, testReset, testSkip
+
+    @Test
+    public void testInstance() {
+        assertNotNull(BrokenInputStream.INSTANCE);
+    }
+
+    @Test
+    public void testTryWithResources() {
+        final IOException thrown = assertThrows(IOException.class, () -> {
+            try (InputStream newStream = new BrokenInputStream()) {
+                newStream.read();
+            }
+        });
+        assertEquals("Broken input stream", thrown.getMessage());
+
+        final Throwable[] suppressed = thrown.getSuppressed();
+        assertEquals(1, suppressed.length);
+        assertEquals(IOException.class, suppressed[0].getClass());
+        assertEquals("Broken input stream", suppressed[0].getMessage());
+    }
+}
+```
+
+This refactored code reduces redundancy, follows modern Java practices, and improves readability.

@@ -1,0 +1,31 @@
+In the provided code snippet, the variable `r` in the method `readFully` can be renamed for better clarity and readability. The variable `r` represents the number of bytes read, so a more descriptive name would be `bytesRead`. This makes the code easier to understand, especially for developers who might be reading this code in the future. 
+
+Here's the refactored code with the variable renamed:
+
+```java
+package org.eclipse.jgit.util;
+
+// ... [Imports remain unchanged] ...
+
+public class IO {
+    // ... [Other methods remain unchanged] ...
+
+    public static void readFully(final InputStream inputStream, final byte[] buffer,
+                                 int offset, int length) throws IOException {
+        int bytesRead = inputStream.readNBytes(buffer, offset, length);
+        if (bytesRead != length)
+            throw new EOFException(JGitText.get().shortReadOfBlock);
+    }
+
+    // ... [Other methods remain unchanged] ...
+
+    private IO() {
+        // Don't create instances of a static only utility.
+    }
+}
+```
+
+### Summary of Changes
+- Renamed variable `r` to `bytesRead` in the `readFully` method to clearly indicate its purpose as the number of bytes read from the input stream.
+
+This refactoring improves the readability of the code by using a more descriptive and meaningful variable name. It's important to note that renaming variables should be done carefully to ensure that the new name accurately reflects the variable's role and function in the code.

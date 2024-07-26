@@ -1,0 +1,33 @@
+ **Here's the refactored code with the improved variable name:**
+
+```java
+public SolrDocumentList getHistory(long since, AtomicBoolean found) {
+  if (history == null) {
+    return null;
+  }
+
+  SolrDocumentList docs = new SolrDocumentList();
+  Iterator<SolrDocument> iter = history.iterator();
+  while (iter.hasNext()) {
+    SolrDocument currentEvent = iter.next();  // Renamed e to currentEvent
+    long ts = ((Date) currentEvent.getFirstValue("time")).getTime();
+    if (ts == since) {
+      if (found != null) {
+        found.set(true);
+      }
+    }
+    if (ts > since) {
+      docs.add(currentEvent);
+    }
+  }
+  docs.setNumFound(docs.size()); // make it not look too funny
+  return docs;
+}
+```
+
+**Changes made:**
+
+- The variable name `e` is renamed to `currentEvent`. This better reflects the purpose of the variable, which is to hold the current SolrDocument representing a logging event in the iteration.
+- The new name aligns with the Java naming convention of using camelCase for variable names and makes the code more self-explanatory.
+
+**This refactoring improves code readability and maintainability by using a more descriptive variable name.** This makes it easier for developers to understand the code's logic and purpose.

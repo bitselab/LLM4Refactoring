@@ -1,0 +1,92 @@
+Reviewing the provided code, I notice several opportunities for refactoring to improve readability, maintainability, and efficiency. Here are the changes I propose:
+
+1. **Extract Repeated Code**: The tests contain repeated code patterns, particularly in setting up the `contextRunner`. This can be refactored into a common method.
+
+2. **Simplify isEqual Method**: The `isEqual` method in `OAuth2WebSecurityConfigurationTests` can be simplified. Instead of multiple assignments to `result`, you can return early if any condition is false.
+
+3. **Consolidate Configuration Classes**: If the configuration classes `TestConfig`, `ClientRegistrationRepositoryConfiguration`, `TestSecurityFilterChainConfiguration`, `OAuth2AuthorizedClientServiceConfiguration`, and `OAuth2AuthorizedClientRepositoryConfiguration` are only used in this test, they can be nested within `OAuth2WebSecurityConfigurationTests` to encapsulate their scope.
+
+4. **Improve Test Method Names**: Test method names should be more descriptive about what they test. For instance, `securityConfigurerBacksOffWhenClientRegistrationBeanAbsent` can be more explicit.
+
+5. **Remove Unused Imports**: If there are any unused imports, they should be removed to clean up the code.
+
+6. **Refactor Client Registration Building**: In `ClientRegistrationRepositoryConfiguration`, the method `getClientRegistration` can be refactored to be more concise.
+
+Let's refactor the code based on these suggestions. I will focus on key sections for brevity.
+
+Here's the refactored code, focusing on the key sections I mentioned:
+
+```java
+class OAuth2WebSecurityConfigurationTests {
+
+    private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
+            .withUserConfiguration(ClientRegistrationRepositoryConfiguration.class, OAuth2WebSecurityConfiguration.class);
+
+    // ... other methods and inner classes ...
+
+    @Test
+    void contextLoadsClientRegistrationRepository() {
+        runContext((context) -> {
+            ClientRegistrationRepository expected = context.getBean(ClientRegistrationRepository.class);
+            ClientRegistrationRepository actual = getClientRegistrationRepository(context, OAuth2LoginAuthenticationFilter.class);
+            assertClientRegistrationEquals(expected, actual, "first");
+            assertClientRegistrationEquals(expected, actual, "second");
+        });
+    }
+
+    private void assertClientRegistrationEquals(ClientRegistrationRepository expectedRepo, ClientRegistrationRepository actualRepo, String registrationId) {
+        ClientRegistration expected = expectedRepo.findByRegistrationId(registrationId);
+        ClientRegistration actual = actualRepo.findByRegistrationId(registrationId);
+        assertThat(isEqual(expected, actual)).isTrue();
+    }
+
+    private void runContext(Consumer<AssertableWebApplicationContext> contextAssertions) {
+        this.contextRunner.run(contextAssertions);
+    }
+
+    private ClientRegistrationRepository getClientRegistrationRepository(AssertableWebApplicationContext context, Class<? extends Filter> filterClass) {
+        return (ClientRegistrationRepository) ReflectionTestUtils.getField(
+                getFilters(context, filterClass).get(0), "clientRegistrationRepository");
+    }
+
+    private boolean isEqual(ClientRegistration reg1, ClientRegistration reg2) {
+        return ObjectUtils.nullSafeEquals(reg1.getClientId(), reg2.getClientId())
+                && ObjectUtils.nullSafeEquals(reg1.getClientName(), reg2.getClientName())
+                // ... other equality checks ...
+                && ObjectUtils.nullSafeEquals(reg1.getProviderDetails().getTokenUri(), reg2.getProviderDetails().getTokenUri());
+    }
+
+    // ... configuration classes ...
+
+    @Configuration(proxyBeanMethods = false)
+    static class ClientRegistrationRepositoryConfiguration {
+
+        @Bean
+        ClientRegistrationRepository clientRegistrationRepository() {
+            return new InMemoryClientRegistrationRepository(
+                    List.of(
+                        createClientRegistration("first", "https://user-info-uri.com"),
+                        createClientRegistration("second", "https://other-user-info-uri.com")
+                    )
+            );
+        }
+
+        private ClientRegistration createClientRegistration(String id, String userInfoUri) {
+            return ClientRegistration.withRegistrationId(id)
+                    .clientName("foo")
+                    .clientId("foo")
+                    // ... other builder settings ...
+                    .build();
+        }
+    }
+}
+```
+
+This refactoring addresses the main points:
+
+- Common code in the tests is extracted into `runContext` and `assertClientRegistrationEquals` methods.
+- The `isEqual` method now uses a single return statement with logical ANDs.
+- Configuration classes are left as is but can be nested or further refactored depending on their usage outside this class.
+- `ClientRegistrationRepositoryConfiguration` uses a more streamlined method to create `ClientRegistration` instances.
+
+Please note that this refactoring assumes the rest of the code context and dependencies remain unchanged. Further adjustments might be necessary depending on the entire codebase and specific requirements.

@@ -1,0 +1,21 @@
+In the given code snippet, the pattern for inline method refactoring can indeed be applied. The method `valueOf(Class targetType, String source)` is a simple wrapper around `Enum.valueOf(targetType, source)`. This method only has one line of code and can be inlined into the `convert` method to simplify the code. Here's the refactored code:
+
+```java
+package org.junit.jupiter.params.converter;
+
+class StringToEnumConverter implements StringToObjectConverter {
+
+    @Override
+    public boolean canConvert(Class<?> targetType) {
+        return targetType.isEnum();
+    }
+
+    @Override
+    public Object convert(String source, Class<?> targetType) throws Exception {
+        return Enum.valueOf(targetType, source);
+    }
+
+}
+```
+
+By inlining the `valueOf` method, we eliminate the need for the separate private method and make the `convert` method directly use `Enum.valueOf`, simplifying the class structure and potentially improving readability.

@@ -1,0 +1,50 @@
+The `fromInputStream` method in the provided `SolrXmlConfig` class is a candidate for inline method refactoring. This method can be inlined into its caller methods if it's only used in one or a few places. Inline method refactoring involves moving the method's code into the body of its callers and removing the method itself. This can simplify the class structure, especially if the method is trivial or only used in a limited context.
+
+In this case, if the `fromInputStream` method is not extensively used or if its logic is tightly coupled with its callers, inlining it can improve readability and maintainability. However, if this method is used in multiple places or provides significant abstraction, inlining might not be beneficial.
+
+Let's assume that inlining is beneficial in this context. The refactoring would involve:
+
+1. Identifying all places where `fromInputStream` is called.
+2. Replacing each call to `fromInputStream` with the method's internal code.
+3. Adjusting the inlined code as necessary to fit the context of each caller.
+4. Removing the `fromInputStream` method definition.
+
+Since I don't have access to the entire codebase, I can't identify all the places where `fromInputStream` is called. However, I can demonstrate how to inline this method for one of its potential callers. Let's assume that `fromString` is one of the callers:
+
+Original `fromString` method:
+```java
+public static NodeConfig fromString(Path solrHome, String xml) {
+    return fromInputStream(
+            solrHome, new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)), new Properties());
+}
+```
+
+Refactored `fromString` method with `fromInputStream` inlined:
+```java
+public static NodeConfig fromString(Path solrHome, String xml) {
+    SolrResourceLoader loader = new SolrResourceLoader(solrHome);
+    Properties substituteProps = new Properties();
+
+    try {
+        InputStream is = new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8));
+        byte[] buf = is.readAllBytes();
+        try (ByteArrayInputStream dup = new ByteArrayInputStream(buf)) {
+            XmlConfigFile config =
+                    new XmlConfigFile(loader, null, new InputSource(dup), null, substituteProps);
+            return fromConfig(
+                    solrHome,
+                    substituteProps,
+                    new DataConfigNode(new DOMConfigNode(config.getDocument().getDocumentElement())),
+                    loader);
+        }
+    } catch (SolrException exc) {
+        throw exc;
+    } catch (Exception e) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+    }
+}
+```
+
+In this refactored version, the `fromInputStream` method's logic is directly incorporated into the `fromString` method. This eliminates the need for the `fromInputStream` method, assuming it's not used elsewhere. This approach can streamline the class if the abstraction provided by `fromInputStream` is no longer necessary or if it's only relevant in a limited context.
+
+Note: Before proceeding with such refactorings, it's crucial to understand the context and usage of the method throughout the codebase. Removing a method that's used in multiple places without a thorough understanding can introduce bugs and reduce code clarity.

@@ -1,0 +1,57 @@
+Analyzing the provided code from the `TestContextAotGeneratorTests` class, the main opportunities for extract class refactoring would involve separating out cohesive functionalities into more focused classes. This can help improve readability, modularity, and maintainability of the code. Here’s an overview of possible refactorings:
+
+1. **RuntimeHints Assertions**: The methods for asserting `RuntimeHints` (like `assertRuntimeHints`, `assertReflectionRegistered`, etc.) are tightly focused around interacting and verifying `RuntimeHints`. These can be extracted to a separate class like `RuntimeHintsAsserts` to encapsulate all assertions logic related to `RuntimeHints`.
+
+2. **AOT Test Context Processing**: The methods related to processing tests ahead of time (`processAheadOfTime`, `processAheadOfTimeWithBasicTests`, `processAheadOfTimeWithXmlTests`, etc.) could be refactored into a separate class such as `AotTestProcessor`. This would separate the logic of setting up and processing AOT tests from the test assertions and utilities.
+
+3. **Utility Methods**: Methods like `assertContextForBasicTests`, `assertContextForJdbcTests`, and `assertContextForWebTests` seem to be utility methods for asserting the state of the application context in various scenarios. These could be moved to a utility class such as `ApplicationContextAsserts`.
+
+Here's an example of how the code could be refactored by extracting the `RuntimeHints` related assertions to a separate class:
+
+### Original Class: Part of TestContextAotGeneratorTests (simplified for clarity)
+```java
+class TestContextAotGeneratorTests {
+    // Test methods and other logic remain here
+
+    private static void assertRuntimeHints(RuntimeHints runtimeHints) {
+        // Implementation remains here
+    }
+
+    private static void assertReflectionRegistered(RuntimeHints runtimeHints, String type, MemberCategory memberCategory) {
+        // Implementation remains here
+    }
+
+    private static void assertReflectionRegistered(RuntimeHints runtimeHints, Class<?> type, MemberCategory memberCategory) {
+        // Implementation remains here
+    }
+
+    private static void assertAnnotationRegistered(RuntimeHints runtimeHints, Class<? extends Annotation> annotationType) {
+        // Implementation remains here
+    }
+}
+```
+
+### New Class: RuntimeHintsAsserts
+```java
+class RuntimeHintsAsserts {
+    static void assertRuntimeHints(RuntimeHints runtimeHints) {
+        // Implementation moved here
+    }
+
+    static void assertReflectionRegistered(RuntimeHints runtimeHints, String type, MemberCategory memberCategory) {
+        // Implementation moved here
+    }
+
+    static void assertReflectionRegistered(RuntimeHints runtimeHints, Class<?> type, MemberCategory memberCategory) {
+        // Implementation moved here
+    }
+
+    static void assertAnnotationRegistered(RuntimeHints runtimeHints, Class<? extends Annotation> annotationType) {
+        // Implementation moved here
+    }
+}
+```
+
+This refactoring would involve updating all calls to these methods in `TestContextAotGeneratorTests` to use the new `RuntimeHintsAsserts` class.
+
+If you would like to see the detailed refactored code for all the identified opportunities or another specific part, let me know!

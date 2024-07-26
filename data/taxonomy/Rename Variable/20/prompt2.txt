@@ -1,0 +1,90 @@
+Rename variable refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename variable refactoring pattern is to rename variables that are inconsistent with method calls in their initialization expressions. Here is an example of the rename variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public static XSourcePosition getCaretPosition(@NotNull Project project, DataContext context) {
+    Editor editor = getEditor(project, context);
+    if (editor == null) return null;
+    final Document document = editor.getDocument();
+    int line = editor.getCaretModel().getOffset();
+    VirtualFile file = FileDocumentManager.getInstance().getFile(document);
+    return XSourcePositionImpl.createByOffset(file, line);
+}
+```
+The source code after refactoring is:
+```
+public static XSourcePosition getCaretPosition(@NotNull Project project, DataContext context) {
+    Editor editor = getEditor(project, context);
+    if (editor == null) return null;
+    final Document document = editor.getDocument();
+    int offset = editor.getCaretModel().getOffset();
+    VirtualFile file = FileDocumentManager.getInstance().getFile(document);
+    return XSourcePositionImpl.createByOffset(file, offset);
+}
+```
+In this example, the developer renamed the variable "line" to "offset".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+@Override
+public boolean matches(Method method, Class<?> targetClass, Object... args) {
+    obtainPointcutExpression();
+    ShadowMatch shadowMatch = getTargetShadowMatch(method, targetClass);
+
+    // Bind Spring AOP proxy to AspectJ "this" and Spring AOP target to AspectJ target,
+    // consistent with return of MethodInvocationProceedingJoinPoint
+    ProxyMethodInvocation pmi = null;
+    Object targetObject = null;
+    Object thisObject = null;
+    try {
+        MethodInvocation mi = ExposeInvocationInterceptor.currentInvocation();
+        if (mi.getMethod() == method) {
+            targetObject = mi.getThis();
+            if (!(mi instanceof ProxyMethodInvocation currPmi)) {
+                throw new IllegalStateException("MethodInvocation is not a Spring ProxyMethodInvocation: " + mi);
+            }
+            pmi = currPmi;
+            thisObject = pmi.getProxy();
+        }
+    }
+    catch (IllegalStateException ex) {
+        // No current invocation...
+        if (logger.isDebugEnabled()) {
+            logger.debug("Could not access current invocation - matching with limited context: " + ex);
+        }
+    }
+
+    try {
+        JoinPointMatch joinPointMatch = shadowMatch.matchesJoinPoint(thisObject, targetObject, args);
+
+        /*
+         * Do a final check to see if any this(TYPE) kind of residue match. For
+         * this purpose, we use the original method's (proxy method's) shadow to
+         * ensure that 'this' is correctly checked against. Without this check,
+         * we get incorrect match on this(TYPE) where TYPE matches the target
+         * type but not 'this' (as would be the case of JDK dynamic proxies).
+         * <p>See SPR-2979 for the original bug.
+         */
+        if (pmi != null && thisObject != null) {  // there is a current invocation
+            RuntimeTestWalker originalMethodResidueTest = getRuntimeTestWalker(getShadowMatch(method, method));
+            if (!originalMethodResidueTest.testThisInstanceOfResidue(thisObject.getClass())) {
+                return false;
+            }
+            if (joinPointMatch.matches()) {
+                bindParameters(pmi, joinPointMatch);
+            }
+        }
+
+        return joinPointMatch.matches();
+    }
+    catch (Throwable ex) {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Failed to evaluate join point for arguments " + Arrays.toString(args) +
+                    " - falling back to non-match", ex);
+        }
+        return false;
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

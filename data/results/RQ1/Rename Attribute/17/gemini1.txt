@@ -1,0 +1,47 @@
+ **While the code is generally well-structured, a few refactoring opportunities could enhance readability and maintainability:**
+
+1. **Combine LanguageMetadata Construction:**
+   - Merge the `LanguageMetadata` creation and the call to `super(...)` in the constructor for a more concise expression.
+
+2. **Inline LanguageVersionHandler:**
+   - The `TextLvh` class is a simple wrapper around a parser instance. Consider inlining its functionality directly within the `PlainTextLanguage` class to reduce nesting and improve clarity.
+
+3. **Consider Enhanced Access for Singleton:**
+   - While the `getInstance()` method is a common pattern for singletons, exploring a public static final field for direct access could simplify usage and make the singleton nature more explicit.
+
+**Here's the refactored code with these changes:**
+
+```java
+package net.sourceforge.pmd.lang;
+
+// ... imports ...
+
+@Experimental
+public final class PlainTextLanguage extends SimpleLanguageModuleBase implements CpdCapableLanguage {
+
+    public static final PlainTextLanguage INSTANCE = new PlainTextLanguage(); // Enhanced access for singleton
+
+    private static final String TERSE_NAME = "text";
+
+    private PlainTextLanguage() {
+        super(LanguageMetadata.withId(TERSE_NAME)
+                                .name("Plain text")
+                                .extensions("plain-text-file-goo-extension")
+                                .addDefaultVersion("default"),
+              parser());  // Inline language version handler
+    }
+
+    @Override
+    public Tokenizer createCpdTokenizer(LanguagePropertyBundle bundle) {
+        return new AnyTokenizer();
+    }
+
+    private Parser parser() {
+        return PlainTextFile::new;
+    }
+
+    // ... PlainTextFile class remains unchanged ...
+}
+```
+
+**These changes make the code more concise and easier to read, while retaining its functionality.**

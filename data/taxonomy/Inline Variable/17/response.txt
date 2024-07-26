@@ -1,0 +1,56 @@
+In the provided code snippet, we can identify a potential inline variable refactoring opportunity in the `StreamLoader` subclass within the `getInputStream` method. Currently, the method creates an unnecessary local variable `result` that is immediately returned. This variable can be inlined for improved readability, following the pattern of removing variables used only once.
+
+Here's the refactored code:
+
+```java
+package net.sourceforge.pmd.lang.java.symbols.internal.asm;
+
+import java.io.IOException;
+import java.io.InputStream;
+
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+abstract class Loader {
+
+    @Nullable
+    abstract InputStream getInputStream() throws IOException;
+
+    static class FailedLoader extends Loader {
+
+        static final FailedLoader INSTANCE = new FailedLoader();
+
+        @Override
+        @Nullable InputStream getInputStream() {
+            return null;
+        }
+
+        @Override
+        public String toString() {
+            return "(failed loader)";
+        }
+    }
+
+    static class StreamLoader extends Loader {
+        private final @NonNull String name;
+        private final @NonNull InputStream stream;
+
+        StreamLoader(@NonNull String name, @NonNull InputStream stream) {
+            this.name = name;
+            this.stream = stream;
+        }
+
+        @Override
+        @NonNull InputStream getInputStream() {
+            return stream;
+        }
+
+        @Override
+        public String toString() {
+            return "(StreamLoader for " + name + ")";
+        }
+    }
+}
+```
+
+This adjustment enhances the code's conciseness without affecting its functionality.

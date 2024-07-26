@@ -1,0 +1,70 @@
+In the provided code snippet, there are several opportunities to refactor variable names to enhance readability and maintain consistency. Here's an analysis of the potential refactoring changes:
+
+1. **Rename `remaining` to `remainingBytes`** - This gives a clearer indication of what the variable represents, specifically that it deals with the number of bytes remaining in the `ByteBuffer`.
+
+2. **Rename `last` to `isEndOfHeaders`** - The original name `last` is somewhat ambiguous. Renaming it to `isEndOfHeaders` explicitly states that this boolean flag indicates the end of the headers in the context of the HTTP/2 protocol, which uses continuation frames.
+
+Here's the refactored code:
+```java
+@Override
+public boolean parse(ByteBuffer buffer)
+{
+    while (buffer.hasRemaining())
+    {
+        switch (state)
+        {
+            case PREPARE:
+            {
+                // SPEC: wrong streamId is treated as connection error.
+                if (getStreamId() == 0)
+                    return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_frame");
+
+                if (getStreamId() != headerBlockFragments.getStreamId())
+                    return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                length = getBodyLength();
+                state = State.FRAGMENT;
+                break;
+            }
+            case FRAGMENT:
+            {
+                int remainingBytes = buffer.remaining();
+                if (remainingBytes < length)
+                {
+                    ContinuationFrame frame = new ContinuationFrame(getStreamId(), false);
+                    if (!rateControlOnEvent(frame))
+                        return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+
+                    if (!headerBlockFragments.storeFragment(buffer, remainingBytes, false))
+                        return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                    length -= remainingBytes;
+                    break;
+                }
+                else
+                {
+                    boolean isEndOfHeaders = hasFlag(Flags.END_HEADERS);
+                    ContinuationFrame frame = new ContinuationFrame(getStreamId(), isEndOfHeaders);
+                    if (!rateControlOnEvent(frame))
+                        return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+
+                    if (!headerBlockFragments.storeFragment(buffer, length, isEndOfHeaders))
+                        return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                    reset();
+                    if (isEndOfHeaders)
+                        return onHeaders(buffer);
+                    return true;
+                }
+            }
+            default:
+            {
+                throw new IllegalStateException();
+            }
+        }
+    }
+    return false;
+}
+```
+
+These changes improve the clarity of the code by ensuring that variable names more accurately reflect their use and meaning within the context of the function.

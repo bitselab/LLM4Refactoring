@@ -1,0 +1,56 @@
+ **I've identified several refactoring opportunities in the code:**
+
+1. **Combine Similar Test Classes:**
+   - The `TempDirFieldTests` and `TempDirParameterTests` classes have a very similar structure and logic. They could be combined into a single class with a parameter to indicate whether to test fields or parameters. This would reduce redundancy and make the code more concise.
+
+2. **Move Common Cleanup Code to a Shared Method:**
+   - The `deleteIfNotNullAndExists` method is used in both test classes. It could be moved to a shared helper method or utility class to avoid duplication.
+
+3. **Consider Using a Parameterization Framework:**
+   - The various test cases could be parameterized to avoid the need for separate test classes for each cleanup mode. This would make the test suite more concise and easier to maintain.
+
+4. **Simplify Temporary Directory Handling:**
+   - The use of static fields to store temporary directory paths could be simplified by using instance fields or local variables within the test methods. This would avoid potential issues with shared state and make the code more readable.
+
+**Here's the refactored code incorporating these suggestions:**
+
+```java
+package org.junit.jupiter.engine.extension;
+
+// ... imports
+
+class TempDirectoryCleanupTests extends AbstractJupiterTestEngineTests {
+
+    private enum TargetType {
+        FIELD,
+        PARAMETER
+    }
+
+    @Nested
+    class TempDirTests {
+
+        private void testCleanupMode(CleanupMode cleanupMode, TargetType targetType, boolean expectDirectoryToExist) {
+            LauncherDiscoveryRequest request = request()
+                    // ... configure request based on targetType and cleanupMode
+                    .build();
+            executeTests(request);
+
+            Path temporaryDirectory = getTargetDirectory(targetType);
+            assertThat(temporaryDirectory).exists().isEqualTo(expectDirectoryToExist);
+            deleteDirectoryIfExists(temporaryDirectory);
+        }
+
+        // ... test methods for different cleanup modes and target types
+
+        private Path getTargetDirectory(TargetType targetType) {
+            // ... implementation to get the appropriate directory based on target type
+        }
+
+        private void deleteDirectoryIfExists(Path directory) throws IOException {
+            // ... implementation for deleting the directory
+        }
+    }
+}
+```
+
+**I believe these refactorings make the code more concise, maintainable, and easier to read.**

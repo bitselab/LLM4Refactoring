@@ -1,0 +1,53 @@
+After reviewing the provided code, a key opportunity for the "Extract Method" refactoring is identified in the `doStart()` and `doStop()` methods. These methods contain duplicate logic for iterating over listeners and invoking either `onOpened` or `onClosed`. This can be refactored by extracting the common functionality into a new method, thus improving code readability and maintainability.
+
+### Refactored Code
+
+```java
+// ... [Package, imports, and class documentation remain unchanged]
+
+public abstract class QuicSession extends ContainerLifeCycle {
+    // ... [Member variables remain unchanged]
+
+    // Constructor and other methods remain unchanged
+
+    @Override
+    protected void doStart() throws Exception {
+        super.doStart();
+        notifyListeners(Listener::onOpened);
+    }
+
+    @Override
+    protected void doStop() throws Exception {
+        super.doStop();
+        notifyListeners(Listener::onClosed);
+    }
+
+    // New method to notify listeners based on the provided action
+    private void notifyListeners(Consumer<Listener> action) {
+        getEventListeners().stream()
+                .filter(Listener.class::isInstance)
+                .map(Listener.class::cast)
+                .forEach(listener -> {
+                    try {
+                        action.accept(listener);
+                    } catch (Throwable x) {
+                        LOG.info("Failure notifying listener {}", listener, x);
+                    }
+                });
+    }
+
+    // ... [Rest of the class remains unchanged]
+
+    // Listener interface remains unchanged
+}
+```
+
+### Explanation of Changes
+
+1. **Extract Common Logic**: The logic for iterating over listeners and invoking a method on each listener is extracted into a new method, `notifyListeners`.
+
+2. **Functional Interface Parameter**: The new `notifyListeners` method takes a `Consumer<Listener>` as a parameter, which allows it to perform different actions (like `onOpened` or `onClosed`) on the listeners.
+
+3. **Exception Handling Inside Lambda**: Exception handling is included within the lambda expression to maintain the try-catch block that was present in the original methods.
+
+This refactoring effectively removes the duplication in the `doStart()` and `doStop()` methods, centralizing the logic for notifying listeners, and making the code cleaner and more maintainable.

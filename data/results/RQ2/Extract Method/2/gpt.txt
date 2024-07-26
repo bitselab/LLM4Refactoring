@@ -1,0 +1,60 @@
+To refactor the given code using the extract method refactoring technique, we need to create a new method that encapsulates the repetitive logic. The repeated code snippet `assertEquals(EOF, cis.read(), "read()");` appears multiple times in different test methods. We can extract this into a separate method to improve the readability and maintainability of the code.
+
+Here's how the refactored code would look:
+
+```java
+package org.apache.commons.io.input;
+
+import static org.apache.commons.io.IOUtils.EOF;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests {@link ClosedInputStream}.
+ */
+public class ClosedInputStreamTest {
+
+    @Test
+    public void testRead() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertEOFOnRead(cis);
+        }
+    }
+
+    @Test
+    public void testReadArray() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertEquals(EOF, cis.read(new byte[4096]));
+            assertEquals(EOF, cis.read(new byte[1]));
+            assertEquals(EOF, cis.read(new byte[0]));
+        }
+    }
+
+    @Test
+    public void testReadArrayIndex() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertEquals(EOF, cis.read(new byte[4096], 0, 1));
+            assertEquals(EOF, cis.read(new byte[1], 0, 1));
+            assertEquals(EOF, cis.read(new byte[0], 0, 0));
+        }
+    }
+
+    @Test
+    public void testSingleton() throws Exception {
+        try (@SuppressWarnings("deprecation")
+             ClosedInputStream cis = ClosedInputStream.CLOSED_INPUT_STREAM) {
+            assertEOFOnRead(cis);
+        }
+        try (ClosedInputStream cis = ClosedInputStream.INSTANCE) {
+            assertEOFOnRead(cis);
+        }
+    }
+
+    private void assertEOFOnRead(ClosedInputStream cis) throws IOException {
+        assertEquals(EOF, cis.read(), "read()");
+    }
+}
+```
+
+In this refactored version, the `assertEOFOnRead` method is introduced to encapsulate the repetitive `assertEquals` check. This method is then called in the `testRead` and `testSingleton` methods, replacing the repetitive code snippets. This approach makes the code cleaner and easier to maintain. If the logic for the `assertEquals` check needs to be changed in the future, it can now be done in just one place, enhancing the maintainability of the code.

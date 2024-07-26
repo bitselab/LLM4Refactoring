@@ -1,0 +1,49 @@
+## Refactoring Opportunity: Rename Parameter 'source'
+
+There is a refactoring opportunity in the provided code snippet. The parameter named `source` in both the constructor and the inner class `DoubleValuesSourceLeafComparator` can be renamed to a more descriptive name that clarifies its purpose.
+
+Here's the refactored code:
+
+```java
+package org.hibernate.search.backend.lucene.lowlevel.comparator.impl;
+
+import java.io.IOException;
+
+import org.hibernate.search.backend.lucene.lowlevel.docvalues.impl.DoubleMultiValuesToSingleValuesSource;
+
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.search.LeafFieldComparator;
+import org.apache.lucene.search.Pruning;
+import org.apache.lucene.search.comparators.DoubleComparator;
+
+public class DoubleValuesSourceComparator extends DoubleComparator {
+
+  private final DoubleMultiValuesToSingleValuesSource valueSource; // Renamed parameter
+
+  public DoubleValuesSourceComparator(int numHits, String field, Double missingValue, boolean reversed,
+                                     Pruning enableSkipping, DoubleMultiValuesToSingleValuesSource valueSource) { // Renamed parameter
+    super(numHits, field, missingValue, reversed, enableSkipping);
+    this.valueSource = valueSource;
+  }
+
+  @Override
+  public LeafFieldComparator getLeafComparator(LeafReaderContext context) throws IOException {
+    return new DoubleValuesSourceLeafComparator(context);
+  }
+
+  private class DoubleValuesSourceLeafComparator extends DoubleLeafComparator {
+    DoubleValuesSourceLeafComparator(LeafReaderContext context) throws IOException {
+      super(context);
+    }
+
+    @Override
+    protected NumericDocValues getNumericDocValues(LeafReaderContext context, String field) throws IOException {
+      return valueSource.getValues(context, null).getRawDoubleValues();
+    }
+  }
+
+}
+```
+
+By renaming `source` to `valueSource`, the code becomes more readable and the purpose of the parameter is clearer. This improves code maintainability and understanding for future developers.

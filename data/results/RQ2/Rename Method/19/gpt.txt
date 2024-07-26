@@ -1,0 +1,45 @@
+Analyzing the provided code snippet, I agree that the method name `getFilters` can be improved for better clarity and readability. The method is currently fetching filters of a specific type from the security filter chain. A more descriptive name would make the purpose of this method clearer.
+
+I suggest renaming `getFilters` to `findFiltersOfType`, as it more accurately describes that the method is filtering and returning filters of a specified type from the security filter chain. 
+
+Here is the refactored code with the suggested rename refactoring:
+
+```java
+class OAuth2WebSecurityConfigurationTests {
+
+    private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner();
+
+    // ... other test methods ...
+
+    private List<Filter> findFiltersOfType(AssertableWebApplicationContext context, Class<? extends Filter> filterType) {
+        return getSecurityFilterChain(context).getFilters().stream()
+                                                .filter(filterType::isInstance)
+                                                .toList();
+    }
+
+    private SecurityFilterChain getSecurityFilterChain(AssertableWebApplicationContext context) {
+        Filter springSecurityFilterChain = context.getBean(BeanIds.SPRING_SECURITY_FILTER_CHAIN, Filter.class);
+        FilterChainProxy filterChainProxy = getFilterChainProxy(springSecurityFilterChain);
+        SecurityFilterChain securityFilterChain = filterChainProxy.getFilterChains().get(0);
+        return securityFilterChain;
+    }
+
+    private FilterChainProxy getFilterChainProxy(Filter filter) {
+        if (filter instanceof FilterChainProxy filterChainProxy) {
+            return filterChainProxy;
+        }
+        if (filter instanceof CompositeFilter) {
+            List<?> filters = (List<?>) ReflectionTestUtils.getField(filter, "filters");
+            return (FilterChainProxy) filters.stream()
+                    .filter(FilterChainProxy.class::isInstance)
+                    .findFirst()
+                    .orElseThrow();
+        }
+        throw new IllegalStateException("No FilterChainProxy found");
+    }
+
+    // ... other methods and inner classes ...
+}
+```
+
+In this refactored version, the method `getFilters` has been renamed to `findFiltersOfType`, making its purpose more evident and improving the overall readability of the code. This change should be reflected across all usages of this method in the class to maintain consistency.

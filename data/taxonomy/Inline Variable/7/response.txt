@@ -1,0 +1,143 @@
+The provided Java code for the `MutationExecutorStandard` class is extensive and handles various operations related to database mutation in a Hibernate context. After reviewing the code for potential inline variable refactorings, here are some observations and proposed changes:
+
+1. **Refactoring `batchedJdbcMutations` and `nonBatchedJdbcMutations` Initialization**:
+   The lists `batchedJdbcMutations` and `nonBatchedJdbcMutations` are initialized as null and checked for null before being used to add elements. This can be refactored to simplify the code by initializing these lists directly and then checking for emptiness later as needed. This eliminates the need for null checks every time elements are added.
+
+2. **Refactoring `selfExecutingMutations` Initialization**:
+   Similar to `batchedJdbcMutations` and `nonBatchedJdbcMutations`, `selfExecutingMutations` is also initially set to null and then checked and instantiated later. This can be refactored by initializing it directly to avoid unnecessary null checks.
+
+These changes streamline the code and remove the need for separate initialization checks throughout. Here’s the refactored version of the constructor for `MutationExecutorStandard` based on these observations:
+
+```java
+package org.hibernate.engine.jdbc.mutation.internal;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+import org.hibernate.engine.jdbc.batch.spi.Batch;
+import org.hibernate.engine.jdbc.batch.spi.BatchKey;
+import org.hibernate.engine.jdbc.mutation.JdbcValueBindings;
+import org.hibernate.engine.jdbc.mutation.OperationResultChecker;
+import org.hibernate.engine.jdbc.mutation.ParameterUsage;
+import org.hibernate.engine.jdbc.mutation.TableInclusionChecker;
+import org.hibernate.engine.jdbc.mutation.group.PreparedStatementDetails;
+import org.hibernate.engine.jdbc.mutation.group.PreparedStatementGroup;
+import org.hibernate.engine.jdbc.mutation.spi.BatchKeyAccess;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.values.GeneratedValues;
+import org.hibernate.generator.values.GeneratedValuesMutationDelegate;
+import org.hibernate.persister.entity.mutation.EntityMutationTarget;
+import org.hibernate.sql.model.EntityMutationOperationGroup;
+import org.hibernate.sql.model.MutationOperation;
+import org.hibernate.sql.model.MutationOperationGroup;
+import org.hibernate.sql.model.MutationType;
+import org.hibernate.sql.model.PreparableMutationOperation;
+import org.hibernate.sql.model.SelfExecutingUpdateOperation;
+import org.hibernate.sql.model.TableMapping;
+import org.hibernate.sql.model.ValuesAnalysis;
+import org.hibernate.sql.model.jdbc.JdbcValueDescriptor;
+
+import static org.hibernate.internal.util.collections.CollectionHelper.isNotEmpty;
+
+/**
+ * Standard MutationExecutor implementation
+ *
+ * @author Steve Ebersole
+ */
+public class MutationExecutorStandard extends AbstractMutationExecutor implements JdbcValueBindingsImpl.JdbcValueDescriptorAccess {
+    private final MutationOperationGroup mutationOperationGroup;
+
+    private final Batch batch;
+    private final PreparedStatementGroup nonBatchedStatementGroup;
+    private final GeneratedValuesMutationDelegate generatedValuesDelegate;
+    private final List<SelfExecutingUpdateOperation> selfExecutingMutations;
+    private final JdbcValueBindingsImpl valueBindings;
+
+    private enum StatementLocation { BATCHED, NON_BATCHED }
+    private final Map<String, StatementLocation> statementLocationMap = new HashMap<>();
+
+    public MutationExecutorStandard(
+            MutationOperationGroup mutationOperationGroup,
+            BatchKeyAccess batchKeySupplier,
+            int batchSize,
+            SharedSessionContractImplementor session) {
+        this.mutationOperationGroup = mutationOperationGroup;
+        this.generatedValuesDelegate = mutationOperationGroup.asEntityMutationOperationGroup() != null ?
+                mutationOperationGroup.asEntityMutationOperationGroup().getMutationDelegate() :
+                null;
+
+        final BatchKey batchKey = batchKeySupplier.getBatchKey();
+
+        List<PreparableMutationOperation> batchedJdbcMutations = new ArrayList<>();
+        List<PreparableMutationOperation> nonBatchedJdbcMutations = new ArrayList<>();
+        selfExecutingMutations = new ArrayList<>();
+
+        boolean hasAnyNonBatchedJdbcOperations = false;
+
+        for ( int i = mutationOperationGroup.getNumberOfOperations() - 1; i >= 0; i-- ) {
+            final MutationOperation operation = mutationOperationGroup.getOperation( i );
+            if ( operation instanceof SelfExecutingUpdateOperation ) {
+                selfExecutingMutations.add( 0, (SelfExecutingUpdateOperation) operation );
+            }
+            else {
+                final PreparableMutationOperation preparableMutationOperation = (PreparableMutationOperation) operation;
+                final TableMapping tableDetails = operation.getTableDetails();
+                final boolean canBeBatched = !tableDetails.isIdentifierTable() || !hasAnyNonBatchedJdbcOperations && preparableMutationOperation.canBeBatched( batchKey, batchSize );
+
+                if ( canBeBatched ) {
+                    batchedJdbcMutations.add( 0, preparableMutationOperation );
+                    statementLocationMap.put( tableDetails.getTableName(), StatementLocation.BATCHED );
+                }
+                else {
+                    hasAnyNonBatchedJdbcOperations = true;
+                    nonBatchedJdbcMutations.add( 0, preparableMutationOperation );
+                    statementLocationMap.put( tableDetails.getTableName(), StatementLocation.NON_BATCHED );
+                }
+            }
+        }
+
+        if (batchedJdbcMutations.isEmpty()) {
+            this.batch = null;
+        } else {
+            assert generatedValuesDelegate == null : "Unsupported batched mutation for entity target with generated values delegate";
+            this.batch = session.getJdbcCoordinator().getBatch(
+                    batchKey,
+                    batchSize,
+                    () -> ModelMutationHelper.toPreparedStatementGroup(
+                            mutationOperationGroup.getMutationType(),
+                            mutationOperationGroup.getMutationTarget(),
+                            null,
+                            batchedJdbcMutations,
+                            session
+                    )
+            );
+            assert batch != null;
+        }
+
+        this.nonBatchedStatementGroup = ModelMutationHelper.toPreparedStatementGroup(
+                mutationOperationGroup.getMutationType(),
+                mutationOperationGroup.getMutationTarget(),
+                generatedValuesDelegate,
+                nonBatchedJdbcMutations,
+                session
+        );
+
+        this.valueBindings = new JdbcValueBindingsImpl(
+                mutationOperationGroup.getMutationType(),
+                mutationOperationGroup.getMutationTarget(),
+                this,
+                session
+        );
+
+        if ( isNotEmpty(nonBatchedJdbcMutations) || isNotEmpty(selfExecutingMutations) ) {
+            prepareForNonBatchedWork(batchKey, session);
+        }
+    }
+
+    // Additional overridden methods and other logic remain the same
+}
+```
+This refactor simplifies list management and eliminates repetitive null checks, improving the readability and maintainability of the code.

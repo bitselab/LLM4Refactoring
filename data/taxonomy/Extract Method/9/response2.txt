@@ -1,0 +1,98 @@
+The provided `generateBriefReport` method in the `JavaCoverageEngine` class contains several blocks of code that are candidates for extract method refactoring. These refactoring opportunities will improve readability and maintainability by breaking down this complex method into smaller, more focused methods. Here's how we can refactor the code:
+
+1. **Extract Report Generation Logic for Extensions:**
+   - This logic iterates through extensions and generates a report if available. It's a clear candidate for extraction as it's a self-contained process.
+
+2. **Extract Coverage Data Processing Logic for Jumps and Switches:**
+   - The loops that process jump and switch data are complex and can be extracted into separate methods. This will make the main method simpler and each extracted method can be focused on a specific task.
+
+Here is how the refactored code might look:
+
+```java
+public class JavaCoverageEngine extends CoverageEngine {
+
+    @Override
+    public String generateBriefReport(@NotNull Editor editor,
+                                      @NotNull PsiFile psiFile,
+                                      int lineNumber,
+                                      int startOffset,
+                                      int endOffset,
+                                      @Nullable LineData lineData) {
+        if (lineData == null) {
+            return CoverageBundle.message("hits.title", 0);
+        }
+        try {
+            String reportFromExtensions = getReportFromExtensions(editor, psiFile, lineNumber, startOffset, endOffset, lineData);
+            if (reportFromExtensions != null) {
+                return reportFromExtensions;
+            }
+            
+            return processCoverageData(psiFile, startOffset, endOffset, lineData);
+        } catch (Exception e) {
+            LOG.error(e);
+            return CoverageBundle.message("hits.title", lineData.getHits());
+        }
+    }
+
+    private String getReportFromExtensions(Editor editor, PsiFile psiFile, int lineNumber, int startOffset, int endOffset, LineData lineData) {
+        for (JavaCoverageEngineExtension extension : JavaCoverageEngineExtension.EP_NAME.getExtensionList()) {
+            String report = extension.generateBriefReport(editor, psiFile, lineNumber, startOffset, endOffset, lineData);
+            if (report != null) {
+                return report;
+            }
+        }
+        return null;
+    }
+
+    private String processCoverageData(PsiFile psiFile, int startOffset, int endOffset, LineData lineData) {
+        TextRange range = TextRange.create(startOffset, endOffset);
+        List<SwitchCoverageExpression> switches = JavaCoveragePsiUtilsKt.getSwitches(psiFile, range);
+        List<ConditionCoverageExpression> conditions = JavaCoveragePsiUtilsKt.getConditions(psiFile, range);
+
+        StringBuilder buf = new StringBuilder();
+        String defaultResult = CoverageBundle.message("hits.title", lineData.getHits());
+        buf.append(defaultResult).append("\n");
+        int idx = 0;
+        int hits = 0;
+
+        hits = processJumps(lineData, conditions, buf, hits, idx);
+        hits = processSwitches(lineData, switches, buf, hits, idx);
+
+        if (lineData.getHits() > hits && hits > 0) {
+            buf.append(JavaCoverageBundle.message("report.unknown.outcome", lineData.getHits() - hits));
+        }
+
+        return buf.toString();
+    }
+
+    private int processJumps(LineData lineData, List<ConditionCoverageExpression> conditions, StringBuilder buf, int hits, int idx) {
+        for (JumpData jumpData : lineData.getJumps()) {
+            if (idx >= conditions.size()) {
+                LOG.info("Cannot map coverage report data with PSI: there are more branches in report then in PSI");
+                return hits;
+            }
+            ConditionCoverageExpression expression = conditions.get(idx++);
+            addJumpDataInfo(buf, jumpData, expression);
+            hits += jumpData.getTrueHits() + jumpData.getFalseHits();
+        }
+        return hits;
+    }
+
+    private int processSwitches(LineData lineData, List<SwitchCoverageExpression> switches, StringBuilder buf, int hits, int idx) {
+        for (SwitchData switchData : lineData.getSwitches()) {
+            if (idx >= switches.size()) {
+                LOG.info("Cannot map coverage report data with PSI: there are more switches in report then in PSI");
+                return hits;
+            }
+            SwitchCoverageExpression expression = switches.get(idx++);
+            addSwitchDataInfo(buf, switchData, expression, lineData.getStatus());
+            hits += IntStream.of(switchData.getHits()).sum() + switchData.getDefaultHits();
+        }
+        return hits;
+    }
+
+    // Utility methods for adding data info can also be refactored if needed
+}
+```
+
+In this refactor, we have extracted methods for generating reports from extensions and processing coverage data, which themselves call further specialized methods for jumps and switches. This makes the `generateBriefReport` method much cleaner and its logic easier to follow.

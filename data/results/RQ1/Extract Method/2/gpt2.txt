@@ -1,0 +1,71 @@
+In the provided code snippet, the primary refactoring opportunity lies in extracting common operations into a separate method to reduce duplication and improve readability. The `assertEquals(EOF, cis.read(), "read()")` operation is repeated multiple times across different test methods. We can extract this into a private method to make the tests more concise and maintainable.
+
+Here's the refactored code:
+
+```java
+package org.apache.commons.io.input;
+
+import static org.apache.commons.io.IOUtils.EOF;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests {@link ClosedInputStream}.
+ */
+public class ClosedInputStreamTest {
+
+    @Test
+    public void testRead() throws Exception {
+        testReadOperation(new ClosedInputStream());
+    }
+
+    @Test
+    public void testReadArray() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertReadArray(cis, new byte[4096]);
+            assertReadArray(cis, new byte[1]);
+            assertReadArray(cis, new byte[0]);
+        }
+    }
+
+    @Test
+    public void testReadArrayIndex() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertReadArrayIndex(cis, new byte[4096], 0, 1);
+            assertReadArrayIndex(cis, new byte[1], 0, 1);
+            assertReadArrayIndex(cis, new byte[0], 0, 0);
+        }
+    }
+
+    @Test
+    public void testSingleton() throws Exception {
+        testReadOperation(ClosedInputStream.CLOSED_INPUT_STREAM);
+        testReadOperation(ClosedInputStream.INSTANCE);
+    }
+
+    private void testReadOperation(ClosedInputStream cis) throws Exception {
+        try (cis) {
+            assertEquals(EOF, cis.read(), "read()");
+        }
+    }
+
+    private void assertReadArray(ClosedInputStream cis, byte[] buffer) throws Exception {
+        assertEquals(EOF, cis.read(buffer));
+    }
+
+    private void assertReadArrayIndex(ClosedInputStream cis, byte[] buffer, int offset, int length) throws Exception {
+        assertEquals(EOF, cis.read(buffer, offset, length));
+    }
+}
+```
+
+In this refactoring:
+
+1. **`testReadOperation` Method**: This method handles the common operation of asserting EOF for the `read()` method. It's used in `testRead` and `testSingleton` tests.
+
+2. **`assertReadArray` Method**: This method encapsulates the operation of asserting EOF for the `read(byte[])` method. It's used in the `testReadArray` test.
+
+3. **`assertReadArrayIndex` Method**: This method encapsulates the operation of asserting EOF for the `read(byte[], int, int)` method. It's used in the `testReadArrayIndex` test.
+
+These changes improve the code's maintainability and readability by reducing repetition and making the purpose of each test clearer.

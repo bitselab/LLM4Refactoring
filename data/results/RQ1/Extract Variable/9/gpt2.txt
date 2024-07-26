@@ -1,0 +1,93 @@
+In this code snippet, applying "Extract Variable" refactoring can enhance readability and potentially reduce redundancy. Let's identify and implement these opportunities:
+
+1. **Extract Repeated Path Resolutions:** In both `guessUltimateHome` and `guessCommunityHome` methods, the code repeatedly resolves paths like `home.resolve("ultimate")`. Extracting these as variables would improve readability and maintainability.
+
+2. **Extract Method Argument Conversion:** In `getSomeRoot`, the conversion of `klass` to a path is done twice. Extracting this to a variable can avoid duplicate calls to `getPathFromClass`.
+
+Here's the refactored code with these changes:
+
+```java
+package org.jetbrains.intellij.build;
+
+import com.intellij.util.lang.UrlClassLoader;
+import org.jetbrains.intellij.build.dependencies.BuildDependenciesCommunityRoot;
+
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public final class IdeaProjectLoaderUtil {
+    private static final String JPS_BOOTSTRAP_COMMUNITY_HOME_ENV_NAME = "JPS_BOOTSTRAP_COMMUNITY_HOME";
+    private static final String ULTIMATE_REPO_MARKER_FILE = ".ultimate.root.marker";
+    private static final String COMMUNITY_REPO_MARKER_FILE = "intellij.idea.community.main.iml";
+
+    public static Path guessUltimateHome(Class<?> klass) {
+        final Path start = getSomeRoot(klass);
+        Path home = start;
+        while (home != null) {
+            Path ultimateMarkerPath = home.resolve(ULTIMATE_REPO_MARKER_FILE);
+            if (Files.exists(ultimateMarkerPath)) {
+                return home;
+            }
+
+            Path riderLayoutPath = home.resolve("ultimate").resolve(ULTIMATE_REPO_MARKER_FILE);
+            if (Files.exists(riderLayoutPath)) {
+                return home.resolve("ultimate");
+            }
+
+            home = home.getParent();
+        }
+
+        throw new IllegalArgumentException("Cannot guess ultimate project home from root '" + start + "', marker file '" + ULTIMATE_REPO_MARKER_FILE + "'");
+    }
+
+    public static BuildDependenciesCommunityRoot guessCommunityHome(Class<?> klass) {
+        final Path start = getSomeRoot(klass);
+        Path home = start;
+
+        while (home != null) {
+            Path communityMarkerPath = home.resolve(COMMUNITY_REPO_MARKER_FILE);
+            if (Files.exists(communityMarkerPath)) {
+                return new BuildDependenciesCommunityRoot(home);
+            }
+
+            Path communityPath = home.resolve("community").resolve(COMMUNITY_REPO_MARKER_FILE);
+            if (Files.exists(communityPath)) {
+                return new BuildDependenciesCommunityRoot(home.resolve("community"));
+            }
+
+            Path riderCommunityPath = home.resolve("ultimate").resolve("community").resolve(COMMUNITY_REPO_MARKER_FILE);
+            if (Files.exists(riderCommunityPath)) {
+                return new BuildDependenciesCommunityRoot(home.resolve("ultimate").resolve("community"));
+            }
+
+            home = home.getParent();
+        }
+
+        throw new IllegalArgumentException("Cannot guess community project home from root '" + start + "', marker file '" + COMMUNITY_REPO_MARKER_FILE + "'");
+    }
+
+    private static Path getSomeRoot(Class<?> klass) {
+        String communityHome = System.getenv(JPS_BOOTSTRAP_COMMUNITY_HOME_ENV_NAME);
+        if (communityHome != null) {
+            return Path.of(communityHome).normalize();
+        }
+
+        Path classPath = getPathFromClass(klass);
+        if (!classPath.toString().endsWith("class")) {
+            throw new IllegalArgumentException("To guess idea home, you must provide class that resides in .class file inside of idea home dir. But provided " + klass + " resides in " + classPath);
+        }
+        return classPath;
+    }
+
+    private static Path getPathFromClass(Class<?> klass) {
+        URL classFileURL = klass.getResource(klass.getSimpleName() + ".class");
+        if (classFileURL == null) {
+            throw new IllegalStateException("Could not get .class file location from class " + klass.getName());
+        }
+        return Path.of(UrlClassLoader.urlToFilePath(classFileURL.getPath()));
+    }
+}
+```
+
+These refactorings focus on extracting repeated expressions into variables, enhancing the code's clarity and reducing the chance of errors in future modifications.

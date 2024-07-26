@@ -1,0 +1,52 @@
+The given code can indeed benefit from some rename parameter refactorings to enhance readability and better communicate the purpose of each parameter. Here are some suggestions for renaming the parameters:
+
+1. **jdbcMutations** to **mutationOperations**: This renaming provides a clearer description of what the list contains, emphasizing the operations rather than the JDBC technology, which might not be as relevant in this naming context.
+
+2. **mutationType** is clear enough and descriptive of its role, so it doesn't require changes.
+
+3. **mutationTarget** to **generatedValuesDelegate**: This renaming better describes what the object is responsible for, which is handling generated values during mutations.
+
+4. **session** to **databaseSession**: This makes it clear that the session is related to database operations, which could improve readability especially for those unfamiliar with the specific technology being used.
+
+Refactoring the parameter names in the method signature would result in the following updated code snippet:
+```java
+private static SortedMap<String, PreparedStatementDetails> createStatementDetailsMap(
+        List<PreparableMutationOperation> mutationOperations,
+        MutationType mutationType,
+        GeneratedValuesMutationDelegate generatedValuesDelegate,
+        SharedSessionContractImplementor databaseSession) {
+    final Comparator<String> comparator;
+
+    if (mutationType == MutationType.DELETE) {
+        // reverse order
+        comparator = Comparator.comparingInt((tableName) -> {
+            final TableMapping tableMapping = locateTableMapping(mutationOperations, tableName);
+            if (tableMapping == null) {
+                return -1;
+            }
+            return mutationOperations.size() - tableMapping.getRelativePosition();
+        });
+    } else {
+        comparator = Comparator.comparingInt((tableName) -> {
+            final TableMapping tableMapping = locateTableMapping(mutationOperations, tableName);
+            if (tableMapping == null) {
+                return -1;
+            }
+            return tableMapping.getRelativePosition();
+        });
+    }
+
+    final TreeMap<String, PreparedStatementDetails> map = new TreeMap<>(comparator);
+
+    for (final PreparableMutationOperation mutationOperation : mutationOperations) {
+        map.put(
+                mutationOperation.getTableDetails().getTableName(),
+                createPreparedStatementDetails(mutationOperation, generatedValuesDelegate, databaseSession)
+        );
+    }
+
+    return map;
+}
+```
+
+These refactorings aim to make the code more understandable by using names that better describe the roles of the variables and parameters.

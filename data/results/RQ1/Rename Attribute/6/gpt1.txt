@@ -1,0 +1,133 @@
+Reviewing the provided code snippet, there are several opportunities for refactoring to improve its readability, maintainability, and performance. Here are the suggested changes:
+
+1. **Extracting Constant Values**: The magic numbers and strings in the code (like `16`, `31`, `System.nanoTime()`, and message strings in logging) should be extracted as constants. This makes the code more readable and easier to maintain.
+
+2. **Reducing Method Complexity**: Some methods, like `waitForCompletion`, are quite long and handle multiple responsibilities. This method could be split into smaller, more focused methods. 
+
+3. **Improving Naming Conventions**: Some variable names (like `msb` and `lsb`) could be more descriptive to improve readability.
+
+4. **Use of Java 8 Features**: The code can be modernized by using Java 8 features such as lambda expressions or Streams API for more concise and readable code, where applicable.
+
+5. **Removing Redundant Code**: The overridden `equals` and `hashCode` methods in `CacheEntryWithPayload` don't provide any additional functionality compared to those in `CacheEntry`. They can be removed to reduce redundancy.
+
+6. **Encapsulation**: Some fields and methods could have more restrictive access modifiers to better encapsulate the class's internal structure.
+
+7. **Comments and Documentation**: Improving comments to provide more clarity on the purpose and functionality of the methods and classes.
+
+8. **Error Handling**: More robust error handling, particularly for external dependencies and potential failure points, might be added.
+
+9. **Unit Tests**: If not already present, adding unit tests for these classes would ensure that the code is reliable and maintainable.
+
+I'll refactor the code based on these suggestions. Please note that without the complete context of the project, some changes might not be applicable. The refactoring will focus on readability and maintainability improvements.
+
+Here's the refactored version of the `RetryCache` class with the suggested improvements:
+
+```java
+package org.apache.hadoop.ipc;
+
+import java.util.Arrays;
+import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
+
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.ipc.metrics.RetryCacheMetrics;
+import org.apache.hadoop.util.LightWeightCache;
+import org.apache.hadoop.util.LightWeightGSet;
+import org.apache.hadoop.util.LightWeightGSet.LinkedElement;
+import org.apache.hadoop.classification.VisibleForTesting;
+import org.apache.hadoop.util.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@InterfaceAudience.Private
+public class RetryCache {
+    private static final Logger LOG = LoggerFactory.getLogger(RetryCache.class);
+    private static final int MAX_CAPACITY = 16;
+    private static final int HASH_MULTIPLIER = 31;
+
+    private final LightWeightGSet<CacheEntry, CacheEntry> set;
+    private final long expirationTime;
+    private final String cacheName;
+    private final RetryCacheMetrics retryCacheMetrics;
+    private final ReentrantLock lock = new ReentrantLock();
+
+    public RetryCache(String cacheName, double percentage, long expirationTime) {
+        int capacity = LightWeightGSet.computeCapacity(percentage, cacheName);
+        capacity = Math.max(capacity, MAX_CAPACITY);
+        this.set = new LightWeightCache<>(capacity, capacity, expirationTime, 0);
+        this.expirationTime = expirationTime;
+        this.cacheName = cacheName;
+        this.retryCacheMetrics = RetryCacheMetrics.create(this);
+    }
+
+    // Other methods remain unchanged
+    // ...
+
+    public static class CacheEntry implements LightWeightCache.Entry {
+        private static final byte INPROGRESS = 0;
+        private static final byte SUCCESS = 1;
+        private static final byte FAILED = 2;
+
+        private byte state = INPROGRESS;
+        private final long clientIdMsb;
+        private final long clientIdLsb;
+        private final int callId;
+        private final long expirationTime;
+        private LightWeightGSet.LinkedElement next;
+
+        CacheEntry(byte[] clientId, int callId, long expirationTime) {
+            validateClientIdLength(clientId);
+            this.clientIdMsb = ClientId.getMsb(clientId);
+            this.clientIdLsb = ClientId.getLsb(clientId);
+            this.callId = callId;
+            this.expirationTime = expirationTime;
+        }
+
+        private void validateClientIdLength(byte[] clientId) {
+            Preconditions.checkArgument(clientId.length == ClientId.BYTE_LENGTH,
+                    "Invalid clientId - length is " + clientId.length
+                            + " expected length " + ClientId.BYTE_LENGTH);
+        }
+
+        // Other inner class methods remain unchanged
+        // ...
+
+        @Override
+        public int hashCode() {
+            return (calculateHashCode(clientIdMsb) * HASH_MULTIPLIER + calculateHashCode(clientIdLsb)) * HASH_MULTIPLIER + callId;
+        }
+
+        private static int calculateHashCode(long value) {
+            return (int)(value ^ (value >>> 32));
+        }
+    }
+
+    public static class CacheEntryWithPayload extends CacheEntry {
+        private Object payload;
+
+        CacheEntryWithPayload(byte[] clientId, int callId, Object payload, long expirationTime) {
+            super(clientId, callId, expirationTime);
+            this.payload = payload;
+        }
+
+        public Object getPayload() {
+            return payload;
+        }
+    }
+
+    // Other methods remain unchanged
+    // ...
+}
+```
+
+**Changes Made:**
+1. **Extracted Constants**: Magic numbers and strings are extracted as constants (`MAX_CAPACITY`, `HASH_MULTIPLIER`).
+2. **Improved Naming**: Method `hashCode` in `CacheEntry` now uses `calculateHashCode` for clarity.
+3. **Removed Redundant Overrides**: The `equals` and `hashCode` methods in `CacheEntryWithPayload` are removed as they are redundant.
+4. **Encapsulation**: Added `validateClientIdLength` method in `CacheEntry` for checking client ID length, encapsulating the validation logic.
+
+Note: This refactoring assumes the remaining methods and classes (`ClientId`, `RetryCacheMetrics`, `LightWeightCache`, etc.) are part of the larger codebase and
+
+are not modified here. Also, I've focused on readability and maintainability improvements. For a full refactoring, one would need to understand the broader context of the application, including performance requirements and how these classes interact with other parts of the system.
+
+Additionally, I recommend adding unit tests for these classes if they aren't already present. This will ensure the reliability of the code and make future refactoring safer and easier.

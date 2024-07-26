@@ -1,0 +1,39 @@
+Analyzing the provided code snippet for inline method refactoring opportunities involves checking if there are private methods that are only used once within the class and can be inlined to simplify the code structure. Let's review the methods in the `DatabaseContainer` class:
+
+1. **`public static Configuration configuration()`** - This is a public static method that calls the private static method `configure`.
+   
+2. **`private static Configuration configure(Consumer<Configuration> propertySetter)`** - This private static method is called only once by the `configuration()` method. The method performs some checks and operations on the `DATABASE_CONTAINER` and returns a `Configuration` object.
+
+Considering the inline method refactoring pattern, where a private method that is only used once within the class should be inlined if it improves readability or maintainability, we have the following situation:
+
+- The `configure` method is only used once by the `configuration` method.
+- The logic within `configure` is relatively straightforward and directly related to obtaining the configuration. 
+- Inlining this method could simplify the class structure without significantly complicating the `configuration` method.
+
+Given this analysis, we can inline the `configure` method into the `configuration` method. Here is the refactored code:
+
+```java
+@SuppressWarnings("resource")
+public final class DatabaseContainer {
+
+    public static Configuration configuration() {
+        if (!SupportedDatabase.H2.equals(DATABASE)) {
+            DATABASE_CONTAINER.start();
+        }
+        Configuration configuration = DATABASE.configuration(DATABASE_CONTAINER);
+
+        if (DATABASE_CONTAINER != null && !DATABASE_CONTAINER.isRunning()) {
+            synchronized (DATABASE_CONTAINER) {
+                if (!DATABASE_CONTAINER.isRunning()) {
+                    DATABASE_CONTAINER.start();
+                }
+            }
+        }
+
+        return configuration;
+    }
+
+}
+```
+
+In this refactored version, the `configure` method's body has been moved directly into the `configuration` method, removing the need for an extra method call and simplifying the class structure. This refactoring maintains the clarity and purpose of the original method while adhering to the inline method refactoring pattern.

@@ -1,0 +1,61 @@
+ **Here's the refactored code after applying extract method refactoring:**
+
+```java
+package org.apache.flink.table.planner.runtime.stream.jsonplan;
+
+// ... other imports
+
+class ConfigureOperatorLevelStateTtlJsonITCase extends JsonPlanTestBase {
+
+  // ... other methods
+
+  private void testDifferentStateTtlForDifferentOneInputOperator() throws Exception {
+    prepareTestDataAndSinkTable();
+    compileSqlAndExecutePlan("INSERT INTO OrdersStats \n"
+        + "SELECT buyer, COUNT(1) AS ord_cnt, SUM(quantity) AS quantity_cnt, SUM(amount) AS total_amount FROM (\n"
+        + "SELECT *, ROW_NUMBER() OVER(PARTITION BY order_id, buyer, quantity, amount ORDER BY proctime() ASC) AS rk FROM Orders) tmp\n"
+        + "WHERE rk = 1\n"
+        + "GROUP BY buyer", (Function<String, String>) json -> {
+      try {
+        JsonNode target = JsonTestUtils.readFromString(json);
+        JsonTestUtils.setExecNodeStateMetadata(
+            target, "stream-exec-deduplicate", 0, 6000L);
+        JsonTestUtils.setExecNodeStateMetadata(
+            target, "stream-exec-group-aggregate", 0, 9000L);
+        return JsonTestUtils.writeToString(target);
+      } catch (IOException e) {
+        throw new TableException("Cannot modify compiled json plan.", e);
+      }
+    }).await();
+
+    // ... remaining code
+  }
+
+  private void prepareTestDataAndSinkTable() {
+    String dataId = TestValuesTableFactory.registerRowData(Arrays.asList(
+        // ... test data
+      ));
+    createTestSourceTable(
+        "Orders",
+        new String[] {"`order_id` INT", "`buyer` STRING", "`quantity` INT", "`amount` DOUBLE"},
+        null,
+        getProperties(dataId, 1, "2s"));
+
+    createTestNonInsertOnlyValuesSinkTable(
+        "OrdersStats",
+        "`buyer` STRING",
+        "`ord_cnt` BIGINT",
+        "`quantity_cnt` BIGINT",
+        "`total_amount` DOUBLE");
+  }
+
+  // ... other methods
+}
+```
+
+**Key changes:**
+
+1. **Extracted method:** The code block for preparing test data and sink table is extracted into a separate method named `prepareTestDataAndSinkTable`.
+2. **Method call:** The extracted method is called within `testDifferentStateTtlForDifferentOneInputOperator` to reuse the functionality.
+3. **Removed comments:** Unnecessary comments within the extracted block are removed for clarity.
+4. **Enhanced readability:** The original method now focuses on its core logic, improving readability and maintainability.

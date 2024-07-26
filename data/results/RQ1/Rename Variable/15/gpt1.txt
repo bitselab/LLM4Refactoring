@@ -1,0 +1,63 @@
+Reviewing the provided code, it appears to be well-structured and follows good coding practices. However, there are a few opportunities for refactoring to enhance clarity, maintainability, and potentially performance. Here are the changes I recommend:
+
+1. **Extract Constant for Repeated Strings**: The strings `"session"` and `"mocks"` are used multiple times. It's good practice to define such strings as constants to avoid typos in their repeated use and make it easier to change the value in one place if needed.
+
+2. **Use Enhanced for Loop**: In the `afterEach` method, the traditional for loop can be replaced with an enhanced for loop for better readability.
+
+3. **Avoid Deep Nesting**: The method `retrieveAnnotationFromTestClasses` has a nested loop with a conditional break. This could be refactored for better readability.
+
+4. **Refactor Optional Handling**: The handling of `Optional` in `retrieveAnnotationFromTestClasses` can be streamlined for clarity.
+
+5. **General Cleanup**: Some minor improvements can be made, like removing unnecessary type annotations and simplifying expressions.
+
+Here is the refactored code:
+
+```java
+package org.mockito.junit.jupiter;
+
+// ... [import statements remain unchanged]
+
+public class MockitoExtension implements BeforeEachCallback, AfterEachCallback, ParameterResolver {
+
+    private static final Namespace MOCKITO = create("org.mockito");
+    private static final String SESSION_KEY = "session";
+    private static final String MOCKS_KEY = "mocks";
+
+    private final Strictness strictness;
+    private final ParameterResolver parameterResolver;
+
+    // Constructor details remain unchanged
+
+    @Override
+    public void beforeEach(final ExtensionContext context) {
+        // ... [rest of the method remains unchanged]
+        context.getStore(MOCKITO).put(MOCKS_KEY, new HashSet<>());
+        context.getStore(MOCKITO).put(SESSION_KEY, session);
+    }
+
+    private Optional<MockitoSettings> retrieveAnnotationFromTestClasses(final ExtensionContext context) {
+        for (ExtensionContext currentContext = context; currentContext != null; currentContext = currentContext.getParent().orElse(null)) {
+            Optional<MockitoSettings> annotation = findAnnotation(currentContext.getElement(), MockitoSettings.class);
+            if (annotation.isPresent() || currentContext == context.getRoot()) {
+                return annotation;
+            }
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void afterEach(ExtensionContext context) {
+        Set<ScopedMock> mocks = context.getStore(MOCKITO).remove(MOCKS_KEY, Set.class);
+        for (ScopedMock mock : mocks) {
+            mock.closeOnDemand();
+        }
+        context.getStore(MOCKITO).remove(SESSION_KEY, MockitoSession.class)
+                .finishMocking(context.getExecutionException().orElse(null));
+    }
+
+    // ... [rest of the class remains unchanged]
+}
+```
+
+These changes should enhance the readability and maintainability of the code without altering its functionality.

@@ -1,0 +1,43 @@
+There is a refactoring opportunity in the `convertJsonPropertyToLocalParams` method. The variable `existingSize` is calculated twice within the code block. It can be inlined to improve readability.
+
+Here's the refactored code:
+
+```java
+private static void convertJsonPropertyToLocalParams(
+    Map<String, String[]> outMap,
+    JsonQueryConverter jsonQueryConverter,
+    Map.Entry<String, Object> jsonProperty,
+    String outKey,
+    boolean isQuery,
+    boolean arr) {
+  Object val = jsonProperty.getValue();
+
+  if (arr) {
+    String[] existing = outMap.get(outKey);
+    List<?> lst = val instanceof List ? (List<?>) val : null;
+    int existingSize = existing == null ? 0 : existing.length;
+    int jsonSize = lst == null ? 1 : lst.size();
+    String[] newval = new String[existingSize + jsonSize];
+    for (int i = 0; i < existingSize; i++) {
+      newval[i] = existing[i];
+    }
+    if (lst != null) {
+      for (int i = 0; i < jsonSize; i++) {
+        Object v = lst.get(i);
+        newval[existingSize + i] =
+            isQuery ? jsonQueryConverter.toLocalParams(v, outMap) : v.toString();
+      }
+    } else {
+      newval[newval.length - 1] =
+          isQuery ? jsonQueryConverter.toLocalParams(val, outMap) : val.toString();
+    }
+    outMap.put(outKey, newval);
+  } else {
+    outMap.put(
+        outKey,
+        new String[] {isQuery ? jsonQueryConverter.toLocalParams(val, outMap) : val.toString()});
+  }
+}
+```
+
+The repeated calculation of `existingSize` is replaced with a direct usage within the conditional statements. This reduces redundancy and makes the code easier to understand.

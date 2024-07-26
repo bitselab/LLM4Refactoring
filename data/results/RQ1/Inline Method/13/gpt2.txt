@@ -1,0 +1,28 @@
+The provided Java code snippet for a `StringToEnumConverter` can benefit from an inline method refactoring. The `valueOf` method is a private static method that's only being used once in the `convert` method. Its functionality is straightforward, as it simply delegates to `Enum.valueOf`. This is a classic case where inline method refactoring can be applied to improve readability and reduce unnecessary method indirection.
+
+Here's the refactored code:
+
+```java
+package org.junit.jupiter.params.converter;
+
+class StringToEnumConverter implements StringToObjectConverter {
+
+    @Override
+    public boolean canConvert(Class<?> targetType) {
+        return targetType.isEnum();
+    }
+
+    @Override
+    public Object convert(String source, Class<?> targetType) throws Exception {
+        return Enum.valueOf(targetType, source);
+    }
+
+}
+```
+
+Changes Made:
+
+- The `valueOf` method has been removed.
+- Its functionality is now directly included in the `convert` method.
+
+This refactoring simplifies the class by removing an unnecessary level of method call, making the code more direct and easier to follow. The behavior of the `convert` method remains the same.

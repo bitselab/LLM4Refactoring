@@ -1,0 +1,42 @@
+In the provided code snippet, the method `relativizeAndNormalizePath` is tasked with generating a relative path based on a base directory and a given path. The method name, while descriptive, is somewhat lengthy and could potentially be made more concise while still retaining clarity. A good practice in naming methods is to ensure that they clearly describe the action being performed and, if possible, hint at the expected inputs and outputs.
+
+A proposed refactoring of the method name could be `getRelativePath`. This new name succinctly indicates the primary action of the method (getting a relative path) and is less verbose while still being descriptive.
+
+Here's the refactored code with the renamed method:
+
+```java
+package com.puppycrawl.tools.checkstyle.utils;
+
+// ... [other parts of the class remain unchanged]
+
+public final class CommonUtil {
+    // ... [other parts of the class remain unchanged]
+
+    /**
+     * Constructs a relative path between base directory and a given path.
+     *
+     * @param baseDirectory
+     *            the base path to which given path is relativized
+     * @param path
+     *            the path to relativize against base directory
+     * @return the relative normalized path between base directory and
+     *     path or path if base directory is null.
+     */
+    public static String getRelativePath(final String baseDirectory, final String path) {
+        final String resultPath;
+        if (baseDirectory == null) {
+            resultPath = path;
+        }
+        else {
+            final Path pathAbsolute = Paths.get(path);
+            final Path pathBase = Paths.get(baseDirectory);
+            resultPath = pathBase.relativize(pathAbsolute).toString();
+        }
+        return resultPath;
+    }
+
+    // ... [other parts of the class remain unchanged]
+}
+```
+
+This refactoring improves the readability of the code by making the method name more concise and to the point, without losing the essence of what the method does. Remember, the goal of refactoring is to make the code more readable and maintainable without altering its functionality.

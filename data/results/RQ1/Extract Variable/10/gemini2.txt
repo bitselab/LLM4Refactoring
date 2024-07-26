@@ -1,0 +1,77 @@
+## Refactored Code with Extract Variable
+
+There are two opportunities for extract variable refactoring in the provided code snippet:
+
+1. Refactoring the condition for the infinite loop check:
+
+```java
+// Original condition
+if (typeParam.get().isWildcard() &&
+      (!typeParam.get().asWildcard().equals(ResolvedWildcard.UNBOUNDED)
+           && type.equals(typeParam.get().asWildcard().getBoundedType()))) {
+  // ...
+}
+
+// Refactored with extracted variable
+ResolvedType boundedType = typeParam.get().asWildcard().getBoundedType();
+if (typeParam.get().isWildcard() && 
+    !typeParam.get().asWildcard().equals(ResolvedWildcard.UNBOUNDED) && 
+    type.equals(boundedType)) {
+  // ...
+}
+```
+
+2. Refactoring the recursive call with the extracted variable:
+
+```java
+// Original recursive call
+return ResolvedWildcard.extendsBound(useThisTypeParametersOnTheGivenType(type.asWildcard().getBoundedType()));
+
+// Refactored with extracted variable (similar for superBound)
+ResolvedType boundedType = type.asWildcard().getBoundedType();
+return ResolvedWildcard.extendsBound(useThisTypeParametersOnTheGivenType(boundedType));
+```
+
+Here's the complete refactored code:
+
+```java
+public interface ResolvedTypeParameterValueProvider {
+
+  // ...
+
+  default ResolvedType useThisTypeParametersOnTheGivenType(ResolvedType type) {
+    if (type.isTypeVariable()) {
+      ResolvedTypeParameterDeclaration typeParameter = type.asTypeParameter();
+      if (typeParameter.declaredOnType()) {
+        Optional<ResolvedType> typeParam = typeParamValue(typeParameter);
+        if (typeParam.isPresent()) {
+          // Extract variable for infinite loop check
+          ResolvedType boundedType = typeParam.get().asWildcard().getBoundedType();
+          if (typeParam.get().isWildcard() &&
+              !typeParam.get().asWildcard().equals(ResolvedWildcard.UNBOUNDED) &&
+              type.equals(boundedType)) {
+            return type;
+          }
+          type = typeParam.get();
+        }
+      }
+    }
+    if (type.isWildcard() && type.asWildcard().isBounded()) {
+      if (type.asWildcard().isExtends()) {
+        // Extract variable for recursive call
+        ResolvedType boundedType = type.asWildcard().getBoundedType();
+        return ResolvedWildcard.extendsBound(useThisTypeParametersOnTheGivenType(boundedType));
+      }
+      return ResolvedWildcard.superBound(useThisTypeParametersOnTheGivenType(type.asWildcard().getBoundedType()));
+    }
+    if (type.isReferenceType()) {
+      type = type.asReferenceType().transformTypeParameters(this::useThisTypeParametersOnTheGivenType);
+    }
+    return type;
+  }
+
+  // ...
+}
+```
+
+These refactorings improve code readability by making the conditions and recursive call easier to understand by separating the logic into named variables.

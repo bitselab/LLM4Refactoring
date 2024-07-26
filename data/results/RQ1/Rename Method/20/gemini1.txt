@@ -1,0 +1,68 @@
+Absolutely, here are some refactoring opportunities for the provided code snippet:
+
+1. **Cache `inheritedParameterAnnotations`:** The `getInterfaceParameterAnnotations` method calculates the inherited parameter annotations and stores them in `inheritedParameterAnnotations`. This value is then  used in `getParameterAnnotations`.  We can improve efficiency by caching the result of `getInterfaceParameterAnnotations` in `inheritedParameterAnnotations` to avoid redundant calculations.
+
+2. **Combine null checks in `getParameterAnnotations`:** The `getParameterAnnotations` method performs two null checks before accessing `anns`. These checks can be combined using a single null check on `this.combinedAnnotations`.
+
+Here's the refactored code with the suggested improvements:
+
+```java
+public class AnnotatedMethod {
+
+  // ... (other code)
+
+  private List<Annotation[][]> getInterfaceParameterAnnotations() {
+    List<Annotation[][]> parameterAnnotations = this.inheritedParameterAnnotations;
+    if (parameterAnnotations == null) {
+      parameterAnnotations = calculateInterfaceParameterAnnotations();
+      this.inheritedParameterAnnotations = parameterAnnotations;
+    }
+    return parameterAnnotations;
+  }
+
+  private List<Annotation[][]> calculateInterfaceParameterAnnotations() {
+    // Implement logic to calculate interface parameter annotations
+  }
+
+  // ... (other code)
+
+  @Override
+  public Annotation[] getParameterAnnotations() {
+    Annotation[] anns = this.combinedAnnotations;
+    if (anns == null) {
+      anns = super.getParameterAnnotations();
+      int index = getParameterIndex();
+      if (index >= 0) {
+        for (Annotation[][] ifcAnns : getInterfaceParameterAnnotations()) {
+          if (index < ifcAnns.length) {
+            Annotation[] paramAnns = ifcAnns[index];
+            if (paramAnns.length > 0) {
+              List<Annotation> merged = new ArrayList<>(anns.length + paramAnns.length);
+              merged.addAll(Arrays.asList(anns));
+              for (Annotation paramAnn : paramAnns) {
+                boolean existingType = false;
+                for (Annotation ann : anns) {
+                  if (ann.annotationType() == paramAnn.annotationType()) {
+                    existingType = true;
+                    break;
+                  }
+                }
+                if (!existingType) {
+                  merged.add(adaptAnnotation(paramAnn));
+                }
+              }
+              anns = merged.toArray(new Annotation[0]);
+            }
+          }
+        }
+      }
+      this.combinedAnnotations = anns;
+    }
+    return anns;
+  }
+
+  // ... (other code)
+}
+```
+
+These changes improve code efficiency by reducing redundant calculations and streamlining null checks.  

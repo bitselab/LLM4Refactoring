@@ -1,0 +1,48 @@
+In the provided code snippet, the variable `switchStmt` in the `solveSymbol` method could be renamed to improve clarity and readability. The current name `switchStmt` suggests that it's a switch statement, but in fact, it represents a node in the abstract syntax tree (AST). A more appropriate name would be `switchNode`, which clearly indicates its role in the AST.
+
+Here's the refactored method with the renamed variable:
+
+```java
+public SymbolReference<? extends ResolvedValueDeclaration> solveSymbol(String name) {
+    SwitchNode switchNode = (SwitchNode) demandParentNode(wrappedNode);
+    ResolvedType type = JavaParserFacade.get(typeSolver).getType(switchNode.getSelector());
+    if (type.isReferenceType() && type.asReferenceType().getTypeDeclaration().isPresent()) {
+        ResolvedReferenceTypeDeclaration typeDeclaration = type.asReferenceType().getTypeDeclaration().get();
+        if (typeDeclaration.isEnum()) {
+            if (type instanceof ReferenceTypeImpl) {
+                ReferenceTypeImpl referenceType = (ReferenceTypeImpl) type;
+                if (referenceType.getTypeDeclaration().isPresent()) {
+                    ResolvedReferenceTypeDeclaration typeUsageTypeDeclaration = referenceType.getTypeDeclaration().get();
+                    if (typeUsageTypeDeclaration.asEnum().hasEnumConstant(name)) {
+                        return SymbolReference.solved(typeUsageTypeDeclaration.asEnum().getEnumConstant(name));
+                    }
+                    if (typeUsageTypeDeclaration.hasField(name)) {
+                        return SymbolReference.solved(typeUsageTypeDeclaration.getField(name));
+                    }
+                } else {
+                    // Consider IllegalStateException or similar?
+                }
+            } else {
+                throw new UnsupportedOperationException();
+            }
+        }
+    }
+
+    for (SwitchEntry seStmt : switchNode.getEntries()) {
+        for (Statement stmt : seStmt.getStatements()) {
+            SymbolDeclarator symbolDeclarator = JavaParserFactory.getSymbolDeclarator(stmt, typeSolver);
+            SymbolReference<? extends ResolvedValueDeclaration> symbolReference = solveWith(symbolDeclarator, name);
+            if (symbolReference.isSolved()) {
+                return symbolReference;
+            }
+        }
+        if (seStmt == wrappedNode) {
+            break;
+        }
+    }
+
+    return solveSymbolInParentContext(name);
+}
+```
+
+This change enhances the readability of the code by using a more descriptive and accurate variable name.

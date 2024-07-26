@@ -1,0 +1,54 @@
+In the provided `UniqueKeySelectingDelegate` class, there are opportunities to apply the rename attribute refactoring to improve clarity and consistency of the attribute names. Let's examine the attribute names and their relationship to the methods and overall class context:
+
+1. **`uniqueKeyPropertyNames` and `uniqueKeyTypes`**: These two fields are clearly related and correctly named to reflect their purpose in dealing with unique key properties. However, the naming can be made more concise and aligned by ensuring that both explicitly include their purpose and data type. This is already the case, so no change is needed here.
+
+2. **`idSelectString`**: This attribute holds a SQL selection string based on unique keys. The name is somewhat clear but could be improved to reflect that it is specifically a SQL query or statement to avoid confusion with potentially being an identifier or a simple string value.
+
+Here is a potential refactoring for clarity:
+
+- Rename `idSelectString` to `uniqueKeySelectSQL` to more explicitly indicate that this string is a SQL query associated with selecting based on unique keys.
+
+Here's the refactored code:
+
+```java
+public class UniqueKeySelectingDelegate extends AbstractSelectingDelegate {
+    private final String[] uniqueKeyPropertyNames;
+    private final Type[] uniqueKeyTypes;
+
+    private final String uniqueKeySelectSQL;  // Renamed from idSelectString
+
+    public UniqueKeySelectingDelegate(
+            EntityPersister persister,
+            String[] uniqueKeyPropertyNames,
+            EventType timing) {
+        super(persister, timing, true, true);
+
+        this.uniqueKeyPropertyNames = uniqueKeyPropertyNames;
+
+        uniqueKeyTypes = new Type[uniqueKeyPropertyNames.length];
+        for (int i = 0; i < uniqueKeyPropertyNames.length; i++) {
+            uniqueKeyTypes[i] = persister.getPropertyType(uniqueKeyPropertyNames[i]);
+        }
+
+        final EntityRowIdMapping rowIdMapping = persister.getRowIdMapping();
+        if (!persister.isIdentifierAssignedByInsert()
+                || persister.getInsertGeneratedProperties().size() > 1
+                || rowIdMapping != null) {
+            final List<GeneratedValueBasicResultBuilder> resultBuilders = jdbcValuesMappingProducer.getResultBuilders();
+            final List<String> columnNames = new ArrayList<>(resultBuilders.size());
+            for (GeneratedValueBasicResultBuilder resultBuilder : resultBuilders) {
+                columnNames.add(getActualGeneratedModelPart(resultBuilder.getModelPart()).getSelectionExpression());
+            }
+            uniqueKeySelectSQL = persister.getSelectByUniqueKeyString(
+                    uniqueKeyPropertyNames,
+                    columnNames.toArray(new String[0])
+            );
+        }
+        else {
+            uniqueKeySelectSQL = persister.getSelectByUniqueKeyString(uniqueKeyPropertyNames);
+        }
+    }
+}
+```
+
+This renaming makes it clearer that the string is related to a SQL operation and involves selection based on unique keys, improving readability and maintainability of the code.

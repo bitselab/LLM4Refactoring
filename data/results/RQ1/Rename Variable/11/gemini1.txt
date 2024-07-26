@@ -1,0 +1,109 @@
+ **Here's the refactored code with improvements to clarity and maintainability:**
+
+```java
+package org.eclipse.jetty.http2.parser;
+
+import java.nio.ByteBuffer;
+
+import org.eclipse.jetty.http.MetaData;
+import org.eclipse.jetty.http2.ErrorCode;
+import org.eclipse.jetty.http2.Flags;
+import org.eclipse.jetty.http2.frames.ContinuationFrame;
+import org.eclipse.jetty.http2.frames.HeadersFrame;
+
+public class ContinuationBodyParser extends BodyParser {
+
+  private final HeaderBlockParser headerBlockParser;
+  private final HeaderBlockFragments headerBlockFragments;
+  private State state = State.PREPARE;
+  private int remainingLength;
+
+  public ContinuationBodyParser(HeaderParser headerParser, Parser.Listener listener, HeaderBlockParser headerBlockParser, HeaderBlockFragments headerBlockFragments) {
+    super(headerParser, listener);
+    this.headerBlockParser = headerBlockParser;
+    this.headerBlockFragments = headerBlockFragments;
+  }
+
+  @Override
+  protected void emptyBody(ByteBuffer buffer) {
+    if (isEndOfHeaders(buffer)) {
+      onHeaders(buffer);
+    } else {
+      processContinuationFrame(buffer, true);
+    }
+  }
+
+  @Override
+  public boolean parse(ByteBuffer buffer) {
+    while (buffer.hasRemaining()) {
+      switch (state) {
+        case PREPARE:
+          processPrepareState(buffer);
+          break;
+        case FRAGMENT:
+          processFragmentState(buffer);
+          break;
+        default:
+          throw new IllegalStateException();
+      }
+    }
+    return false;
+  }
+
+  private void processPrepareState(ByteBuffer buffer) {
+    if (!isValidStreamId(buffer)) {
+      connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+      return;
+    }
+
+    remainingLength = getBodyLength();
+    state = State.FRAGMENT;
+  }
+
+  private void processFragmentState(ByteBuffer buffer) {
+    processContinuationFrame(buffer, false);
+  }
+
+  private void processContinuationFrame(ByteBuffer buffer, boolean isEndStream) {
+    ContinuationFrame frame = new ContinuationFrame(getStreamId(), isEndStream);
+    if (!rateControlOnEvent(frame)) {
+      connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+      return;
+    }
+
+    if (!headerBlockFragments.storeFragment(buffer, remainingLength, isEndStream)) {
+      connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+      return;
+    }
+
+    remainingLength -= buffer.remaining();
+    if (remainingLength == 0) {
+      reset();
+      if (isEndStream) {
+        onHeaders(buffer);
+      }
+    }
+  }
+
+  private boolean onHeaders(ByteBuffer buffer) {
+    // ... (unchanged code)
+  }
+
+  private void reset() {
+    state = State.PREPARE;
+    remainingLength = 0;
+  }
+
+  private boolean isEndOfHeaders(ByteBuffer buffer) {
+    return hasFlag(buffer, Flags.END_HEADERS);
+  }
+
+  private boolean isValidStreamId(ByteBuffer buffer) {
+    // ... (stream ID validation logic)
+  }
+
+  private enum State {
+    PREPARE, FRAGMENT
+  }
+}
+```

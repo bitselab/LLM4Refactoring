@@ -1,0 +1,29 @@
+To refactor the `createLateReplier` method with inline variable refactorings, the focus will be on removing the `handler` variable and returning the lambda expression directly. This change will make the code more concise and maintain its readability. Here is the refactored version of the method:
+
+```java
+private MessageHandler createLateReplier(final CountDownLatch latch, final AtomicReference<Throwable> failure) {
+    return message -> {
+        try {
+            Thread.sleep(500);
+            MessageChannel replyChannel = (MessageChannel) message.getHeaders().getReplyChannel();
+            replyChannel.send(new GenericMessage<>("response"));
+            failure.set(new IllegalStateException("Expected exception"));
+        } catch (InterruptedException e) {
+            failure.set(e);
+        } catch (MessageDeliveryException ex) {
+            String expected = "Reply message received but the receiving thread has exited due to a timeout";
+            if (!expected.equals(ex.getMessage())) {
+                failure.set(new IllegalStateException("Unexpected error: '" + ex.getMessage() + "'"));
+            }
+        } finally {
+            latch.countDown();
+        }
+    };
+}
+```
+
+In this refactored method:
+- The `handler` variable is removed, and the lambda expression is returned directly.
+- The code's functionality remains unchanged, but its structure is more streamlined.
+
+This refactoring enhances the method's clarity by eliminating an unnecessary intermediate variable, adhering to best practices for concise and readable code.

@@ -1,0 +1,76 @@
+To improve the readability and maintainability of the `testProfileDfs` method in the provided code snippet, we can apply the "Extract Variable" refactoring technique. This technique is particularly useful in eliminating repeated expressions and clarifying the purpose of complex expressions. The repeated expression of interest here is the instantiation of `KnnSearchBuilder`.
+
+Here's the refactored version of the `testProfileDfs` method:
+
+```java
+public void testProfileDfs() throws Exception {
+    String textField = "text_field";
+    String numericField = "number";
+    String vectorField = "vector";
+    String indexName = "text-dfs-profile";
+    createIndex(indexName, vectorField);
+    ensureGreen();
+
+    int numDocs = randomIntBetween(10, 50);
+    IndexRequestBuilder[] docs = new IndexRequestBuilder[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+        docs[i] = prepareIndex(indexName).setId(String.valueOf(i))
+                .setSource(
+                        textField,
+                        English.intToEnglish(i),
+                        numericField,
+                        i,
+                        vectorField,
+                        createRandomVector()
+                );
+    }
+    indexRandom(true, docs);
+    refresh();
+
+    int iters = between(5, 10);
+    for (int i = 0; i < iters; i++) {
+        QueryBuilder query = randomQueryBuilder(List.of(textField), List.of(numericField), numDocs, 3);
+        KnnSearchBuilder knnSearchBuilder = createKnnSearchBuilder(vectorField);
+        if (randomBoolean()) {
+            knnSearchBuilder.addFilterQuery(query);
+        }
+        logger.info("Query: {}", query);
+        assertResponse(
+                prepareSearch().setQuery(query)
+                        .setTrackTotalHits(true)
+                        .setProfile(true)
+                        .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
+                        .setKnnSearch(randomList(2, 5, () -> knnSearchBuilder)),
+                this::validateResponse
+        );
+    }
+}
+
+private float[] createRandomVector() {
+    return new float[]{randomFloat(), randomFloat(), randomFloat()};
+}
+
+private KnnSearchBuilder createKnnSearchBuilder(String vectorField) {
+    return new KnnSearchBuilder(
+            vectorField,
+            createRandomVector(),
+            randomIntBetween(5, 10),
+            50,
+            randomBoolean() ? null : randomFloat()
+    );
+}
+
+private void validateResponse(SearchResponse response) {
+    // Existing validation logic...
+}
+```
+
+### Changes Made:
+
+1. **Extracted `createRandomVector` Method**: The creation of a random vector is extracted into a method to avoid repetition.
+
+2. **Extracted `createKnnSearchBuilder` Method**: The instantiation of `KnnSearchBuilder` is extracted into its own method, improving clarity and reducing duplication.
+
+3. **Refactored assertResponse Call**: The lambda expression provided to `assertResponse` is replaced with a method reference to `validateResponse`, assuming that the existing validation logic is encapsulated in this method.
+
+These refactoring steps enhance the readability and maintainability of the code by reducing duplication and clarifying the purpose of complex expressions.

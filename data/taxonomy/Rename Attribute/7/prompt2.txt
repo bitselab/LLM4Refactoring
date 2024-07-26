@@ -1,0 +1,125 @@
+Rename attribute refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename attribute refactoring pattern is to rename attributes that are inconsistent with methods within the enclosing class. Here is an example of the rename attribute refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public class ReactNativeBundle extends AbstractBuildRule implements AbiRule {
+    @AddToRuleKey
+    private final SourcePath entryPath;
+    @AddToRuleKey
+    private final boolean isDevMode;
+    @AddToRuleKey
+    private final SourcePath jsPackager;
+    @AddToRuleKey
+    private final ReactNativePlatform platform;
+    @AddToRuleKey
+    private final String bundleName;
+    private final ReactNativeDeps depsFinder;
+    private final Path jsOutput;
+    private final Path resource;
+    
+    protected ReactNativeBundle(
+        BuildRuleParams ruleParams,
+        SourcePathResolver resolver,
+        SourcePath entryPath,
+        boolean isDevMode,
+        String bundleName,
+        SourcePath jsPackager,
+        ReactNativePlatform platform,
+        ReactNativeDeps depsFinder) {
+      super(ruleParams, resolver);
+      this.entryPath = entryPath;
+      this.isDevMode = isDevMode;
+      this.bundleName = bundleName;
+      this.jsPackager = jsPackager;
+      this.platform = platform;
+      this.depsFinder = depsFinder;
+      BuildTarget buildTarget = ruleParams.getBuildTarget();
+      this.jsOutput = getPathToJSBundleDir(buildTarget);
+      this.resource = getPathToResources(buildTarget);
+    }
+}
+```
+The source code after refactoring is:
+```
+public class ReactNativeBundle extends AbstractBuildRule implements AbiRule {
+    @AddToRuleKey
+    private final SourcePath entryPath;
+    @AddToRuleKey
+    private final boolean isDevMode;
+    @AddToRuleKey
+    private final SourcePath jsPackager;
+    @AddToRuleKey
+    private final ReactNativePlatform platform;
+    @AddToRuleKey
+    private final String bundleName;
+    private final ReactNativeDeps depsFinder;
+    private final Path jsOutputDir;
+    private final Path resource;
+
+    protected ReactNativeBundle(
+        BuildRuleParams ruleParams,
+        SourcePathResolver resolver,
+        SourcePath entryPath,
+        boolean isDevMode,
+        String bundleName,
+        SourcePath jsPackager,
+        ReactNativePlatform platform,
+        ReactNativeDeps depsFinder) {
+      super(ruleParams, resolver);
+      this.entryPath = entryPath;
+      this.isDevMode = isDevMode;
+      this.bundleName = bundleName;
+      this.jsPackager = jsPackager;
+      this.platform = platform;
+      this.depsFinder = depsFinder;
+      BuildTarget buildTarget = ruleParams.getBuildTarget();
+      this.jsOutputDir = getPathToJSBundleDir(buildTarget);
+      this.resource = getPathToResources(buildTarget);
+    }
+}
+```
+In this example, the developer renamed the attribute "jsOutput" to "jsOutputDir".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename attribute refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public class UniqueKeySelectingDelegate extends AbstractSelectingDelegate {
+    private final String[] uniqueKeyPropertyNames;
+    private final Type[] uniqueKeyTypes;
+
+    private final String idSelectString;
+
+    public UniqueKeySelectingDelegate(
+            EntityPersister persister,
+            String[] uniqueKeyPropertyNames,
+            EventType timing) {
+        super( persister, timing, true, true );
+
+        this.uniqueKeyPropertyNames = uniqueKeyPropertyNames;
+
+        uniqueKeyTypes = new Type[ uniqueKeyPropertyNames.length ];
+        for ( int i = 0; i < uniqueKeyPropertyNames.length; i++ ) {
+            uniqueKeyTypes[i] = persister.getPropertyType( uniqueKeyPropertyNames[i] );
+        }
+
+        final EntityRowIdMapping rowIdMapping = persister.getRowIdMapping();
+        if ( !persister.isIdentifierAssignedByInsert()
+                || persister.getInsertGeneratedProperties().size() > 1
+                || rowIdMapping != null ) {
+            final List<GeneratedValueBasicResultBuilder> resultBuilders = jdbcValuesMappingProducer.getResultBuilders();
+            final List<String> columnNames = new ArrayList<>( resultBuilders.size() );
+            for ( GeneratedValueBasicResultBuilder resultBuilder : resultBuilders ) {
+                columnNames.add( getActualGeneratedModelPart( resultBuilder.getModelPart() ).getSelectionExpression() );
+            }
+            idSelectString = persister.getSelectByUniqueKeyString(
+                    uniqueKeyPropertyNames,
+                    columnNames.toArray( new String[0] )
+            );
+        }
+        else {
+            idSelectString = persister.getSelectByUniqueKeyString( uniqueKeyPropertyNames );
+        }
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

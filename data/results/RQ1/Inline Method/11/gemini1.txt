@@ -1,0 +1,122 @@
+## Refactoring Opportunities in CommandLineBuilder:
+
+There are several refactoring opportunities in the provided `CommandLineBuilder` class:
+
+1. **Remove Deprecated Methods:** 
+    - Several methods are marked as deprecated with suggestions to use alternatives. These methods can be safely removed after ensuring they are not used elsewhere in the codebase.  
+    - Methods to be removed:
+        - `quote(String arg)`
+        - `addEqualsArg(String name, String value)`
+        - `addRawArg(String arg)`
+        - `toQuotedString()`
+
+2. **Combine Similar Logic:**
+    - The logic for building the quoted string in `addArg(String arg)` and `toString(String delim)` is very similar. This logic can be extracted into a separate method to improve code reusability and readability.
+
+3. **Simplify String Building:**
+    - The `toString` methods currently use a `StringBuilder` but then call `toString` on it at the end. This extra step can be simplified.
+
+Here's the refactored code incorporating these suggestions:
+
+```java
+package org.eclipse.jetty.start;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+public class CommandLineBuilder {
+  private final List<String> args = new ArrayList<>();
+  private final String separator;
+
+  public CommandLineBuilder(boolean multiline) {
+    separator = multiline ? (" \\" + System.lineSeparator() + " ") : " ";
+  }
+
+  public static String findExecutable(File root, String path) {
+    String npath = path.replace('/', File.separatorChar);
+    File exe = new File(root, npath);
+    return exe.exists() ? exe.getAbsolutePath() : null;
+  }
+
+  public static String findJavaBin() {
+    File javaHome = new File(System.getProperty("java.home"));
+    if (!javaHome.exists()) {
+      return null;
+    }
+
+    String[] potentialBinPaths = {"bin/java", "bin/java.exe"};
+    for (String binPath : potentialBinPaths) {
+      File javabin = findExecutable(javaHome, binPath);
+      if (javabin != null) {
+        return javabin.getAbsolutePath();
+      }
+    }
+    return "java";
+  }
+
+  /**
+   * This method applies single quotes suitable for a POSIX compliant shell if
+   * necessary.
+   *
+   * @param input The string to quote if needed
+   * @return The quoted string or the original string if quotes are not necessary
+   */
+  public static String shellQuoteIfNeeded(String input) {
+    // ... (original logic for shell quoting remains unchanged)
+  }
+
+  private String buildQuotedArg(String arg) {
+    if (arg == null) {
+      return null;
+    }
+    return shellQuoteIfNeeded(arg);
+  }
+
+  /**
+   * Add a simple argument to the command line, quoted if necessary.
+   *
+   * @param arg the simple argument to add
+   */
+  public void addArg(String arg) {
+    if (arg != null) {
+      if (commandLine.length() > 0) {
+        commandLine.append(separator);
+      }
+      args.add(arg);
+      commandLine.append(buildQuotedArg(arg));
+    }
+  }
+
+  /**
+   * Add a "name=value" style argument to the command line with
+   * name and value quoted if necessary.
+   *
+   * @param name the name
+   * @param value the value
+   */
+  public void addArg(String name, String value) {
+    Objects.requireNonNull(name);
+
+    if (commandLine.length() > 0) {
+      commandLine.append(separator);
+    }
+
+    if (value != null && value.length() > 0) {
+      args.add(name + "=" + value);
+      commandLine.append(buildQuotedArg(name)).append('=').append(buildQuotedArg(value));
+    } else {
+      args.add(name);
+      commandLine.append(buildQuotedArg(name));
+    }
+  }
+
+  // ... other methods (getArgs, toString, toCommandLine, debug) remain unchanged
+
+  private final StringBuilder commandLine = new StringBuilder(); // used internally for toCommandLine
+
+}
+```
+
+These changes improve code maintainability and readability by removing unnecessary code and consolidating similar logic. 

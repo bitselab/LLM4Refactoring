@@ -1,0 +1,49 @@
+ **I've identified several refactoring opportunities in the code:**
+
+1. **Combine `visitChild` and `visitBiRel`:**
+   - The `visitChild` method is primarily responsible for updating the `currentInheritPath` and then calling `super.visitChild`.
+   - The `visitBiRel` method performs logic specific to `BiRel` nodes and also calls `super.visitChild`.
+   - These methods can be combined to reduce code duplication and simplify the logic flow:
+
+   ```java
+   @Override
+   protected RelNode visitChild(RelNode parent, int i, RelNode child) {
+       currentInheritPath.addLast(i);
+       RelNode newNode = visit(child); // Call visit recursively for nested processing
+       currentInheritPath.removeLast();
+       return newNode;
+   }
+
+   @Override
+   public RelNode visit(BiRel biRel) {
+       // ... existing logic for BiRel nodes
+   }
+   ```
+
+2. **Simplify `isMatchInvalidInheritPath`:**
+   - The current implementation involves creating a copy of `currentInheritPath`, which might be less efficient.
+   - It can be simplified using `Iterables.elementsEqual` from Guava (assuming Guava is available):
+
+   ```java
+   private boolean isMatchInvalidInheritPath(Iterable<Integer> invalidInheritPath, List<Integer> checkedInheritPath) {
+       return Iterables.elementsEqual(invalidInheritPath, checkedInheritPath);
+   }
+   ```
+
+3. **Consider Extracting Hint Removal Logic:**
+   - The logic for finding and removing invalid query hints is scattered across multiple methods.
+   - It could be encapsulated in a separate method for better readability and potential reusability:
+
+   ```java
+   private RelNode removeInvalidQueryHint(Hintable hintable) {
+       List<RelHint> hints = new ArrayList<>(hintable.getHints());
+       hints.removeIf(this::isInvalidQueryHint);
+       return super.visit(hintable.withHints(hints));
+   }
+   ```
+
+4. **Consider Alternative Hint Handling Approach:**
+   - The current approach involves iteratively removing hints using shuttles.
+   - It might be worth exploring a more declarative approach (e.g., using a HintStrategy), potentially simplifying the logic and improving maintainability.
+
+**Remember that refactoring is context-dependent. It's best to evaluate these suggestions within your project's specific requirements and constraints.**

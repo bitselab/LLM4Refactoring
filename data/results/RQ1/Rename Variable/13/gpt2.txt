@@ -1,0 +1,95 @@
+After reviewing the code snippet for potential rename variable refactoring opportunities, here are some suggestions:
+
+1. **Variable `className`**: The name `className` is clear and contextually appropriate. It accurately represents the purpose of the variable, which is to store the name of a class. No change needed.
+
+2. **Variable `classLoader`**: The name `classLoader` is also descriptive and appropriate for its role, which is to reference a `ClassLoader` object. No change needed.
+
+3. **Variable `javaClass`**: The name `javaClass` is quite clear in its current context. It represents a Java `Class` object. However, if we want to emphasize that it's a class related to the selected entity, we could rename it to `selectedClass`. This minor change might enhance readability by making the purpose of the variable slightly more explicit.
+
+4. **Local Variable `clazz` in `getJavaClass()`**: The variable name `clazz` is a common convention in Java to avoid the keyword `class`. However, it might be slightly improved for readability. A name like `loadedClass` could be more descriptive of its role, which is the class loaded based on the class name or class loader.
+
+Here's the refactored code with the suggested variable name changes:
+
+```java
+package org.junit.platform.engine.discovery;
+
+import static org.apiguardian.api.API.Status.EXPERIMENTAL;
+import static org.apiguardian.api.API.Status.STABLE;
+
+import java.util.Objects;
+
+import org.apiguardian.api.API;
+import org.junit.platform.commons.PreconditionViolationException;
+import org.junit.platform.commons.function.Try;
+import org.junit.platform.commons.util.ReflectionUtils;
+import org.junit.platform.commons.util.ToStringBuilder;
+import org.junit.platform.engine.DiscoverySelector;
+
+@API(status = STABLE, since = "1.0")
+public class ClassSelector implements DiscoverySelector {
+
+    private final String className;
+    private final ClassLoader classLoader;
+
+    private Class<?> selectedClass;
+
+    ClassSelector(String className) {
+        this(className, null);
+    }
+
+    ClassSelector(String className, ClassLoader classLoader) {
+        this.className = className;
+        this.classLoader = classLoader;
+    }
+
+    ClassSelector(Class<?> javaClass) {
+        this.className = javaClass.getName();
+        this.classLoader = javaClass.getClassLoader();
+        this.selectedClass = javaClass;
+    }
+
+    public String getClassName() {
+        return this.className;
+    }
+
+    @API(status = EXPERIMENTAL, since = "1.10")
+    public ClassLoader getClassLoader() {
+        return this.classLoader;
+    }
+
+    public Class<?> getJavaClass() {
+        if (this.selectedClass == null) {
+            Try<Class<?>> loadedClass = this.classLoader == null
+                    ? ReflectionUtils.tryToLoadClass(this.className)
+                    : ReflectionUtils.tryToLoadClass(this.className, this.classLoader);
+            this.selectedClass = loadedClass.getOrThrow(cause ->
+                    new PreconditionViolationException("Could not load class with name: " + this.className, cause));
+        }
+        return this.selectedClass;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ClassSelector that = (ClassSelector) o;
+        return Objects.equals(this.className, that.className);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.className);
+    }
+
+    @Override
+    public String toString() {
+        return new ToStringBuilder(this)
+                .append("className", this.className)
+                .append("classLoader", this.classLoader)
+                .toString();
+    }
+
+}
+```
+
+These changes aim to enhance the readability and clarity of the code without altering its functionality.

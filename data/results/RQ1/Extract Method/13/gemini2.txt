@@ -1,0 +1,77 @@
+Absolutely! Here are some potential refactoring opportunities using the Extract Method technique in the provided code:
+
+1. **Extracting `resetTracking` method:**
+
+The method `resetTracking` is used twice in the code to clear the `recorder` list. This functionality can be extracted into a separate method to improve readability and maintainability.
+
+Here's the refactored code:
+
+```java
+private void clearTracking() {
+  recorder.clear();
+}
+
+// ... rest of the code
+
+@Test
+void fieldsAreProperlyClosedWithNestedTestClassesWithInstancePerMethod() {
+  // ...
+  clearTracking();
+  // ...
+}
+
+// ... other tests where resetTracking is used
+```
+
+2. **Extracting close logic for `AutoCloseSpy`:**
+
+The `close` method in `AutoCloseSpy` performs similar operations irrespective of the presence of the `fail` flag. This logic can be extracted into a separate helper method for better code organization.
+
+Here's the refactored code:
+
+```java
+static class AutoCloseSpy implements AutoCloseable, Runnable {
+
+  private final String prefix;
+  private final boolean fail;
+  private String invokedMethod = null;
+
+  AutoCloseSpy(String prefix) {
+    this.fail = false;
+    this.prefix = prefix;
+  }
+
+  AutoCloseSpy(String prefix, boolean fail) {
+    this.fail = fail;
+    this.prefix = prefix;
+  }
+
+  @Override
+  public void run() {
+    recordInvocation("run()");
+  }
+
+  @Override
+  public void close() {
+    recordInvocation("close()");
+  }
+
+  private void recordInvocation(String methodName) {
+    if (this.invokedMethod != null) {
+      throw new IllegalStateException("Already closed via " + this.invokedMethod);
+    }
+    this.invokedMethod = methodName;
+    String invocation = this.prefix + this.invokedMethod;
+    recorder.add(invocation);
+    performCloseAction();
+  }
+
+  private void performCloseAction() {
+    if (this.fail) {
+      throw new RuntimeException(prefix + invokedMethod);
+    }
+  }
+}
+```
+
+These are potential improvements, but it's always good to consider the specific codebase and coding standards when applying refactorings.

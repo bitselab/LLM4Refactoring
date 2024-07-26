@@ -1,0 +1,31 @@
+## Refactoring Opportunity: Attribute Renaming
+
+The attribute named `classLoader` can be renamed to a more descriptive name that reflects its purpose. Currently, "classLoader" is generic and doesn't explicitly state what type of class loader it is or what it's used for.
+
+Here's the refactored code with the renamed attribute:
+
+```java
+public class WebSocketCoreClient extends ContainerLifeCycle {
+  // ... other code ...
+
+  private final ClassLoader contextClassLoader;
+
+  public WebSocketCoreClient() {
+    this(null, new WebSocketComponents());
+  }
+
+  // ... other constructors and methods ...
+
+  public ClassLoader getContextClassLoader() {
+    return contextClassLoader;
+  }
+
+  public void setContextClassLoader(ClassLoader classLoader) {
+    this.contextClassLoader = Objects.requireNonNull(classLoader);
+  }
+
+  // ... other code ...
+}
+```
+
+In this refactoring, `classLoader` is renamed to `contextClassLoader`. This name clarifies that this attribute holds the ClassLoader used for loading classes within the context of this WebSocketCoreClient instance.

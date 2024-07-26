@@ -1,0 +1,50 @@
+ **Here's the refactored code with the extracted method:**
+
+```java
+package org.apache.commons.io.input;
+
+// ... other imports
+
+public class ClosedInputStreamTest {
+
+    // ... other fields and methods
+
+    private void assertReadReturnsEOF(ClosedInputStream cis) throws Exception {
+        assertEquals(EOF, cis.read(), "read()");
+    }
+
+    @Test
+    public void testRead() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertReadReturnsEOF(cis);
+        }
+    }
+
+    // ... other test methods
+
+    @Test
+    public void testSingleton() throws Exception {
+        try (@SuppressWarnings("deprecation")
+             ClosedInputStream cis = ClosedInputStream.CLOSED_INPUT_STREAM) {
+            assertReadReturnsEOF(cis);
+        }
+        try (ClosedInputStream cis = ClosedInputStream.INSTANCE) {
+            assertReadReturnsEOF(cis);
+        }
+    }
+
+}
+```
+
+**Explanation of the Refactoring:**
+
+1. **Identify Duplicate Code:** I identified the duplicate code snippet `assertEquals(EOF, cis.read(), "read()");`, which appeared multiple times in different test methods.
+2. **Extract Method:** I extracted the duplicate code into a new method named `assertReadReturnsEOF`. This method takes a `ClosedInputStream` object as its argument and performs the assertion.
+3. **Replace Duplicates with Method Calls:** I replaced the original code blocks containing the duplicates with calls to the newly extracted `assertReadReturnsEOF` method.
+
+**Benefits of Refactoring:**
+
+- **Improved Readability:** The code becomes more readable and easier to understand by encapsulating the logic of the assertion within a separate method.
+- **Enhanced Maintainability:** Changes to the assertion logic can be made in a single place, reducing the likelihood of errors and inconsistencies.
+- **Reusability:** The `assertReadReturnsEOF` method can be reused in other test methods if needed, reducing code duplication.
+- **Conciseness:** The code becomes more concise, making it easier to focus on the essential test logic.

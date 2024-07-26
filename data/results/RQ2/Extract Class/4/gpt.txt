@@ -1,0 +1,93 @@
+To improve the readability and maintainability of the `DomainSplitFunction` class in the provided code, we can apply the "Extract Class" refactoring technique. The primary candidates for extraction are the map declarations and the static initialization block, which deal with domain suffix data management. This functionality can be encapsulated into a new class, such as `DomainSuffixData`.
+
+Here's how the refactored code could look:
+
+### DomainSuffixData.java
+```java
+package org.elasticsearch.xpack.ml.utils;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.util.Map;
+import java.util.stream.Collectors;
+import static java.util.Map.entry;
+
+public class DomainSuffixData {
+
+    private final Map<String, String> exact;
+    private final Map<String, String> under;
+    private final Map<String, String> excluded;
+
+    public DomainSuffixData() {
+        under = Map.ofEntries(
+                entry("bd", "i"),
+                // ... other entries ...
+                entry("zw", "i")
+        );
+
+        excluded = Map.of(
+                "city.yokohama.jp", "i",
+                // ... other entries ...
+                "city.kitakyushu.jp", "i"
+        );
+
+        exact = initializeExactMap();
+    }
+
+    private Map<String, String> initializeExactMap() {
+        return AccessController.doPrivileged((PrivilegedAction<Map<String, String>>) () -> {
+            try (var stream = DomainSplitFunction.class.getClassLoader()
+                    .getResourceAsStream("org/elasticsearch/xpack/ml/utils/exact.properties")) {
+                return Streams.readAllLines(stream)
+                        .stream()
+                        .map(line -> line.split("="))
+                        .collect(Collectors.toUnmodifiableMap(split -> split[0].intern(), split -> split[1].intern()));
+            } catch (final IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+    }
+
+    public Map<String, String> getExact() {
+        return exact;
+    }
+
+    public Map<String, String> getUnder() {
+        return under;
+    }
+
+    public Map<String, String> getExcluded() {
+        return excluded;
+    }
+}
+```
+
+### Updated DomainSplitFunction.java
+```java
+package org.elasticsearch.xpack.ml.utils;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.StringJoiner;
+
+public final class DomainSplitFunction {
+
+    private static final DomainSuffixData suffixData = new DomainSuffixData();
+    private static final DeprecationLogger deprecationLogger = DeprecationLogger.getLogger(DomainSplitFunction.class);
+
+    private DomainSplitFunction() {}
+
+    // Remaining methods with updated references to `suffixData`
+    // For example:
+    // If `exact` map is needed, use `suffixData.getExact()`
+}
+```
+
+In this refactoring:
+- The `DomainSuffixData` class encapsulates the domain suffix data and its initialization logic.
+- The `DomainSplitFunction` class now has a cleaner and more focused role, delegating the suffix data management to the `DomainSuffixData` class.
+
+This refactoring improves the overall structure of the code, making it more modular and maintainable, and separating concerns more clearly.

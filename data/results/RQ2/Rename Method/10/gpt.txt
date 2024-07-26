@@ -1,0 +1,45 @@
+The method `fixIndentOfMovedNode` in the provided code snippet could benefit from a rename to more accurately describe its function. The current name is somewhat ambiguous and does not clearly communicate what the method does. A more descriptive name could be `adjustIndentationForNewComment`. This name better conveys the specific action the method is performing, which is adjusting the indentation when a new comment is added to a node. 
+
+Here's the refactored method with the new name:
+
+### Refactored Code Snippet
+
+```java
+private void adjustIndentationForNewComment(NodeText nodeText, int index) {
+    if (index <= 0) {
+        return;
+    }
+    TextElement currentSpaceCandidate = null;
+    for (int i = index; i >= 0; i--) {
+        TextElement spaceCandidate = nodeText.getTextElement(i);
+        if (spaceCandidate.isSpaceOrTab()) {
+            // Save the current indentation character
+            currentSpaceCandidate = nodeText.getTextElement(i);
+        }
+        if (!spaceCandidate.isSpaceOrTab()) {
+            if (spaceCandidate.isNewline() && i != index) {
+                int numberOfIndentationCharacters = index - i;
+                for (int j = 0; j < numberOfIndentationCharacters; j++) {
+                    if (currentSpaceCandidate != null) {
+                        // Use the current (or last) indentation character
+                        nodeText.addElement(index, new TokenTextElement(JavaToken.Kind.SPACE.getKind(), currentSpaceCandidate.expand()));
+                    } else {
+                        // Use the default indentation character
+                        nodeText.addElement(index, new TokenTextElement(JavaToken.Kind.SPACE.getKind()));
+                    }
+                }
+            }
+            break;
+        }
+    }
+}
+```
+
+### Explanation
+
+The new method name, `adjustIndentationForNewComment`, provides a clear understanding of the method's purpose:
+
+- **adjustIndentation**: Indicates that the method alters the indentation.
+- **ForNewComment**: Specifies that the indentation adjustment is related to the insertion of a new comment.
+
+This renaming makes the code more readable and maintainable, as it clarifies the method's functionality at a glance.

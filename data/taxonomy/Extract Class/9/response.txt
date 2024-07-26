@@ -1,0 +1,127 @@
+The provided code snippet from `com.intellij.openapi.wm.impl.welcomeScreen` exhibits a potential for the Extract Class refactoring pattern, primarily due to the presence of multiple inner classes (`ToolbarTextButtonWrapper` and `LargeIconWithTextWrapper`) that handle UI components. These classes are closely related and manipulate UI elements, such as buttons and labels, along with action handling. Extracting these related functionalities into a separate class can improve modularity and maintainability. Here's how the refactoring could be approached:
+
+### Potential Refactoring
+1. **Extract UI Component Handling:** Both `ToolbarTextButtonWrapper` and `LargeIconWithTextWrapper` manage UI components and their actions. These can be extracted to a separate class or multiple classes based on functionality, such as button handling and UI updates.
+
+2. **Simplify the `WelcomeScreenActionsUtil` class:** By extracting the UI handling, the `WelcomeScreenActionsUtil` class can focus more on its core functionality—managing action groups and their interactions, which aligns better with the Single Responsibility Principle.
+
+Here's the refactored code:
+
+### Refactored Code
+**File: WelcomeScreenUIComponents.java**
+```java
+package com.intellij.openapi.wm.impl.welcomeScreen;
+
+import com.intellij.openapi.actionSystem.*;
+import com.intellij.openapi.actionSystem.ex.ActionUtil;
+import com.intellij.ui.components.JBOptionButton;
+import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.UIUtil;
+import org.jetbrains.annotations.NotNull;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+
+public class WelcomeScreenUIComponents {
+
+    public static class ToolbarTextButtonWrapper extends AnActionWrapper implements CustomComponentAction {
+
+        private final List<AnAction> myActions;
+
+        ToolbarTextButtonWrapper(@NotNull List<AnAction> actions) {
+            super(actions.get(0));
+            myActions = actions;
+        }
+
+        @Override
+        public @NotNull JComponent createCustomComponent(@NotNull Presentation presentation, @NotNull String place) {
+            JBOptionButton button = new JBOptionButton(null, null);
+            button.setAction(new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    WelcomeScreenActionsUtil.performAnActionForComponent(getDelegate(), button);
+                }
+            });
+            if (myActions.size() > 1) {
+                button.setOptions(ContainerUtil.subList(myActions, 1));
+            }
+            button.setBackground(WelcomeScreenUIManager.getMainAssociatedComponentBackground());
+            button.putClientProperty(JBOptionButton.PLACE, place);
+            return button;
+        }
+
+        @Override
+        public void updateCustomComponent(@NotNull JComponent component, @NotNull Presentation presentation) {
+            if (!(component instanceof JBOptionButton button)) return;
+            button.getAction().putValue(Action.NAME, presentation.getText());
+            UIUtil.setEnabled(button, presentation.isEnabled(), true);
+        }
+
+        public static ToolbarTextButtonWrapper wrapAsTextButton(@NotNull AnAction action) {
+            return new ToolbarTextButtonWrapper(Collections.singletonList(action));
+        }
+
+        public static ToolbarTextButtonWrapper wrapAsOptionButton(@NotNull List<AnAction> actions) {
+            return new ToolbarTextButtonWrapper(actions);
+        }
+    }
+
+    public static class LargeIconWithTextWrapper extends AnActionWrapper implements CustomComponentAction {
+
+        final JButton myIconButton;
+        final JBLabel myLabel;
+
+        LargeIconWithTextWrapper() {
+            super(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, JBUI.scale(12), false, false));
+
+            myIconButton = new JButton();
+            myIconButton.setBorder(JBUI.Borders.empty());
+            myIconButton.setHorizontalAlignment(SwingConstants.CENTER);
+            myIconButton.setOpaque(false);
+            myIconButton.setPreferredSize(new JBDimension(60, 60));
+
+            Wrapper iconWrapper = new Wrapper(myIconButton);
+            iconWrapper.setFocusable(false);
+            iconWrapper.setBorder(JBUI.Borders.empty(0, 30));
+
+            myLabel = new JBLabel("", SwingConstants.CENTER);
+            myLabel.setOpaque(false);
+
+            setFocusable(false);
+            add(iconWrapper);
+            add(myLabel);
+            myIconButton.getAccessibleContext().setAccessibleName(myLabel.getText());
+        }
+
+        @Override
+        public @NotNull JComponent createCustomComponent(@NotNull Presentation presentation, @NotNull String place) {
+            String text = presentation.getText();
+            if (StringUtil.isEmpty(text)) {
+                Utils.reportEmptyTextMenuItem(getDelegate(), place);
+            }
+            LargeIconWithTextWrapper panel = new LargeIconWithTextWrapper();
+            panel.myIconButton.addActionListener(l -> WelcomeScreenActionsUtil.performAnActionForComponent(
+                    getDelegate(), panel.myIconButton));
+            return panel;
+        }
+
+        @Override
+        public void updateCustomComponent(@NotNull JComponent component, @NotNull Presentation presentation) {
+            if (!(component instanceof LargeIconWithTextPanel panel)) return;
+            panel.myIconButton.setIcon(presentation.getIcon());
+            panel.myIconButton.setSelectedIcon(presentation.getSelectedIcon());
+            panel.myLabel.setText(presentation.getText());
+            UIUtil.setEnabled(panel, presentation.isEnabled(), true);
+        }
+
+        static @NotNull LargeIconWithTextWrapper wrapAsBigIconWithText(AnAction action) {
+            return new LargeIconWithTextWrapper(action);
+        }
+    }
+}
+```
+
+**File: WelcomeScreenActionsUtil.java** (remaining unchanged methods and imports)
+
+This refactoring separates the concerns into more focused classes, improving code organization and facilitating easier maintenance and potential future extensions.

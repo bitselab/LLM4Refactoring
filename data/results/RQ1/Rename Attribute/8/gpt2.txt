@@ -1,0 +1,94 @@
+In this Java code snippet, focusing on improving the readability through renaming attributes is a good approach. While the code is generally clear, some variable names could be more descriptive to enhance understanding and maintainability. Here are a few suggestions:
+
+1. **`maxConn`**: This variable name is a bit cryptic. It could be renamed to something more descriptive like `maxConnections`.
+
+2. **`beamWidth`**: This name is already quite descriptive, but for consistency with the renaming of `maxConn`, it might be renamed to `beamWidthValue` to clearly indicate it's a variable holding a value.
+
+3. **`delegate`**: This is a fairly generic name. A more specific name indicating what kind of delegate it is would be more informative. For example, `vectorFormatDelegate`.
+
+4. **`DEFAULT_KNN_VECTORS_FORMAT`**: While this name is descriptive, it's somewhat lengthy and could be simplified to `DEFAULT_FORMAT` since it's already within the context of the `HibernateSearchKnnVectorsFormat` class.
+
+Here's the refactored code with these changes:
+
+```java
+package org.hibernate.search.backend.lucene.lowlevel.codec.impl;
+
+import static org.apache.lucene.util.hnsw.HnswGraphBuilder.DEFAULT_BEAM_WIDTH;
+import static org.apache.lucene.util.hnsw.HnswGraphBuilder.DEFAULT_MAX_CONN;
+
+import java.io.IOException;
+import java.util.Objects;
+
+import org.apache.lucene.codecs.KnnVectorsFormat;
+import org.apache.lucene.codecs.KnnVectorsReader;
+import org.apache.lucene.codecs.KnnVectorsWriter;
+import org.apache.lucene.codecs.lucene95.Lucene95HnswVectorsFormat;
+import org.apache.lucene.index.SegmentReadState;
+import org.apache.lucene.index.SegmentWriteState;
+
+public class HibernateSearchKnnVectorsFormat extends KnnVectorsFormat {
+    public static final int DEFAULT_MAX_DIMENSIONS = KnnVectorsFormat.DEFAULT_MAX_DIMENSIONS;
+    private static final KnnVectorsFormat DEFAULT_FORMAT = new HibernateSearchKnnVectorsFormat();
+
+    public static KnnVectorsFormat defaultFormat() {
+        return DEFAULT_FORMAT;
+    }
+
+    private final KnnVectorsFormat vectorFormatDelegate;
+    private final int maxConnections;
+    private final int beamWidthValue;
+
+    public HibernateSearchKnnVectorsFormat() {
+        this(DEFAULT_MAX_CONN, DEFAULT_BEAM_WIDTH);
+    }
+
+    public HibernateSearchKnnVectorsFormat(int maxConnection, int beamWidth) {
+        super(HibernateSearchKnnVectorsFormat.class.getSimpleName());
+        this.vectorFormatDelegate = new Lucene95HnswVectorsFormat(maxConnection, beamWidth);
+        this.maxConnections = maxConnection;
+        this.beamWidthValue = beamWidth;
+    }
+
+    @Override
+    public KnnVectorsWriter fieldsWriter(SegmentWriteState state) throws IOException {
+        return vectorFormatDelegate.fieldsWriter(state);
+    }
+
+    @Override
+    public KnnVectorsReader fieldsReader(SegmentReadState state) throws IOException {
+        return vectorFormatDelegate.fieldsReader(state);
+    }
+
+    @Override
+    public int getMaxDimensions(String fieldName) {
+        return DEFAULT_MAX_DIMENSIONS;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        HibernateSearchKnnVectorsFormat that = (HibernateSearchKnnVectorsFormat) o;
+        return maxConnections == that.maxConnections && beamWidthValue == that.beamWidthValue;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(maxConnections, beamWidthValue);
+    }
+
+    @Override
+    public String toString() {
+        return "HibernateSearchKnnVectorsFormat{" +
+                "maxConnections=" + maxConnections +
+                ", beamWidthValue=" + beamWidthValue +
+                '}';
+    }
+}
+```
+
+These changes make the variable names more self-explanatory, which can be particularly helpful for new developers or for future maintenance of the code.

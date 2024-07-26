@@ -1,0 +1,25 @@
+In the provided Java code snippet, there are several opportunities to apply the "Extract Variable" refactoring to improve readability and potential reusability. Let's consider the refactorings:
+
+1. **Extracting `codec` from `field.type().codec()`** - This expression is accessed multiple times in the `if` and `instanceof` checks. Extracting this to a variable could make the code cleaner and prevent repeated method calls.
+
+2. **Extracting Repeated Type Cast** - The expression `((LuceneVectorFieldCodec<F>) codec)` is repeated for accessing `vectorElementsType` and `indexedVectorsDimension`. This can be extracted to avoid casting the `codec` multiple times.
+
+Refactoring these expressions will make the code more readable and maintainable. Here is how the refactored code would look:
+
+```java
+private Builder(LuceneSearchIndexScope<?> scope, LuceneSearchIndexValueFieldContext<F> field) {
+    super(scope, field);
+
+    LuceneFieldCodec<F> codec = field.type().codec();
+    if (codec instanceof LuceneVectorFieldCodec) {
+        LuceneVectorFieldCodec<F> vectorCodec = (LuceneVectorFieldCodec<F>) codec;
+        vectorElementsType = vectorCodec.vectorElementsType();
+        indexedVectorsDimension = vectorCodec.getConfiguredDimensions();
+    } else {
+        // shouldn't really happen as if someone tries this it should fail on `queryElementFactory` lookup.
+        throw new AssertionFailure("Attempting to use a knn predicate on a non-vector field.");
+    }
+}
+```
+
+This version of the code avoids multiple method calls and type casts by using the extracted variables effectively.

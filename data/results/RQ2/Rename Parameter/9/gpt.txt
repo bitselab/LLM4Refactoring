@@ -1,0 +1,12 @@
+In the provided code snippet, the parameter name `entityReference` in the method `addModuleRoot` could be renamed to improve readability and convey a clearer meaning. A more descriptive name would be `moduleEntityPointer`, as it appears to be a pointer to a module entity. This name would make the code more readable by clearly stating the purpose and type of the parameter.
+
+Here's the refactored version of the method with the parameter name changed:
+
+```java
+private void addModuleRoot(Module module, EntityPointer<?> moduleEntityPointer, VirtualFileUrl url) {
+    filesFromModulesContent.add(new ModuleRootData<>(moduleEntityPointer, ((ModuleBridge)module).getModuleEntityId(), url));
+    pointers.add(moduleEntityPointer);
+}
+```
+
+This change makes it clear that the method deals with a module entity pointer, which is more specific than the generic term "entity reference." Such refactoring is valuable for code maintainability and clarity, especially in complex systems where understanding the exact type and purpose of a variable is crucial.

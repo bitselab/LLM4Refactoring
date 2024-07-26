@@ -1,0 +1,60 @@
+The provided code snippet involves two methods: `getNextTransition` and `getTransition`. These methods share a significant portion of logic related to setting the `Transition` object's properties based on the state transitions. Here, we can apply the "Extract Method" refactoring pattern by extracting the common code into a new method, improving code readability and maintainability.
+
+### Refactoring Steps
+
+1. **Identify the common code**: Both methods calculate the `dest`, `min`, and `max` properties of the `Transition` object in the same way.
+
+2. **Extract the common code into a new method**: We will create a method `setTransitionProperties` to set these properties, reducing code duplication.
+
+Here's the refactored code:
+
+```java
+public class NFARunAutomaton implements ByteRunnable, TransitionAccessor {
+
+    @Override
+    public void getNextTransition(Transition t) {
+        assert t.transitionUpto < points.length - 1 && t.transitionUpto >= -1;
+        while (dStates[t.source].transitions[++t.transitionUpto] == MISSING) {
+            // this shouldn't throw AIOOBE as long as this function is only called
+            // numTransitions times
+        }
+        assert dStates[t.source].transitions[t.transitionUpto] != NOT_COMPUTED;
+
+        setTransitionProperties(t);
+    }
+    
+    @Override
+    public void getTransition(int state, int index, Transition t) {
+        dStates[state].determinize();
+        int outgoingTransitions = -1;
+        t.transitionUpto = -1;
+        t.source = state;
+        while (outgoingTransitions < index && t.transitionUpto < points.length - 1) {
+            if (dStates[t.source].transitions[++t.transitionUpto] != MISSING) {
+                outgoingTransitions++;
+            }
+        }
+        assert outgoingTransitions == index;
+
+        setTransitionProperties(t);
+    }
+
+    private void setTransitionProperties(Transition t) {
+        t.dest = dStates[t.source].transitions[t.transitionUpto];
+        t.min = points[t.transitionUpto];
+        if (t.transitionUpto == points.length - 1) {
+            t.max = alphabetSize - 1;
+        } else {
+            t.max = points[t.transitionUpto + 1] - 1;
+        }
+    }
+}
+```
+
+### Benefits of This Refactoring
+
+- **Reduced Code Duplication**: The repetitive code for setting the properties of `Transition` is now centralized in one method, reducing duplication and potential errors.
+- **Improved Readability**: The main methods now focus more on their primary responsibilities, making the code easier to understand at a glance.
+- **Easier Maintenance**: Any future changes to how transitions are handled only need to be made in one place, simplifying maintenance.
+
+This refactoring is a textbook example of improving the design of software through simple, effective changes.

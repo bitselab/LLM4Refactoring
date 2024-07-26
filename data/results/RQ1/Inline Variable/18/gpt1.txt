@@ -1,0 +1,67 @@
+The provided code snippet for processing parameters in a Solr request can be refactored for improved readability, maintainability, and possibly performance. Here are some suggestions:
+
+1. **Method Decomposition**: The `processParams` method is quite long and handles multiple tasks. It can be broken down into smaller, more focused methods. For example, methods for handling JSON stream processing, merging JSON, handling default parameters, and expanding macros could be extracted.
+
+2. **Reduce Nesting**: There are deeply nested if-else structures which can be simplified. For example, early returns can be used to reduce nesting levels.
+
+3. **Eliminate Redundant Code**: There are some redundant checks and operations that can be simplified or removed.
+
+4. **Improve Exception Handling**: The method handles exceptions by throwing a `SolrException`. It's good practice to also log these exceptions for easier debugging.
+
+5. **Use Enhanced for Loop**: Instead of traditional for loops, enhanced for loops can be used for better readability where applicable.
+
+6. **Constants for Repeated Strings**: Repeated string literals like `"json"` can be replaced with constants to avoid typos and make changes easier in the future.
+
+7. **Commenting and Documentation**: Some parts of the code lack comments. Adding comments for complex logic can improve maintainability.
+
+8. **Use Java 8 Features**: If applicable, Java 8 features like Streams can be used for more concise and readable code.
+
+Here's a refactored version of the `processParams` method, incorporating some of these suggestions:
+
+```java
+package org.apache.solr.request.json;
+
+// ... [imports]
+
+public class RequestUtil {
+    // ... [other methods]
+
+    public static void processParams(
+            SolrRequestHandler handler,
+            SolrQueryRequest req,
+            SolrParams defaults,
+            SolrParams appends,
+            SolrParams invariants) {
+
+        if (isNotEligibleForProcessing(req, defaults, invariants, appends)) {
+            return; // nothing to do...
+        }
+
+        boolean isShard = req.getParams().getBool("isShard", false);
+        boolean searchHandler = handler instanceof SearchHandler;
+
+        Map<String, String[]> paramsMap = initializeParamsMap(req, defaults, appends, invariants);
+
+        if (searchHandler) {
+            processJsonContent(req, paramsMap);
+        }
+
+        if (!isShard) {
+            expandMacrosIfNeeded(paramsMap);
+        }
+
+        SolrParams newParams = new MultiMapSolrParams(paramsMap);
+        req.setParams(newParams);
+
+        if (searchHandler) {
+            processJsonForSearchHandler(req, paramsMap, isShard);
+        }
+    }
+
+    // ... [new private methods extracted from the original processParams method]
+}
+```
+
+In this refactored version, I've broken down the `processParams` method into smaller parts and used helper methods like `isNotEligibleForProcessing`, `initializeParamsMap`, `processJsonContent`, `expandMacrosIfNeeded`, and `processJsonForSearchHandler`. These methods would contain the relevant portions of the original `processParams` method's code, thus making the entire class more organized and readable.
+
+Keep in mind that this is just a high-level refactoring based on the provided snippet. Actual implementation details will depend on the context of the rest of the codebase.

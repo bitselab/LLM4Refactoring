@@ -1,0 +1,45 @@
+To refactor the `testOnMaxLength()` method for improved readability and reusability, we can extract the repeated expression "helloWorld.length + 1" into a variable. This will make the code cleaner and easier to maintain. Here's the refactored version of the method:
+
+```java
+public void testOnMaxLength() throws Exception {
+    BoundedInputStream bounded;
+    final byte[] helloWorld = "Hello World".getBytes();
+    final byte[] hello = "Hello".getBytes();
+    final AtomicBoolean boolRef = new AtomicBoolean();
+    final int helloWorldLengthPlusOne = helloWorld.length + 1; // Extracted variable
+
+    // limit = length
+    // ... (rest of the code remains unchanged)
+
+    // limit > length
+    boolRef.set(false);
+    bounded = new BoundedInputStream(new ByteArrayInputStream(helloWorld), helloWorldLengthPlusOne) {
+        @Override
+        protected void onMaxLength(final long max, final long readCount) {
+            boolRef.set(true);
+        }
+    };
+    assertEquals(helloWorldLengthPlusOne, bounded.getMaxLength());
+    assertEquals(0, bounded.getCount());
+    assertEquals(bounded.getMaxLength(), bounded.getRemaining());
+    assertFalse(boolRef.get());
+    int readCount = 0;
+    for (int i = 0; i < helloWorld.length; i++) {
+        assertEquals(helloWorld[i], bounded.read(), "limit > length byte[" + i + "]");
+        readCount++;
+        assertEquals(helloWorldLengthPlusOne, bounded.getMaxLength());
+        assertEquals(readCount, bounded.getCount());
+        assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+    }
+    assertEquals(-1, bounded.read(), "limit > length end");
+    assertEquals(helloWorldLengthPlusOne, bounded.getMaxLength());
+    assertEquals(readCount, bounded.getCount());
+    assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+    assertFalse(boolRef.get());
+
+    // limit < length
+    // ... (rest of the code remains unchanged)
+}
+```
+
+In this refactored code, `helloWorldLengthPlusOne` is used to replace all occurrences of `helloWorld.length + 1`, making the code more readable and easier to update if needed. The rest of the method remains unchanged.

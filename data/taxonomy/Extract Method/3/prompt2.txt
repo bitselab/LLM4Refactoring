@@ -1,0 +1,74 @@
+Extract method refactorings are frequently employed to remove duplicate code snippets to improve readability and reusability.
+##################################################
+An extract method refactoring pattern is to extract repeated expressions as a new method within the class. Here is an example of the extract method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public static class AsListMarshaler {
+    
+    public boolean has(NSString key) {
+        return data.containsKey(key);
+    }
+
+    public String getLocalName() {
+        if (data.containsKey(Keys.LocalName())) {
+            NSString val = (NSString) get(Keys.LocalName());
+            return val.toString();
+        }
+        return null;
+    }
+    
+    public double getTxPowerLevel() {
+        if (data.containsKey(Keys.TxPowerLevel())) {
+            NSNumber val = (NSNumber) get(Keys.TxPowerLevel());
+            return val.doubleValue();
+        }
+        return 0;
+    }
+
+}
+```
+The source code after refactoring is:
+```
+public static class AsListMarshaler {
+
+    public String getLocalName() {
+        if (data.containsKey(Keys.LocalName())) {
+            NSString val = (NSString) get(Keys.LocalName());
+            return val.toString();
+        }
+        return null;
+    }
+    
+    public double getTxPowerLevel() {
+        if (data.containsKey(Keys.TxPowerLevel())) {
+            NSNumber val = (NSNumber) get(Keys.TxPowerLevel());
+            return val.doubleValue();
+        }
+        return 0;
+    }
+
+}
+```
+In this example, the developer extracted the repeated expressions "data.containsKey(Keys.LocalName())" as new method "has".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public class ReflectionDiffBuilder<T> implements Builder<DiffResult<T>> {
+
+    private void appendFields(final Class<?> clazz) {
+        for (final Field field : FieldUtils.getAllFields(clazz)) {
+            if (accept(field)) {
+                try {
+                    diffBuilder.append(field.getName(), FieldUtils.readField(field, getLeft(), true), FieldUtils.readField(field, getRight(), true));
+                } catch (final IllegalAccessException e) {
+                    // this can't happen. Would get a Security exception instead
+                    // throw a runtime exception in case the impossible happens.
+                    throw new IllegalArgumentException("Unexpected IllegalAccessException: " + e.getMessage(), e);
+                }
+            }
+        }
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

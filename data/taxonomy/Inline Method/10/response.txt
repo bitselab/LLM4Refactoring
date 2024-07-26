@@ -1,0 +1,59 @@
+Looking at the code snippet provided from `PathUtilEx`, there are a couple of private methods marked for removal (`chooseJdk` overloads) that are also deprecated, indicating that their continued use is discouraged. Inline method refactoring is suitable in cases where a method is only used once and the method's body is sufficiently simple to be included directly in its call site without significantly harming readability or maintainability.
+
+In this scenario, we have two methods named `chooseJdk`, one of which is used within the other, and the other is used by `getAnyJdk`. To apply inline method refactoring effectively:
+
+1. **Inline `chooseJdk(Collection<? extends Module> modules)` into `chooseJdk(Project project, Collection<? extends Module> modules)`:** Since it's only called from the latter and the body is relatively straightforward, we can simplify the code by moving the logic directly into the method that remains.
+
+2. **Inline `chooseJdk(Project project, Collection<? extends Module> modules)` into `getAnyJdk(Project project)`:** Given that this method is already marked for removal and only called once, inlining this logic can simplify the class and centralize the logic within a single method.
+
+Let's apply these refactorings:
+
+```java
+package com.intellij.openapi.projectRoots.ex;
+
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.JavaSdkType;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.ProjectRootManager;
+import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.lang.JavaVersion;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+
+/**
+ * @author Eugene Zhuravlev
+ */
+public final class PathUtilEx {
+
+    @Nullable
+    public static Sdk getAnyJdk(@NotNull Project project) {
+        Sdk projectJdk = ProjectRootManager.getInstance(project).getProjectSdk();
+        if (projectJdk != null && projectJdk.getSdkType() instanceof JavaSdkType) {
+            return projectJdk;
+        }
+
+        Collection<? extends Module> modules = Arrays.asList(ModuleManager.getInstance(project).getModules());
+        List<Sdk> jdks = ContainerUtil.mapNotNull(modules, module -> {
+            if (module == null) return null;
+            Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
+            if (sdk == null || !(sdk.getSdkType() instanceof JavaSdkType)) return null;
+            return sdk;
+        });
+
+        if (jdks.isEmpty()) {
+            return null;
+        }
+        return jdks.stream().max(Comparator.comparing(jdk -> JavaVersion.tryParse(jdk.getVersionString()), Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(null);
+    }
+}
+```
+
+This refactored version removes the deprecated `chooseJdk` methods and consolidates the JDK selection logic into `getAnyJdk`, making the codebase cleaner and reducing the surface for potential bugs.

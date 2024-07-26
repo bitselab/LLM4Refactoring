@@ -1,0 +1,68 @@
+Inline variable refactoring involves replacing a variable with its direct value or expression if the variable is used only once, and doing so improves readability. In the provided code, there are several instances where variables are used only once, making them good candidates for inline variable refactoring. This can make the code more concise and readable.
+
+Here's the refactored code with inline variable refactoring applied:
+
+```java
+package org.junit.jupiter.engine.extension;
+
+// ... [imports remain unchanged]
+
+class AutoCloseTests extends AbstractJupiterTestEngineTests {
+    // ... [unchanged class members]
+
+    @Test
+    void blankCloseMethodName() {
+        assertFailingWithMessage(
+            executeTestsForClass(BlankCloseMethodNameTestCase.class).testEvents(),
+            String.format("@AutoClose on field %s.field must specify a method name.", 
+                          BlankCloseMethodNameTestCase.class.getCanonicalName())
+        );
+    }
+
+    @Test
+    void primitiveTypeCannotBeClosed() {
+        assertFailingWithMessage(
+            executeTestsForClass(PrimitiveFieldTestCase.class).testEvents(),
+            String.format("@AutoClose is not supported on primitive field %s.x.", 
+                          PrimitiveFieldTestCase.class.getCanonicalName())
+        );
+    }
+
+    @Test
+    void arrayCannotBeClosed() {
+        assertFailingWithMessage(
+            executeTestsForClass(ArrayFieldTestCase.class).testEvents(),
+            String.format("@AutoClose is not supported on array field %s.x.", 
+                          ArrayFieldTestCase.class.getCanonicalName())
+        );
+    }
+
+    @Test
+    void nullCannotBeClosed(@TrackLogRecords LogRecordListener listener) {
+        Events tests = executeTestsForClass(NullCloseableFieldTestCase.class).testEvents();
+        tests.assertStatistics(stats -> stats.succeeded(1).failed(0));
+        assertThat(listener.stream(Level.WARNING))
+                .map(LogRecord::getMessage)
+                .anyMatch(
+                    String.format("Cannot @AutoClose field %s.field because it is null.", 
+                                  NullCloseableFieldTestCase.class.getCanonicalName())::equals
+                );
+    }
+
+    // ... [remaining test methods remain largely unchanged, except inlining where applicable]
+
+    private void assertFailingWithMessage(Events testEvents, String msg) {
+        testEvents.assertStatistics(stats -> stats.failed(1))
+                  .assertThatEvents().haveExactly(1, finishedWithFailure(message(msg)));
+    }
+
+    // ... [remaining methods and classes remain unchanged]
+}
+```
+
+### Key Changes:
+1. In `blankCloseMethodName`, `primitiveTypeCannotBeClosed`, and `arrayCannotBeClosed` methods, the `testClass` variable is inlined. The `Class<?> testClass` declaration is removed, and `testClass.getCanonicalName()` is directly replaced with the respective class's `getCanonicalName()` method call.
+
+2. In the `nullCannotBeClosed` method, the `msg` variable is inlined. The formatted message is directly used within the `anyMatch` method call.
+
+These changes improve readability by removing temporary variables that are only used once, thereby reducing the cognitive load on the reader to track these variables. The code's functionality remains the same.

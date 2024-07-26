@@ -1,0 +1,124 @@
+Rename variable refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename variable refactoring pattern is to rename variables that are inconsistent with their types. Here is an example of the rename variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private List<AbsoluteMetricQueueItem> buildInstanceStatusPut(final String instanceId) throws Exception {
+    final List<Pair<String, Double>> instanceStatusDatums = ImmutableList.<Pair<String, Double>>builder()
+            .add(Pair.pair(
+                    Count.StatusCheckFailed.name(),
+                    instanceInfoProvider.getStatusCheckFailed(instanceId).doubleValue()))
+            .add(Pair.pair(
+                    Count.StatusCheckFailed_Instance.name(),
+                    instanceInfoProvider.getInstanceStatusCheckFailed(instanceId).doubleValue()))
+            .add(Pair.pair(
+                    Count.StatusCheckFailed_System.name(),
+                    instanceInfoProvider.getSystemStatusCheckFailed(instanceId).doubleValue()))
+            .build();
+    final ArrayList<Dimension> dimArray = Lists.newArrayList();
+    populateInstanceDimensions(instanceId, dimArray);
+    final Dimensions dimensions = new Dimensions();
+    dimensions.setMember(dimArray);
+    final List<AbsoluteMetricQueueItem> queueItems = Lists.newArrayList();
+    for (final Pair<String, Double> datum : instanceStatusDatums) {
+        final MetricDatum metricDatum = new MetricDatum();
+        metricDatum.setMetricName(datum.getLeft());
+        metricDatum.setDimensions(dimensions);
+        metricDatum.setTimestamp(new Date());
+        metricDatum.setValue(datum.getRight());
+        metricDatum.setUnit(Count.class.getSimpleName());
+        final AbsoluteMetricQueueItem putMetricData = new AbsoluteMetricQueueItem();
+        putMetricData.setNamespace("AWS/EC2");
+        putMetricData.setMetricDatum(metricDatum);
+        putMetricData.setAccountId(instanceInfoProvider.getEffectiveUserId(instanceId).getAccountNumber());
+        queueItems.add(putMetricData);
+    }
+    return queueItems;
+}
+```
+The source code after refactoring is:
+```
+private List<AbsoluteMetricQueueItem> buildInstanceStatusPut(final String instanceId) throws Exception {
+    final List<Pair<String, Double>> instanceStatusDatums = ImmutableList.<Pair<String, Double>>builder()
+            .add(Pair.pair(
+                    Count.StatusCheckFailed.name(),
+                    instanceInfoProvider.getStatusCheckFailed(instanceId).doubleValue()))
+            .add(Pair.pair(
+                    Count.StatusCheckFailed_Instance.name(),
+                    instanceInfoProvider.getInstanceStatusCheckFailed(instanceId).doubleValue()))
+            .add(Pair.pair(
+                    Count.StatusCheckFailed_System.name(),
+                    instanceInfoProvider.getSystemStatusCheckFailed(instanceId).doubleValue()))
+            .build();
+    final ArrayList<Dimension> dimArray = Lists.newArrayList();
+    populateInstanceDimensions(instanceId, dimArray);
+    final Dimensions dimensions = new Dimensions();
+    dimensions.setMember(dimArray);
+    final List<AbsoluteMetricQueueItem> queueItems = Lists.newArrayList();
+    for (final Pair<String, Double> datum : instanceStatusDatums) {
+        final MetricDatum metricDatum = new MetricDatum();
+        metricDatum.setMetricName(datum.getLeft());
+        metricDatum.setDimensions(dimensions);
+        metricDatum.setTimestamp(new Date());
+        metricDatum.setValue(datum.getRight());
+        metricDatum.setUnit(Count.class.getSimpleName());
+        final AbsoluteMetricQueueItem queueItem = new AbsoluteMetricQueueItem();
+        queueItem.setNamespace("AWS/EC2");
+        queueItem.setMetricDatum(metricDatum);
+        queueItem.setAccountId(instanceInfoProvider.getEffectiveUserId(instanceId).getAccountNumber());
+        queueItems.add(queueItem);
+    }
+    return queueItems;
+}
+```
+In this example, the developer renamed the variable "putMetricData" to "queueItem".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+package net.sourceforge.pmd.cpd;
+
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
+import net.sourceforge.pmd.cpd.renderer.CPDRenderer;
+import net.sourceforge.pmd.lang.document.TextFile;
+import net.sourceforge.pmd.lang.java.JavaLanguageModule;
+
+final class RendererHelper {
+    private RendererHelper() {
+        // utility class
+    }
+
+    static void render(Iterator<Match> matches, Writer writer, CPDReportRenderer renderer) throws IOException {
+        List<Match> matchesList = new ArrayList<>();
+        matches.forEachRemaining(matchesList::add);
+
+        List<TextFile> textFiles = new ArrayList<>();
+        Set<String> paths = new HashSet<>();
+        for (Match match : matchesList) {
+            for (Mark mark : match.getMarkSet()) {
+                paths.add(mark.getFilename());
+            }
+        }
+        for (String path : paths) {
+            textFiles.add(TextFile.forPath(Paths.get(path), StandardCharsets.UTF_8, JavaLanguageModule.getInstance().getDefaultVersion()));
+        }
+
+        try (SourceManager sourcManager = new SourceManager(textFiles)) {
+            CPDReport report = new CPDReport(sourcManager, matchesList, Collections.emptyMap());
+            renderer.render(report, writer);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

@@ -1,0 +1,64 @@
+In the provided code snippet for the `AutoCloseTests` class, several sections repeat similar patterns or logic that might be simplified through the extract method refactoring. A potential refactoring opportunity involves extracting duplicated code used to handle and verify exceptions, especially in the part where the code checks for exceptions related to field closures. Here's how you might refactor it:
+
+### Refactoring the Code
+
+1. **Extract Method for Exception Handling and Verification**: The logic that handles exceptions and verifies them is repeated twice: once for test-level failures and once for container-level failures. You can extract this into a single method to improve code readability and reusability.
+
+### Refactored Code:
+
+Here is how the refactored version would look:
+
+```java
+class AutoCloseTests extends AbstractJupiterTestEngineTests {
+
+    @Test
+    void allFieldsAreClosedIfAnyFieldThrowsAnException() {
+        String staticField1 = "staticField1";
+        String staticField2 = "staticField2";
+        String staticField3 = "staticField3";
+        String field1 = "field1";
+        String field2 = "field2";
+        String field3 = "field3";
+
+        // Prerequisites to ensure fields are "ordered" as expected (based on the hash codes for their names).
+        assertThat(staticField1.hashCode()).isLessThan(staticField2.hashCode()).isLessThan(staticField3.hashCode());
+        assertThat(field1.hashCode()).isLessThan(field2.hashCode()).isLessThan(field3.hashCode());
+
+        Class<?> testClass = FailingFieldsTestCase.class;
+        EngineExecutionResults allEvents = executeTestsForClass(testClass);
+
+        Events tests = allEvents.testEvents();
+        tests.assertStatistics(stats -> stats.succeeded(0).failed(1));
+        // Verify that ALL fields were closed.
+        assertThat(recorder).containsExactly(
+                "FailingFieldsTestCase.field1.close()", 
+                "FailingFieldsTestCase.field2.close()", 
+                "FailingFieldsTestCase.field3.close()", 
+                "FailingFieldsTestCase.staticField1.close()", 
+                "FailingFieldsTestCase.staticField2.close()", 
+                "FailingFieldsTestCase.staticField3.close()"
+        );
+
+        // Handle and verify test-level and container-level failures
+        handleFailure(tests, "test()", "FailingFieldsTestCase.field1.close()", testClass);
+        handleFailure(tests, testClass.getSimpleName(), "FailingFieldsTestCase.staticField1.close()", testClass);
+    }
+
+    private void handleFailure(Events tests, String testName, String message, Class<?> testClass) {
+        Throwable throwable = findExecution(tests, testName)
+            .getTerminationInfo().getExecutionResult().getThrowable().orElseThrow();
+        assertThat(throwable)
+            .isExactlyInstanceOf(RuntimeException.class)
+            .hasMessage(message)
+            .hasNoCause()
+            .hasSuppressedException(new RuntimeException(message.replace("1", "2")));
+    }
+
+}
+```
+
+### Explanation:
+
+- **handleFailure Method**: This method takes parameters to handle the specific test or container failure checks. It accepts the events, the test name to check, the expected message from the exception, and the test class for context. This method reduces code duplication and centralizes the exception handling logic.
+
+This refactoring approach enhances the maintainability of the code by encapsulating the error handling logic into a single, reusable method, adhering to the principles of DRY (Don't Repeat Yourself) and improving the overall structure of the test class.

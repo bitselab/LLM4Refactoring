@@ -1,0 +1,71 @@
+To improve the readability and clarity of the code, I will apply rename variable refactoring to the `bufferSize` variable in the `seekReadAndTest` method. The variable name `bufferSize` could be more descriptive in explaining its role in the context of this method. A more appropriate name could be `streamBufferSize`, indicating that it refers to the size of the buffer of the `AbfsInputStream`.
+
+Here's the refactored version of the `seekReadAndTest` method with the `bufferSize` variable renamed to `streamBufferSize`:
+
+```java
+private void seekReadAndTest(final AzureBlobFileSystem fs,
+                             final Path testFilePath, final int seekPos, final int length,
+                             final byte[] fileContent, int footerReadBufferSize) throws Exception {
+    AbfsConfiguration conf = getAbfsStore(fs).getAbfsConfiguration();
+    long actualContentLength = fileContent.length;
+    FutureDataInputStreamBuilder builder = getParameterizedBuilder(
+            testFilePath, fs, footerReadBufferSize);
+    try (FSDataInputStream iStream = builder.build().get()) {
+        AbfsInputStream abfsInputStream = (AbfsInputStream) iStream.getWrappedStream();
+        verifyConfigValueInStream(iStream, footerReadBufferSize);
+        long streamBufferSize = abfsInputStream.getBufferSize();
+        seek(iStream, seekPos);
+        byte[] buffer = new byte[length];
+        long bytesRead = iStream.read(buffer, 0, length);
+
+        long footerStart = max(0, actualContentLength - AbfsInputStream.FOOTER_SIZE);
+        boolean optimizationOn = conf.optimizeFooterRead() && seekPos >= footerStart;
+
+        long actualLength = length;
+        if (seekPos + length > actualContentLength) {
+            long delta = seekPos + length - actualContentLength;
+            actualLength = length - delta;
+        }
+        long expectedLimit;
+        long expectedBCursor;
+        long expectedFCursor;
+        if (optimizationOn) {
+            if (actualContentLength <= footerReadBufferSize) {
+                expectedLimit = actualContentLength;
+                expectedBCursor = seekPos + actualLength;
+            } else {
+                expectedLimit = footerReadBufferSize;
+                long lastBlockStart = max(0, actualContentLength - footerReadBufferSize);
+                expectedBCursor = seekPos - lastBlockStart + actualLength;
+            }
+            expectedFCursor = actualContentLength;
+        } else {
+            if (seekPos + streamBufferSize < actualContentLength) {
+                expectedLimit = streamBufferSize;
+                expectedFCursor = streamBufferSize;
+            } else {
+                expectedLimit = actualContentLength - seekPos;
+                expectedFCursor = min(seekPos + streamBufferSize, actualContentLength);
+            }
+            expectedBCursor = actualLength;
+        }
+
+        assertEquals(expectedFCursor, abfsInputStream.getFCursor());
+        assertEquals(expectedFCursor, abfsInputStream.getFCursorAfterLastRead());
+        assertEquals(expectedLimit, abfsInputStream.getLimit());
+        assertEquals(expectedBCursor, abfsInputStream.getBCursor());
+        assertEquals(actualLength, bytesRead);
+        // Verify user-content read
+        assertContentReadCorrectly(fileContent, seekPos, (int) actualLength, buffer, testFilePath);
+        // Verify data read to AbfsInputStream buffer
+        int from = seekPos;
+        if (optimizationOn) {
+            from = (int) max(0, actualContentLength - footerReadBufferSize);
+        }
+        assertContentReadCorrectly(fileContent, from, (int) abfsInputStream.getLimit(),
+                abfsInputStream.getBuffer(), testFilePath);
+    }
+}
+```
+
+This refactoring helps in enhancing the understandability of the code by using a more descriptive variable name, `streamBufferSize`, which clearly indicates that it refers to the size of the stream's buffer.

@@ -1,0 +1,24 @@
+The identified opportunity for refactoring in the `testToStringSpecifyStyleOutput` method is the use of the `expectedOutput` variable. This variable is only used once and can be inlined directly into the `assertEquals` method call. This would make the code more concise without compromising readability. Here's the refactored method:
+
+```java
+@Test
+public void testToStringSpecifyStyleOutput() {
+    final DiffResult<SimpleClass> result = SIMPLE_FALSE.diff(SIMPLE_TRUE);
+    assertEquals(result.getToStringStyle(), SHORT_STYLE);
+
+    // @formatter:off
+    final String lhsString = new ToStringBuilder(SIMPLE_FALSE, ToStringStyle.MULTI_LINE_STYLE)
+            .append(SimpleClass.getFieldName(), SIMPLE_FALSE.booleanField)
+            .build();
+
+    final String rhsString = new ToStringBuilder(SIMPLE_TRUE, ToStringStyle.MULTI_LINE_STYLE)
+            .append(SimpleClass.getFieldName(), SIMPLE_TRUE.booleanField)
+            .build();
+    // @formatter:on
+
+    assertEquals(String.format("%s differs from %s", lhsString, rhsString), 
+                 result.toString(ToStringStyle.MULTI_LINE_STYLE));
+}
+```
+
+In this refactored version, the `expectedOutput` variable is removed, and the `String.format` expression is directly placed inside the `assertEquals` method. This change simplifies the method without affecting the clarity of what is being tested.

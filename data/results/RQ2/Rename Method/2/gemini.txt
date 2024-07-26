@@ -1,0 +1,47 @@
+ **Here's the refactored code with a more descriptive method name:**
+
+```java
+package org.apache.commons.io.input;
+
+import static org.apache.commons.io.IOUtils.EOF;
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+
+public class NullInputStream extends InputStream {
+
+  // ... (rest of the code remains the same)
+
+  /**
+   * Handles reaching the end of the file.
+   *
+   * @return {@code -1} if {@code throwEofException} is set to {@code false}
+   * @throws EOFException if {@code throwEofException} is set to {@code true}.
+   */
+  private int handleEndOfFile() throws EOFException {
+    eof = true;
+    checkThrowEof("handleEndOfFile()");
+    return EOF;
+  }
+
+  // ... (rest of the code remains the same)
+
+}
+```
+
+**Explanation of the refactoring:**
+
+- **Original method name:** `doEndOfFile()`
+- **Refactored method name:** `handleEndOfFile()`
+
+**Improvements:**
+
+- **Clarity:** The new name explicitly conveys the purpose of the method, which is to handle the situation when the end of the file is reached. This makes it easier for developers to understand the code's behavior at a glance.
+- **Consistency:** The new name aligns better with other methods in the class that also use the "handle" verb to describe their actions, such as `handleClose()`, `handleMark()`, and `handleReset()`.
+- **Readability:** The new name is more fluent and grammatically correct, as it clearly states what the method does.
+
+**Additional notes:**
+
+- The rest of the code remains the same, as the refactoring only involves renaming a method.
+- It's generally a good practice to use descriptive method names that accurately reflect their functionality. This makes code more self-documenting and easier to maintain.

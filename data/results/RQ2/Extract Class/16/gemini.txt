@@ -1,0 +1,67 @@
+ **Here's the refactored code, incorporating extract class refactorings:**
+
+**New class:**
+
+```java
+class ProxyDefinitionDetails {
+
+    private final Class<?>[] proxiedInterfaces;
+    private boolean equalsDefined;
+    private boolean hashCodeDefined;
+
+    public ProxyDefinitionDetails(AdvisedSupport advised) {
+        this.proxiedInterfaces = AopProxyUtils.completeProxiedInterfaces(advised, true);
+        findDefinedEqualsAndHashCodeMethods();
+    }
+
+    private void findDefinedEqualsAndHashCodeMethods() {
+        for (Class<?> proxiedInterface : proxiedInterfaces) {
+            Method[] methods = proxiedInterface.getDeclaredMethods();
+            for (Method method : methods) {
+                if (AopUtils.isEqualsMethod(method)) {
+                    this.equalsDefined = true;
+                } else if (AopUtils.isHashCodeMethod(method)) {
+                    this.hashCodeDefined = true;
+                }
+                if (this.equalsDefined && this.hashCodeDefined) {
+                    return;
+                }
+            }
+        }
+    }
+
+    public boolean isEqualsDefined() {
+        return equalsDefined;
+    }
+
+    public boolean isHashCodeDefined() {
+        return hashCodeDefined;
+    }
+}
+```
+
+**Refactored JdkDynamicAopProxy:**
+
+```java
+final class JdkDynamicAopProxy implements AopProxy, InvocationHandler, Serializable {
+
+    // ... other fields and methods remain the same ...
+
+    private final ProxyDefinitionDetails proxyDefinitionDetails;
+
+    public JdkDynamicAopProxy(AdvisedSupport config) throws AopConfigException {
+        Assert.notNull(config, "AdvisedSupport must not be null");
+        this.advised = config;
+        this.proxyDefinitionDetails = new ProxyDefinitionDetails(this.advised);
+    }
+
+    // ... other methods use proxyDefinitionDetails as needed ...
+}
+```
+
+**Key improvements:**
+
+- **Encapsulation:** The `ProxyDefinitionDetails` class encapsulates data and behavior related to proxy definition, making the `JdkDynamicAopProxy` class more focused on its core responsibilities.
+- **Readability:** The code is easier to read and understand as the responsibilities are now divided into smaller, more cohesive classes.
+- **Reusability:** The `ProxyDefinitionDetails` class can potentially be reused in other contexts where similar proxy definition information is needed.
+- **Maintainability:** Changes related to proxy definition can be made within the `ProxyDefinitionDetails` class without affecting other parts of the code.

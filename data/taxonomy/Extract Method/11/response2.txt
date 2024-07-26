@@ -1,0 +1,68 @@
+In the provided code snippet, we can observe a clear opportunity for the **Extract Method** refactoring pattern to reduce duplication and improve readability. Both methods `onCompleteSuccess()` and `onCompleteFailure()` in the `Flusher` class perform a sequence of actions that are largely similar, except for the initial logging action.
+
+Here's the original code for reference:
+```java
+private class Flusher extends IteratingCallback
+{
+    @Override
+    protected void onCompleteSuccess()
+    {
+        if (LOG.isDebugEnabled())
+            LOG.debug("connection closed {}", QuicSession.this);
+        Throwable failure = new ClosedChannelException();
+        byteBufferPool.release(cipherBuffer);
+        finishOutwardClose(failure);
+        timeout.destroy();
+    }
+
+    @Override
+    protected void onCompleteFailure(Throwable failure)
+    {
+        if (LOG.isDebugEnabled())
+            LOG.debug("failed to write cipher bytes, closing session on {}", QuicSession.this, failure);
+        byteBufferPool.release(cipherBuffer);
+        finishOutwardClose(failure);
+        timeout.destroy();
+    }
+}
+```
+
+### Refactoring Steps:
+1. **Extract Common Code**: The actions performed after the logging in both methods are identical. These actions can be extracted into a new method, say `cleanUpAndCloseSession(Throwable failure)`.
+2. **Call the Extracted Method**: Replace the duplicated code in both `onCompleteSuccess()` and `onCompleteFailure()` with calls to the newly created method.
+
+### Refactored Code:
+```java
+private class Flusher extends IteratingCallback
+{
+    @Override
+    protected void onCompleteSuccess()
+    {
+        if (LOG.isDebugEnabled())
+            LOG.debug("connection closed {}", QuicSession.this);
+        Throwable failure = new ClosedChannelException();
+        cleanUpAndCloseSession(failure);
+    }
+
+    @Override
+    protected void onCompleteFailure(Throwable failure)
+    {
+        if (LOG.isDebugEnabled())
+            LOG.debug("failed to write cipher bytes, closing session on {}", QuicSession.this, failure);
+        cleanUpAndCloseSession(failure);
+    }
+
+    private void cleanUpAndCloseSession(Throwable failure) {
+        byteBufferPool.release(cipherBuffer);
+        finishOutwardClose(failure);
+        timeout.destroy();
+    }
+}
+```
+
+### Explanation:
+- **Method Extraction**: The method `cleanUpAndCloseSession(Throwable failure)` encapsulates the common tasks of releasing resources and handling session closure, thereby reducing code duplication.
+- **Readability and Maintainability**: This refactoring makes the code easier to read and maintain. Any future changes to the cleanup and closure process need to be made in only one place.
+- **Logging**: The specific logging for success and failure cases remains directly within the respective methods, preserving the context-specific information they log.
+
+This refactored code follows best practices by minimizing duplication and making the codebase more maintainable.

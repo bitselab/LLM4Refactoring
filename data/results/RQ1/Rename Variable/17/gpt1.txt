@@ -1,0 +1,66 @@
+Upon reviewing the provided code snippet, there are several refactoring opportunities that can be considered to improve the code's clarity, efficiency, and maintainability. Here are the key changes I suggest:
+
+1. **Use Java 8 Streams:** The process of collecting matches and file paths can be streamlined using Java 8 Streams. This would make the code more concise and readable.
+
+2. **Exception Handling:** Instead of catching a general `Exception` and re-throwing it as a `RuntimeException`, it's better to handle specific exceptions that might occur. This approach provides clearer information about what might go wrong.
+
+3. **Method Decomposition:** The `render` method can be refactored into smaller methods. This makes the code easier to understand and maintain.
+
+4. **Variable Naming:** The variable `sourcManager` seems to be a typo. It should be renamed to `sourceManager` for clarity.
+
+Here is the refactored code:
+
+```java
+package net.sourceforge.pmd.cpd;
+
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import net.sourceforge.pmd.cpd.renderer.CPDRenderer;
+import net.sourceforge.pmd.lang.document.TextFile;
+import net.sourceforge.pmd.lang.java.JavaLanguageModule;
+
+final class RendererHelper {
+    private RendererHelper() {
+        // utility class
+    }
+
+    static void render(Iterator<Match> matches, Writer writer, CPDReportRenderer renderer) throws IOException {
+        List<Match> matchesList = collectMatches(matches);
+        Set<String> paths = extractPaths(matchesList);
+        List<TextFile> textFiles = createTextFiles(paths);
+
+        try (SourceManager sourceManager = new SourceManager(textFiles)) {
+            CPDReport report = new CPDReport(sourceManager, matchesList, Collections.emptyMap());
+            renderer.render(report, writer);
+        } catch (IOException e) {
+            throw new IOException("Error rendering CPD report", e);
+        }
+    }
+
+    private static List<Match> collectMatches(Iterator<Match> matches) {
+        List<Match> matchesList = new ArrayList<>();
+        matches.forEachRemaining(matchesList::add);
+        return matchesList;
+    }
+
+    private static Set<String> extractPaths(List<Match> matches) {
+        return matches.stream()
+                .flatMap(match -> match.getMarkSet().stream())
+                .map(Mark::getFilename)
+                .collect(Collectors.toSet());
+    }
+
+    private static List<TextFile> createTextFiles(Set<String> paths) {
+        return paths.stream()
+                .map(path -> TextFile.forPath(Paths.get(path), StandardCharsets.UTF_8, JavaLanguageModule.getInstance().getDefaultVersion()))
+                .collect(Collectors.toList());
+    }
+}
+```
+
+These changes should make the code more readable and maintainable while preserving its original functionality.

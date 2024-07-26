@@ -1,0 +1,61 @@
+ **Here's the refactored code with identified opportunities applied:**
+
+```java
+package net.sourceforge.pmd.cpd;
+
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import net.sourceforge.pmd.cpd.renderer.CPDRenderer;
+import net.sourceforge.pmd.lang.document.TextFile;
+import net.sourceforge.pmd.lang.java.JavaLanguageModule;
+
+final class RendererHelper {
+
+    private RendererHelper() {
+        // utility class
+    }
+
+    static void render(Iterator<Match> matches, Writer writer, CPDReportRenderer renderer) throws IOException {
+        List<Match> matchesList = collectMatches(matches);
+        List<TextFile> textFiles = createTextFiles(extractUniquePaths(matchesList));
+
+        try (SourceManager sourceManager = new SourceManager(textFiles)) {
+            CPDReport report = new CPDReport(sourceManager, matchesList, Collections.emptyMap());
+            renderer.render(report, writer);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static List<Match> collectMatches(Iterator<Match> matches) {
+        return matches.collect(Collectors.toList());
+    }
+
+    private static Set<String> extractUniquePaths(List<Match> matches) {
+        return matches.stream()
+                      .flatMap(match -> match.getMarkSet().stream())
+                      .map(Mark::getFilename)
+                      .collect(Collectors.toSet());
+    }
+
+    private static List<TextFile> createTextFiles(Set<String> paths) {
+        return paths.stream()
+                   .map(path -> TextFile.forPath(Paths.get(path), StandardCharsets.UTF_8, JavaLanguageModule.getInstance().getDefaultVersion()))
+                   .collect(Collectors.toList());
+    }
+}
+```
+
+**Key refactorings:**
+
+- **Extracted methods:** Refactored repeated logic into separate, descriptively named methods (`collectMatches`, `extractUniquePaths`, `createTextFiles`) for better readability and maintainability.
+- **Used streams for conciseness:** Replaced traditional loops with streams and method references for a more concise and expressive style (`collect`, `flatMap`, `map`).
+- **Removed unnecessary variable:** Eliminated the `paths` list as its functionality was effectively replaced by the `extractUniquePaths` method.

@@ -1,0 +1,30 @@
+ **Here's the refactored code with a more descriptive variable name:**
+
+```java
+private static DetailNode getNearestNonLeadingNode(DetailNode startingNode) {
+    DetailNode currentNode = startingNode;
+    while (currentNode.getType() == JavadocTokenTypes.LEADING_ASTERISK
+            || currentNode.getType() == JavadocTokenTypes.NEWLINE) {
+        currentNode = JavadocUtil.getNextSibling(currentNode);
+    }
+    return currentNode;
+}
+```
+
+**Explanation of the changes:**
+
+1. **Renaming the variable:** The variable `tag` has been renamed to `currentNode`. This name more accurately reflects its purpose, which is to hold a reference to the current Node being examined within the loop.
+
+2. **Renaming the method:** The method `getNearestNode` has been renamed to `getNearestNonLeadingNode`. This name provides a more explicit description of its functionality, indicating that it finds the nearest Node that is not a leading asterisk or newline.
+
+**Benefits of these changes:**
+
+- **Improved readability:** The refactored code is more readable and understandable because the variable and method names clearly convey their intent.
+- **Reduced cognitive load:** Readers can more easily grasp the logic of the code without having to mentally map ambiguous names to their meanings.
+- **Enhanced maintainability:** Clearer names make it easier for developers to modify and debug the code in the future.
+
+**Additional considerations for refactoring:**
+
+- **Consistency:** Ensure that variable and method names used within a project adhere to consistent naming conventions.
+- **Conciseness:** Choose names that are descriptive yet concise to avoid unnecessarily lengthy code.
+- **Context:** Consider the surrounding code and the domain of the application when selecting names to ensure they are meaningful within those contexts.

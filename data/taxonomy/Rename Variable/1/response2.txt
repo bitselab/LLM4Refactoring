@@ -1,0 +1,16 @@
+In the provided code snippet, the variable `tag` is used to traverse nodes until a node that is not a `LEADING_ASTERISK` or `NEWLINE` is found. The name `tag` might be misleading or less informative because it does not clearly express what the variable is used for or its role within the function. A more appropriate name might be `currentNode` or `nearestNode`, as these names would better describe the purpose of the variable as a reference to the currently examined node in the search for the nearest relevant node.
+
+Here's the code snippet with the refactored variable name:
+
+```java
+private static DetailNode getNearestNode(DetailNode node) {
+    DetailNode currentNode = node;
+    while (currentNode.getType() == JavadocTokenTypes.LEADING_ASTERISK
+            || currentNode.getType() == JavadocTokenTypes.NEWLINE) {
+        currentNode = JavadocUtil.getNextSibling(currentNode);
+    }
+    return currentNode;
+}
+```
+
+In this refactored code, `currentNode` is used instead of `tag`, which makes it clearer that this variable holds the node currently being inspected in the loop. This change improves code readability by making the purpose of the variable more apparent.

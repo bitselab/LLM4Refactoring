@@ -1,0 +1,48 @@
+Examining the provided code, we can identify potential opportunities for inline method refactoring, which is a technique used to improve code readability and maintainability by reducing the number of small, delegate methods. This approach can make the code more direct and easier to understand.
+
+### Refactoring Opportunities
+
+1. **Inline `createPemStoreBundle` and `createJksStoreBundle` Methods**: 
+   - These methods are each called only once within the `createStoreBundle` method. Inlining them will make the createStoreBundle logic more straightforward and eliminate the need for these separate methods.
+   - However, inlining these methods could increase the length of `createStoreBundle`. We'll need to balance readability with the benefits of inlining.
+
+2. **Inline `hasCertificateProperties` and `hasJavaKeyStoreProperties` Methods**:
+   - These methods are simple and used only in one place (`createStoreBundle`). Inlining them can make the logic more visible within the context it is used.
+
+### Proposed Refactored Code
+
+```java
+package org.springframework.boot.web.server;
+
+// ... [import statements]
+
+public final class WebServerSslBundle implements SslBundle {
+
+    // ... [existing fields and methods]
+
+    private static SslStoreBundle createStoreBundle(Ssl ssl) {
+        if (Ssl.isEnabled(ssl) && ssl.getCertificate() != null && ssl.getCertificatePrivateKey() != null) {
+            // Inlined logic of createPemStoreBundle
+            PemSslStoreDetails keyStoreDetails = new PemSslStoreDetails(ssl.getKeyStoreType(), ssl.getCertificate(), ssl.getCertificatePrivateKey())
+                    .withAlias(ssl.getKeyAlias());
+            PemSslStoreDetails trustStoreDetails = new PemSslStoreDetails(ssl.getTrustStoreType(), ssl.getTrustCertificate(), ssl.getTrustCertificatePrivateKey());
+            return new PemSslStoreBundle(keyStoreDetails, trustStoreDetails);
+        }
+        if (Ssl.isEnabled(ssl) && ssl.getKeyStore() != null || (ssl.getKeyStoreType() != null && ssl.getKeyStoreType().equals("PKCS11"))) {
+            // Inlined logic of createJksStoreBundle
+            JksSslStoreDetails keyStoreDetails = new JksSslStoreDetails(ssl.getKeyStoreType(), ssl.getKeyStoreProvider(), ssl.getKeyStore(), ssl.getKeyStorePassword());
+            JksSslStoreDetails trustStoreDetails = new JksSslStoreDetails(ssl.getTrustStoreType(), ssl.getTrustStoreProvider(), ssl.getTrustStore(), ssl.getTrustStorePassword());
+            return new JksSslStoreBundle(keyStoreDetails, trustStoreDetails);
+        }
+        throw new IllegalStateException("SSL is enabled but no trust material is configured");
+    }
+
+    // ... [remaining methods]
+
+}
+```
+
+### Notes on Refactoring
+- The inlining of `createPemStoreBundle` and `createJksStoreBundle` makes the `createStoreBundle` method longer, but it centralizes the SSL store creation logic, making it easier to understand the decision flow in one place.
+- Similarly, inlining `hasCertificateProperties` and `hasJavaKeyStoreProperties` removes the extra method calls, making it clearer when these checks are applied.
+- It's important to keep in mind that inlining should be done judiciously. In some cases, having separate methods can still be beneficial for clarity, especially if the logic is complex or used in multiple places.

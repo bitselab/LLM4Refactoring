@@ -1,0 +1,123 @@
+Analyzing the provided Java code snippet, the focus is to assess whether any method names are misaligned with what their bodies achieve, following the rename method refactoring pattern described. The code snippet consists of various methods in the `ClasspathClassLoaderTest` class which handle loading classes in different scenarios using a custom class loader.
+
+Here's a review of the method names against their functionality:
+
+1. `loadEmptyClasspathWithParent` - The method name accurately reflects its function, which is to load classes when the classpath is empty, and a parent class loader is provided. This name is apt and does not require renaming.
+
+2. `loadEmptyClasspathNoParent` - Similar to the first, this method deals with loading from an empty classpath, but without a parent class loader. The name is descriptive of its functionality.
+
+3. `loadFromJar` - This method specifically loads resources from a jar file, and its name perfectly describes this action.
+
+4. `loadFromJava17` - This method's name could potentially be misleading as it implies it is specific to Java 17, but the method actually tests loading across different specified Java versions (11, 17, 21) based on the parameter passed to it. The name could be made more generic to reflect this versatility.
+
+Given the analysis, the method `loadFromJava17` might be a candidate for renaming to better reflect that it handles multiple Java versions, not just Java 17. A more appropriate name could be `loadFromClasspathOfSpecifiedJavaVersion` or simply `loadFromSpecifiedJavaHome`.
+
+Here's the refactored code snippet with the renamed method:
+
+```java
+package net.sourceforge.pmd.internal.util;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+class ClasspathClassLoaderTest {
+    @TempDir
+    private Path tempDir;
+
+    @Test
+    void loadEmptyClasspathWithParent() throws IOException {
+        try (ClasspathClassLoader loader = new ClasspathClassLoader("", ClasspathClassLoader.class.getClassLoader())) {
+            try (InputStream resource = loader.getResourceAsStream("java/lang/Object.class")) {
+                assertNotNull(resource);
+                try (DataInputStream data = new DataInputStream(resource)) {
+                    assertClassFile(data, Integer.valueOf(System.getProperty("java.specification.version")));
+                }
+            }
+        }
+    }
+
+    @Test
+    void loadEmptyClasspathNoParent() throws IOException {
+        try (ClasspathClassLoader loader = new ClasspathClassLoader("", null)) {
+            try (InputStream resource = loader.getResourceAsStream("java/lang/Object.class")) {
+                assertNotNull(resource);
+                try (DataInputStream data = new DataInputStream(resource)) {
+                    assertClassFile(data, Integer.valueOf(System.getProperty("java.specification.version")));
+                }
+            }
+        }
+    }
+
+    @Test
+    void loadFromJar() throws IOException {
+        final String RESOURCE_NAME = "net/sourceforge/pmd/Sample.txt";
+        final String TEST_CONTENT = "Test\n";
+
+        Path jarPath = tempDir.resolve("custom.jar");
+        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jarPath))) {
+            out.putNextEntry(new ZipEntry(RESOURCE_NAME));
+            out.write(TEST_CONTENT.getBytes(StandardCharsets.UTF_8));
+        }
+        String classpath = jarPath.toString();
+
+        try (ClasspathClassLoader loader = new ClasspathClassLoader(classpath, null)) {
+            try (InputStream in = loader.getResourceAsStream(RESOURCE_NAME)) {
+                assertNotNull(in);
+                String s = IOUtil.readToString(in, StandardCharsets.UTF_8);
+                assertEquals(TEST_CONTENT, s);
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {11, 17, 21})
+    void loadFromClasspathOfSpecifiedJavaVersion(int javaVersion) throws IOException {
+        Path javaHome = Paths.get(System.getProperty("user.home"), "openjdk" + javaVersion);
+        assumeTrue(Files.isDirectory(javaHome), "Couldn't find java" + javaVersion + " installation at " + javaHome);
+
+        Path jrtfsPath = javaHome.resolve("lib/jrt-fs.jar");
+        assertTrue(Files.isRegularFile(jrtfsPath), "java" + javaVersion + " installation is incomplete. " + jrtfsPath + " not found!");
+        String classPath = jrtfsPath.toString();
+
+        try (ClasspathClassLoader loader = new ClasspathClassLoader(classPath, null)) {
+            assertEquals(javaHome.toString(), loader.javaHome);
+            try (InputStream stream = loader.getResourceAsStream("java/lang/Object.class")) {
+                assertNotNull(stream);
+                try (DataInputStream data = new DataInputStream(stream)) {
+                    assertClassFile(data, javaVersion);
+                }
+            }
+
+            // should not fail for resources without a package
+            assertNull(loader.getResourceAsStream("ClassInDefaultPackage.class"));
+        }
+    }
+
+    private void assertClassFile(DataInputStream data, int javaVersion) throws IOException {
+        int magicNumber = data.readInt();
+        assertEquals(0xcafebabe, magicNumber);
+        data.readUnsignedShort(); // minorVersion
+        int majorVersion = data.readUnsignedShort();
+        assertEquals(44 + javaVersion, majorVersion);
+    }
+}
+```
+This refactoring makes the method name more representative of its functionality, potentially improving the readability and maintenance of the code.

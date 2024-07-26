@@ -1,0 +1,57 @@
+Reviewing the provided code snippet from the `CommitGraphWriter` class, there are several opportunities for extract variable refactorings to improve readability and potentially enhance maintainability. Here's a refactored version of some parts of the code to demonstrate these opportunities:
+
+### Original Code Snippet for Reference
+```java
+private void writeChunkLookup(CancellableDigestOutputStream out,
+                              List<ChunkHeader> chunks) throws IOException {
+    int numChunks = chunks.size();
+    long chunkOffset = 8 + (numChunks + 1L) * CHUNK_LOOKUP_WIDTH;
+    byte[] buffer = new byte[CHUNK_LOOKUP_WIDTH];
+    for (ChunkHeader chunk : chunks) {
+        NB.encodeInt32(buffer, 0, chunk.id);
+        NB.encodeInt64(buffer, 4, chunkOffset);
+        out.write(buffer);
+        chunkOffset += chunk.size;
+    }
+    NB.encodeInt32(buffer, 0, 0);
+    NB.encodeInt64(buffer, 4, chunkOffset);
+    out.write(buffer);
+}
+```
+
+### Refactored Code
+In the `writeChunkLookup` method, extracting the initial calculation of `chunkOffset` into a separate variable improves readability:
+
+```java
+private void writeChunkLookup(CancellableDigestOutputStream out,
+                              List<ChunkHeader> chunks) throws IOException {
+    int numChunks = chunks.size();
+    int initialChunkOffsetPosition = 8;
+    long chunkOffset = initialChunkOffsetPosition + (numChunks + 1L) * CHUNK_LOOKUP_WIDTH;
+    byte[] buffer = new byte[CHUNK_LOOKUP_WIDTH];
+
+    for (ChunkHeader chunk : chunks) {
+        NB.encodeInt32(buffer, 0, chunk.id);
+        NB.encodeInt64(buffer, 4, chunkOffset);
+        out.write(buffer);
+        chunkOffset += chunk.size;
+    }
+
+    NB.encodeInt32(buffer, 0, 0);
+    NB.encodeInt64(buffer, 4, chunkOffset);
+    out.write(buffer);
+}
+```
+
+### Additional Refactoring Opportunities
+1. **writeHeader Method**: 
+   Extract constants for magic number calculations.
+2. **writeFanoutTable Method**: 
+   Extract the byte array size into a constant.
+3. **writeCommitData Method**: 
+   Extract complex calculations into descriptive variables or even separate methods.
+
+### Explanation
+Extracting variables in these instances helps clarify what each calculation or magic number represents, making the code easier to understand for someone who might not be familiar with the specific details of the implementation. 
+
+This kind of refactoring is particularly useful in complex codebases, where understanding the purpose of each line of code can be challenging. It aids in documentation and can make future modifications easier and less error-prone.

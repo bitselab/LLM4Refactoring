@@ -1,0 +1,29 @@
+In the provided code snippet from the `org.apache.commons.lang3` package, we have a simple scenario involving a method `after()` which delegates to another method `validateNullToStringStyleRegistry()` to perform an assertion check. This is similar to the previous example where a helper method was inlined for simplicity and readability.
+
+Given that the `validateNullToStringStyleRegistry()` method is only called once and contains only a single line of code (an assertion), this is a clear candidate for inlining. By moving the assertion directly into the `after()` method, we can eliminate the need for the separate `validateNullToStringStyleRegistry()` method. Here's how the refactored code would look:
+
+```java
+package org.apache.commons.lang3;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.apache.commons.lang3.builder.ToStringStyle;
+import org.junit.jupiter.api.AfterEach;
+
+/**
+ * All tests subclass this test.
+ */
+public class AbstractLangTest {
+
+    /**
+     * All tests should leave the {@link ToStringStyle} registry empty.
+     */
+    @AfterEach
+    public void after() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+
+}
+```
+
+In this refactored version, the `after()` method directly contains the assertion, making the code more straightforward and slightly reducing the number of methods in the class. This change aligns well with the inline method refactoring pattern you are employing.

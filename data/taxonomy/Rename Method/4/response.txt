@@ -1,0 +1,109 @@
+Upon reviewing the provided Java code, which deals with spatial coordinate conversions and geometry representations, the method names mostly follow Java naming conventions and are generally descriptive of what each method does. However, some improvements can be made to enhance clarity and consistency across the naming scheme, following the pattern of rename method refactoring:
+
+1. **Method `longAsPoint`** - This method converts a long value to a `Point`. The method name could be more descriptive to indicate the type of conversion being performed. For instance, for the `GEO` enum, it could be renamed to `decodeLongitudeLatitudeAsPoint`, and for the `CARTESIAN` enum, to `decodeCartesianCoordinatesAsPoint`.
+   
+2. **Method `pointAsLong`** - Similar to the above, this method converts a point's coordinates into a long. Renaming it to `encodePointAsLong` could clarify the action being performed.
+
+3. **Method `longAsWkb`** - This method's name can be made more consistent with others by renaming it to `encodeLongAsWkb`.
+
+4. **Method `pointAsWKB`** - For consistency with the above and clarity, it could be renamed to `encodeGeometryAsWKB`.
+
+5. **Method `wkbToWkt` and `wktToWkb`** - These methods are clear but could benefit from consistent capitalization to `wkbToWkt` and `wktToWkb` respectively, ensuring that all acronyms are in uppercase, aligning with common Java naming conventions.
+
+Here's how the refactored code could look after applying these renaming suggestions:
+
+```java
+package org.elasticsearch.xpack.ql.util;
+
+import org.apache.lucene.geo.GeoEncodingUtils;
+import org.apache.lucene.geo.XYEncodingUtils;
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.geometry.Geometry;
+import org.elasticsearch.geometry.Point;
+import org.elasticsearch.geometry.utils.GeometryValidator;
+import org.elasticsearch.geometry.utils.WellKnownBinary;
+import org.elasticsearch.geometry.utils.WellKnownText;
+
+import java.nio.ByteOrder;
+
+import static org.apache.lucene.geo.GeoEncodingUtils.encodeLatitude;
+import static org.apache.lucene.geo.GeoEncodingUtils.encodeLongitude;
+
+public enum SpatialCoordinateTypes {
+    GEO {
+        public Point decodeLongitudeLatitudeAsPoint(long encoded) {
+            return new Point(GeoEncodingUtils.decodeLongitude((int) encoded), GeoEncodingUtils.decodeLatitude((int) (encoded >>> 32)));
+        }
+
+        public long encodePointAsLong(double x, double y) {
+            int latitudeEncoded = encodeLatitude(y);
+            int longitudeEncoded = encodeLongitude(x);
+            return (((long) latitudeEncoded) << 32) | (longitudeEncoded & 0xFFFFFFFFL);
+        }
+    },
+    CARTESIAN {
+
+        private static final int MAX_VAL_ENCODED = XYEncodingUtils.encode((float) XYEncodingUtils.MAX_VAL_INCL);
+        private static final int MIN_VAL_ENCODED = XYEncodingUtils.encode((float) XYEncodingUtils.MIN_VAL_INCL);
+
+        public Point decodeCartesianCoordinatesAsPoint(long encoded) {
+            final int x = checkCoordinate((int) (encoded >>> 32));
+            final int y = checkCoordinate((int) (encoded & 0xFFFFFFFF));
+            return new Point(XYEncodingUtils.decode(x), XYEncodingUtils.decode(y));
+        }
+
+        private int checkCoordinate(int i) {
+            if (i > MAX_VAL_ENCODED || i < MIN_VAL_ENCODED) {
+                throw new IllegalArgumentException("Failed to convert invalid encoded value to cartesian point");
+            }
+            return i;
+        }
+
+        public long encodePointAsLong(double x, double y) {
+            final long xi = XYEncodingUtils.encode((float) x);
+            final long yi = XYEncodingUtils.encode((float) y);
+            return (yi & 0xFFFFFFFFL) | xi << 32;
+        }
+    };
+
+    public abstract Point decodeLongitudeLatitudeAsPoint(long encoded);
+
+    public abstract long encodePointAsLong(double x, double y);
+
+    public long wkbAsLong(BytesRef wkb) {
+        Geometry geometry = WellKnownBinary.fromWKB(GeometryValidator.NOOP, false, wkb.bytes, wkb.offset, wkb.length);
+        if (geometry instanceof Point point) {
+            return encodePointAsLong(point.getX(), point.getY());
+        } else {
+            throw new IllegalArgumentException("Unsupported geometry: " + geometry.type());
+        }
+    }
+
+    public BytesRef encodeLongAsWkb(long encoded) {
+        return encodeGeometryAsWKB(decodeLongitudeLatitudeAsPoint(encoded));
+    }
+
+    public String asWkt(Geometry geometry) {
+        return WellKnownText.toWKT(geometry);
+    }
+
+    public BytesRef encodeGeometryAsWKB(Geometry geometry) {
+        return new BytesRef(WellKnownBinary.toWKB(geometry, ByteOrder.LITTLE_ENDIAN));
+    }
+
+    public BytesRef wktToWkb(String wkt) {
+        try {
+            Geometry geometry = WellKnownText.fromWKT(GeometryValidator.NOOP, false, wkt);
+            return new BytesRef(WellKnownBinary.toWKB(geometry, ByteOrder.LITTLE_ENDIAN));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to parse WKT: " + e.getMessage(), e);
+        }
+    }
+
+    public String wkbToWkt(BytesRef wkb) {
+        return WellKnownText.fromWKB(wkb.bytes, wkb.offset, wkb.length);
+    }
+}
+```
+
+This refactoring enhances the clarity and consistency of method names, making the codebase easier to understand and maintain.

@@ -1,0 +1,22 @@
+In the provided code snippet, attribute names should ideally be consistent and descriptive enough to clearly indicate their purpose and type. Here's a review of the attributes:
+
+1. `PemSslStoreDetails details`: This name appears to be consistent with its type (`PemSslStoreDetails`). It's descriptive, indicating that it holds details relevant to `PemSslStore`.
+
+2. `Supplier<List<X509Certificate>> certificates`: The attribute name `certificates` sufficiently describes what it supplies—`List<X509Certificate>`. However, the name might be enhanced to reflect that it is a supplier, not a direct list of certificates.
+
+3. `Supplier<PrivateKey> privateKeySupplier`: This attribute is named appropriately, clearly indicating that it supplies a `PrivateKey`.
+
+Considering the refactoring pattern of renaming attributes to be consistent with their types, here is a suggested refactoring to make the attribute names more explicit about their nature as suppliers:
+
+```java
+final class LoadedPemSslStore implements PemSslStore {
+
+    private final PemSslStoreDetails details;
+
+    private final Supplier<List<X509Certificate>> certificateSupplier;
+
+    private final Supplier<PrivateKey> privateKeySupplier;
+}
+```
+
+In this refactoring, I've renamed `certificates` to `certificateSupplier` to make it clear that it's not a direct list of certificates but a supplier providing them. This enhances readability and consistency, aligning with the pattern discussed.

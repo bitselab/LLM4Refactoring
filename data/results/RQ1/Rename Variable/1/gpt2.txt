@@ -1,0 +1,64 @@
+Reviewing the code for potential variable renaming to improve readability, I identified a few variables that could benefit from more descriptive names. These changes will help clarify the purpose of each variable, making the code easier to understand and maintain. Here's the refactored code with the suggested changes:
+
+```java
+package com.puppycrawl.tools.checkstyle.checks.javadoc;
+
+// ... [imports remain unchanged]
+
+@StatelessCheck
+public class JavadocParagraphCheck extends AbstractJavadocCheck {
+
+    // ... [constant declarations and other class members remain unchanged]
+
+    @Override
+    public void visitJavadocToken(DetailNode javadocNode) {
+        if (javadocNode.getType() == JavadocTokenTypes.NEWLINE && isEmptyLine(javadocNode)) {
+            checkEmptyLine(javadocNode);
+        }
+        else if (javadocNode.getType() == JavadocTokenTypes.HTML_ELEMENT
+                && JavadocUtil.getFirstChild(javadocNode).getType() == JavadocTokenTypes.P_TAG_START) {
+            checkParagraphTag(javadocNode);
+        }
+    }
+
+    private void checkEmptyLine(DetailNode newlineNode) {
+        final DetailNode nextNonWhitespaceNode = getNearestNode(newlineNode);
+        if (nextNonWhitespaceNode.getType() == JavadocTokenTypes.TEXT
+                && !CommonUtil.isBlank(nextNonWhitespaceNode.getText())) {
+            log(newlineNode.getLineNumber(), MSG_TAG_AFTER);
+        }
+    }
+
+    private void checkParagraphTag(DetailNode paragraphTagNode) {
+        final DetailNode precedingNewlineNode = getNearestEmptyLine(paragraphTagNode);
+        if (isFirstParagraph(paragraphTagNode)) {
+            log(paragraphTagNode.getLineNumber(), MSG_REDUNDANT_PARAGRAPH);
+        }
+        else if (precedingNewlineNode == null || paragraphTagNode.getLineNumber() - precedingNewlineNode.getLineNumber() != 1) {
+            log(paragraphTagNode.getLineNumber(), MSG_LINE_BEFORE);
+        }
+        if (allowNewlineParagraph && isImmediatelyFollowedByText(paragraphTagNode)) {
+            log(paragraphTagNode.getLineNumber(), MSG_MISPLACED_TAG);
+        }
+    }
+
+    private static DetailNode getNearestNode(DetailNode currentNode) {
+        DetailNode followingNode = currentNode;
+        while (followingNode.getType() == JavadocTokenTypes.LEADING_ASTERISK
+                || followingNode.getType() == JavadocTokenTypes.NEWLINE) {
+            followingNode = JavadocUtil.getNextSibling(followingNode);
+        }
+        return followingNode;
+    }
+
+    // ... [other methods remain unchanged]
+}
+```
+
+Changes made:
+1. Renamed `ast` to `javadocNode` in the `visitJavadocToken` method for clarity.
+2. In `checkEmptyLine`, renamed `newline` to `newlineNode` and `nearestToken` to `nextNonWhitespaceNode` for better context.
+3. In `checkParagraphTag`, renamed `tag` to `paragraphTagNode` and `newLine` to `precedingNewlineNode` for more descriptive naming.
+4. In `getNearestNode`, renamed `node` to `currentNode` and `tag` to `followingNode` for clarity.
+
+These changes aim to make the code more readable by using names that better describe the role and context of each variable.

@@ -1,0 +1,62 @@
+## Refactoring Opportunities in GenericMaster.java
+
+There are refactoring opportunities in the provided code to improve code reuse and readability.
+
+**1. Extract Generic Type Retrieval Logic:**
+
+Both `getGenericType(Field field)` and `getGenericType(Parameter parameter)` methods follow identical logic to extract the first generic type argument. This logic can be encapsulated in a separate helper method to reduce redundancy.
+
+**2. Use a More Descriptive Method Name:**
+
+The method `getGenericType` doesn't reveal its intent of returning the first generic type argument. A more descriptive name like `getFirstGenericTypeArgument` would improve clarity.
+
+Here's the refactored code:
+
+```java
+public class GenericMaster {
+
+  /**
+   * Retrieves the first generic type argument of the provided Type object.
+   * If the type is not parameterized, it returns Object.class.
+   *
+   * @param type the type to inspect
+   * @return the first generic type argument or Object.class if not parameterized
+   */
+  private static Class<?> getFirstGenericTypeArgument(Type type) {
+    if (type instanceof ParameterizedType) {
+      Type actual = ((ParameterizedType) type).getActualTypeArguments()[0];
+      if (actual instanceof Class) {
+        return (Class<?>) actual;
+      } else if (actual instanceof ParameterizedType) {
+        // in case of nested generics we don't go deep
+        return (Class<?>) ((ParameterizedType) actual).getRawType();
+      }
+    }
+    return Object.class;
+  }
+
+  /**
+   * Finds the first generic type argument of the field.
+   * If the field is not generic it returns Object.class.
+   *
+   * @param field the field to inspect
+   * @return the first generic type argument or Object.class if not parameterized
+   */
+  public Class<?> getGenericType(Field field) {
+    return getFirstGenericTypeArgument(field.getGenericType());
+  }
+
+  /**
+   * Resolves the first generic type argument of the parameter.
+   * If the field is not generic it returns Object.class.
+   *
+   * @param parameter the parameter to inspect
+   * @return the first generic type argument or Object.class if not parameterized
+   */
+  public Class<?> getGenericType(Parameter parameter) {
+    return getFirstGenericTypeArgument(parameter.getType());
+  }
+}
+```
+
+The refactored code improves code reusability and readability by separating the generic type retrieval logic and using more descriptive method names.  

@@ -1,0 +1,94 @@
+The provided code demonstrates a well-structured and organized approach for handling uploading a single file to a configset. There are minimal refactoring opportunities due to the clear separation of concerns within the `updateConfigSetFile` method. However, there are a few minor suggestions for improvement:
+
+1. **Reduce Code Duplication for Error Messages:**  
+The code throws two `SolrExceptions` with nearly identical messages for invalid file paths. Consider creating a helper method to encapsulate this logic and generate a more generic error message about invalid file paths.
+
+2. **Early Return for Invalid File Path:**  
+The code performs multiple checks after determining an invalid file path is provided. These checks can be avoided by returning early after validating the path.
+
+Here's the refactored code with the suggested improvements:
+
+```java
+package org.apache.solr.handler.configsets;
+
+import static org.apache.solr.client.solrj.SolrRequest.METHOD.PUT;
+import static org.apache.solr.security.PermissionNameProvider.Name.CONFIG_EDIT_PERM;
+
+import java.io.InputStream;
+import org.apache.solr.api.EndPoint;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.cloud.ZkMaintenanceUtils;
+import org.apache.solr.common.params.ConfigSetParams;
+import org.apache.solr.core.CoreContainer;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.util.FileTypeMagicUtil;
+
+/**
+ * V2 API for adding or updating a single file within a configset.
+ *
+ * <p>This API (PUT /v2/cluster/configs/configsetName/someFilePath) is analogous to the v1
+ * /admin/configs?action=UPLOAD&amp;filePath=someFilePath command.
+ */
+public class UploadConfigSetFileAPI extends ConfigSetAPIBase {
+
+  public static final String CONFIGSET_NAME_PLACEHOLDER =
+      UploadConfigSetAPI.CONFIGSET_NAME_PLACEHOLDER;
+  public static final String FILEPATH_PLACEHOLDER = "*";
+
+  private static final String API_PATH =
+      "/cluster/configs/{" + CONFIGSET_NAME_PLACEHOLDER + "}/" + FILEPATH_PLACEHOLDER;
+
+  public UploadConfigSetFileAPI(CoreContainer coreContainer) {
+    super(coreContainer);
+  }
+
+  @EndPoint(method = PUT, path = API_PATH, permission = CONFIG_EDIT_PERM)
+  public void updateConfigSetFile(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
+    ensureConfigSetUploadEnabled();
+
+    final String configSetName = req.getPathTemplateValues().get("name");
+    boolean overwritesExisting = configSetService.checkConfigExists(configSetName);
+    boolean requestIsTrusted =
+        isTrusted(req.getUserPrincipal(), coreContainer.getAuthenticationPlugin());
+
+    // Get upload parameters
+    String singleFilePath = req.getPathTemplateValues().getOrDefault(FILEPATH_PLACEHOLDER, "");
+
+    validateFilePath(singleFilePath);
+
+    boolean allowOverwrite = req.getParams().getBool(ConfigSetParams.OVERWRITE, true);
+    boolean cleanup = req.getParams().getBool(ConfigSetParams.CLEANUP, false);
+    final InputStream inputStream = ensureNonEmptyInputStream(req);
+
+    String fixedSingleFilePath = singleFilePath.startsWith("/") ? singleFilePath.substring(1) : singleFilePath;
+
+    if (ZkMaintenanceUtils.isFileForbiddenInConfigSets(fixedSingleFilePath)
+        || FileTypeMagicUtil.isFileForbiddenInConfigset(inputStream.readAllBytes())) {
+      throw new SolrException(
+          SolrException.ErrorCode.BAD_REQUEST,
+          "The file type provided for upload, '" + singleFilePath + "', is forbidden for use in configSets.");
+    } else if (cleanup) {
+      throw new SolrException(
+          SolrException.ErrorCode.BAD_REQUEST,
+          "ConfigSet uploads do not allow cleanup=true when file path is used.");
+    } else {
+      // Create a node for the configuration in config
+      // For creating the baseNode, the cleanup parameter is only allowed to be true when
+      // singleFilePath is not passed.
+      createBaseNode(configSetService, overwritesExisting, requestIsTrusted, configSetName);
+      configSetService.uploadFileToConfig(configSetName, fixedSingleFilePath, inputStream.readAllBytes(), allowOverwrite);
+    }
+  }
+
+  private void validateFilePath(String filePath) {
+    if (filePath.isEmpty()) {
+      throw new SolrException(
+          SolrException.ErrorCode.BAD_REQUEST,
+        "The file path provided for upload is empty.");
+  } else if (filePath.charAt(0) == '/') {
+    throw new SolrException(
+        SolrException.ErrorCode.BAD_REQUEST,
+        "The file path provided for upload must not start with a '/': '" + filePath + "'.");
+  }
+}

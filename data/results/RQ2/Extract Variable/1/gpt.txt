@@ -1,0 +1,49 @@
+To apply an extract variable refactoring to the `processFiles` method in the provided code, we can identify the repeated expression and extract it into a separate variable. The expression `file.getPath()` is repeated multiple times in both the `catch` blocks. We can extract this into a variable at the beginning of the try block and then use this variable throughout the method.
+
+Here's the refactored `processFiles` method:
+
+```java
+private void processFiles(List<File> files) throws CheckstyleException {
+    for (final File file : files) {
+        String fileName = null;
+        try {
+            fileName = file.getAbsolutePath();
+            final long timestamp = file.lastModified();
+            final String filePath = file.getPath(); // Extracted variable for file path
+
+            if (cacheFile != null && cacheFile.isInCache(fileName, timestamp)
+                    || !acceptFileStarted(fileName)) {
+                continue;
+            }
+            if (cacheFile != null) {
+                cacheFile.put(fileName, timestamp);
+            }
+            fireFileStarted(fileName);
+            final SortedSet<Violation> fileMessages = processFile(file);
+            fireErrors(fileName, fileMessages);
+            fireFileFinished(fileName);
+        }
+        // -@cs[IllegalCatch] There is no other way to deliver filename that was under
+        // processing. See https://github.com/checkstyle/checkstyle/issues/2285
+        catch (Exception ex) {
+            if (fileName != null && cacheFile != null) {
+                cacheFile.remove(fileName);
+            }
+
+            // Using the extracted variable here
+            throw new CheckstyleException("Exception was thrown while processing "
+                    + filePath, ex);
+        }
+        catch (Error error) {
+            if (fileName != null && cacheFile != null) {
+                cacheFile.remove(fileName);
+            }
+
+            // Using the extracted variable here
+            throw new Error("Error was thrown while processing " + filePath, error);
+        }
+    }
+}
+```
+
+In this refactoring, I introduced a new variable `filePath` at the start of the try block, which holds the value of `file.getPath()`. This variable is then used in the catch blocks, replacing the direct calls to `file.getPath()`. This change makes the code cleaner and reduces redundancy.

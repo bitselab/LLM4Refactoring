@@ -1,0 +1,111 @@
+To improve the readability and understanding of the code, renaming the attribute `references` to a more descriptive name is a good approach. The name should clearly reflect the purpose or nature of the data it holds. Considering the context of the code, it seems that `references` holds pointers to `WorkspaceEntity` objects. A more descriptive name could be `workspaceEntityPointers`.
+
+Here is the refactored portion of the code with the renamed attribute:
+
+```java
+// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+package com.intellij.util.indexing;
+
+// ... [Imports remain unchanged]
+
+final class EntityIndexingServiceImpl implements EntityIndexingServiceEx {
+    // ... [Other parts of the class remain unchanged]
+
+    private static final class WorkspaceEventRescanningInfo implements RootsChangeRescanningInfo {
+        @NotNull
+        private final List<EntityChange<?>> events;
+
+        private WorkspaceEventRescanningInfo(@NotNull List<EntityChange<?>> events) {
+            this.events = events;
+        }
+    }
+
+    private static final class WorkspaceEntitiesRootsChangedRescanningInfo implements RootsChangeRescanningInfo {
+        @NotNull
+        private final List<EntityPointer<WorkspaceEntity>> workspaceEntityPointers;
+
+        private WorkspaceEntitiesRootsChangedRescanningInfo(@NotNull List<EntityPointer<WorkspaceEntity>> workspaceEntityPointers) {
+            this.workspaceEntityPointers = workspaceEntityPointers;
+        }
+    }
+
+    private static void doIndexChanges(@NotNull Project project, @NotNull List<? extends RootsChangeRescanningInfo> changes) {
+        boolean indexDependencies = false;
+        for (RootsChangeRescanningInfo change : changes) {
+            if (change == RootsChangeRescanningInfo.TOTAL_RESCAN) {
+                runFullRescan(project, "Reindex requested by project root model changes");
+                return;
+            }
+            else if (change == RootsChangeRescanningInfo.RESCAN_DEPENDENCIES_IF_NEEDED) {
+                if (!indexDependencies && !DependenciesIndexedStatusService.shouldBeUsed()) {
+                    runFullRescan(project, "Reindex of changed dependencies requested, but not enabled");
+                    return;
+                }
+                else {
+                    indexDependencies = true;
+                }
+            }
+        }
+        List<IndexableIteratorBuilder> builders = new SmartList<>();
+
+        StatusMark dependenciesStatusMark = null;
+        if (indexDependencies) {
+            Pair<Collection<? extends IndexableIteratorBuilder>, StatusMark> dependencyBuildersPair =
+                    DependenciesIndexedStatusService.getInstance(project).getDeltaWithLastIndexedStatus();
+            if (dependencyBuildersPair == null) {
+                runFullRescan(project, "Reindex of changed dependencies requested, but status is not initialized");
+                return;
+            }
+            builders.addAll(dependencyBuildersPair.getFirst());
+            dependenciesStatusMark = dependencyBuildersPair.getSecond();
+        }
+
+        EntityStorage entityStorage = WorkspaceModel.getInstance(project).getCurrentSnapshot();
+        for (RootsChangeRescanningInfo change : changes) {
+            if (change == RootsChangeRescanningInfo.NO_RESCAN_NEEDED || change == RootsChangeRescanningInfo.RESCAN_DEPENDENCIES_IF_NEEDED) {
+                continue;
+            }
+            if (change instanceof WorkspaceEventRescanningInfo) {
+                builders.addAll(getBuildersOnWorkspaceChange(project, ((WorkspaceEventRescanningInfo)change).events, entityStorage));
+            }
+            else if (change instanceof WorkspaceEntitiesRootsChangedRescanningInfo) {
+                List<EntityPointer<WorkspaceEntity>> workspaceEntityPointers = ((WorkspaceEntitiesRootsChangedRescanningInfo)change).workspaceEntityPointers;
+                List<@NotNull WorkspaceEntity> entities = ContainerUtil.mapNotNull(workspaceEntityPointers, (ref) -> ref.resolve(entityStorage));
+                builders.addAll(getBuildersOnWorkspaceEntitiesRootsChange(project, entities, entityStorage));
+            }
+            else if (change instanceof BuiltRescanningInfo) {
+                builders.addAll(getBuildersOnBuildableChangeInfo((BuiltRescanningInfo)change, project, entityStorage));
+            }
+            else {
+                LOG.warn("Unexpected change " + change.getClass() + " " + change + ", full reindex requested");
+                runFullRescan(project, "Reindex on unexpected change in EntityIndexingServiceImpl");
+                return;
+            }
+        }
+
+        if (!builders.isEmpty()) {
+            List<IndexableFilesIterator> mergedIterators =
+                    IndexableIteratorBuilders.INSTANCE.instantiateBuilders(builders, project, entityStorage);
+
+            if (!mergedIterators.isEmpty()) {
+                List<String> debugNames = ContainerUtil.map(mergedIterators, IndexableFilesIterator::getDebugName);
+                LOG.debug("Accumulated iterators: " + debugNames);
+                int maxNamesToLog = 10;
+                String reasonMessage = "changes in: " + debugNames
+                        .stream()
+                        .limit(maxNamesToLog)
+                        .map(StringUtil::wrapWithDoubleQuote).collect(Collectors.joining(", "));
+                if (debugNames.size() > maxNamesToLog) {
+                    reasonMessage += " and " + (debugNames.size() - maxNamesToLog) + " iterators more";
+                }
+                logRootChanges(project, false);
+                new UnindexedFilesScanner(project, mergedIterators, dependenciesStatusMark, reasonMessage).queue();
+            }
+        }
+    }
+
+    // ... [Rest of the EntityIndexingServiceImpl class remains unchanged]
+}
+```
+
+This renaming makes it clearer that the attribute is a list of pointers specifically for `WorkspaceEntity` objects, enhancing the readability and maintainability of the code.

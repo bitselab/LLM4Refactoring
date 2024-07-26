@@ -1,0 +1,96 @@
+In the provided code snippet, the attribute `httpClient` is a bit generic, especially within the context of a WebSocket client class. A more descriptive name can improve the readability and maintainability of the code. A suggested renaming for this attribute is `webSocketHttpClient`. This name clearly communicates that the `HttpClient` instance is specifically used for WebSocket-related operations, making the code more self-explanatory.
+
+Here's the refactored code with the renamed attribute:
+
+```java
+package org.eclipse.jetty.websocket.core.client;
+
+// ... [imports remain the same]
+
+public class WebSocketCoreClient extends ContainerLifeCycle {
+    public static final String WEBSOCKET_CORECLIENT_ATTRIBUTE = WebSocketCoreClient.class.getName();
+
+    private static final Logger LOG = LoggerFactory.getLogger(WebSocketCoreClient.class);
+    private final HttpClient webSocketHttpClient;
+    private final WebSocketComponents components;
+    private ClassLoader classLoader;
+
+    public WebSocketCoreClient() {
+        this(null, new WebSocketComponents());
+    }
+
+    public WebSocketCoreClient(WebSocketComponents webSocketComponents) {
+        this(null, webSocketComponents);
+    }
+
+    public WebSocketCoreClient(HttpClient httpClient, WebSocketComponents webSocketComponents) {
+        this.webSocketHttpClient = Objects.requireNonNullElse(httpClient, HttpClientProvider.get());
+        addBean(this.webSocketHttpClient);
+        if (webSocketComponents == null) {
+            webSocketComponents = this.webSocketHttpClient.isStarted() ?
+                new WebSocketComponents(null, null, this.webSocketHttpClient.getByteBufferPool(), null, null, this.webSocketHttpClient.getExecutor()) :
+                new WebSocketComponents();
+        }
+        components = webSocketComponents;
+        addBean(components);
+        if (!this.webSocketHttpClient.isStarted()) {
+            if (this.webSocketHttpClient.getByteBufferPool() == null)
+                this.webSocketHttpClient.setByteBufferPool(components.getBufferPool());
+            if (this.webSocketHttpClient.getExecutor() == null)
+                this.webSocketHttpClient.setExecutor(components.getExecutor());
+        }
+        classLoader = Thread.currentThread().getContextClassLoader();
+    }
+
+    public ClassLoader getClassLoader() {
+        return classLoader;
+    }
+
+    public void setClassLoader(ClassLoader classLoader) {
+        this.classLoader = Objects.requireNonNull(classLoader);
+    }
+
+    public CompletableFuture<CoreSession> connect(FrameHandler frameHandler, URI wsUri) throws IOException {
+        CoreClientUpgradeRequest request = CoreClientUpgradeRequest.from(this, wsUri, frameHandler);
+        return connect(request);
+    }
+
+    public CompletableFuture<CoreSession> connect(CoreClientUpgradeRequest request) throws IOException {
+        if (!isStarted())
+            throw new IllegalStateException(WebSocketCoreClient.class.getSimpleName() + "@" + this.hashCode() + " is not started");
+
+        for (ExtensionConfig reqExt : request.getExtensions()) {
+            if (!components.getExtensionRegistry().isAvailable(reqExt.getName())) {
+                throw new IllegalArgumentException("Requested extension [" + reqExt.getName() + "] is not installed");
+            }
+        }
+
+        for (Request.Listener l : getBeans(Request.Listener.class)) {
+            request.listener(l);
+        }
+
+        if (LOG.isDebugEnabled())
+            LOG.debug("Connecting to WebSocket at {}", request.getURI());
+
+        return request.sendAsync();
+    }
+
+    public WebSocketExtensionRegistry getExtensionRegistry() {
+        return components.getExtensionRegistry();
+    }
+
+    public HttpClient getHttpClient() {
+        return webSocketHttpClient;
+    }
+
+    public DecoratedObjectFactory getObjectFactory() {
+        return components.getObjectFactory();
+    }
+
+    public WebSocketComponents getWebSocketComponents() {
+        return components;
+    }
+}
+```
+
+This simple renaming improves the clarity of the code by making the purpose of the `HttpClient` instance more explicit within the context of the WebSocket client.

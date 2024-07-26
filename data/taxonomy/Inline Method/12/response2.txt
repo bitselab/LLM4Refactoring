@@ -1,0 +1,54 @@
+The given code snippet for the `DefaultArgumentConverter` class involves a private method `convertToTargetType` that appears to be a suitable candidate for inline refactoring. This method is called only once in the code, specifically in the `convert` method. Following the pattern you've described, where private methods called only once may be inlined to improve readability and reduce the unnecessary complexity of the code, we can perform an inline refactoring here.
+
+The `convertToTargetType` method's logic will be integrated directly into the `convert` method. Here is how the refactored code will look:
+
+```java
+@API(status = INTERNAL, since = "5.0")
+public class DefaultArgumentConverter implements ArgumentConverter {
+
+    public final Object convert(Object source, Class<?> targetType, ParameterContext context) {
+        if (source == null) {
+            if (targetType.isPrimitive()) {
+                throw new ArgumentConversionException(
+                        "Cannot convert null to primitive value of type " + targetType.getTypeName());
+            }
+            return null;
+        }
+
+        if (ReflectionUtils.isAssignableTo(source, targetType)) {
+            return source;
+        }
+
+        // Inlining convertToTargetType method here
+        if (source instanceof String) {
+            Class<?> targetTypeToUse = toWrapperType(targetType);
+            Optional<StringToObjectConverter> converter = stringToObjectConverters.stream().filter(
+                    candidate -> candidate.canConvert(targetTypeToUse)).findFirst();
+            if (converter.isPresent()) {
+                ClassLoader classLoader = context.getDeclaringExecutable().getDeclaringClass().getClassLoader();
+                if (classLoader == null) {
+                    classLoader = ClassLoaderUtils.getDefaultClassLoader();
+                }
+                try {
+                    return converter.get().convert((String) source, targetTypeToUse, classLoader);
+                }
+                catch (Exception ex) {
+                    if (ex instanceof ArgumentConversionException) {
+                        // simply rethrow it
+                        throw (ArgumentConversionException) ex;
+                    }
+                    // else
+                    throw new ArgumentConversionException(
+                            "Failed to convert String \"" + source + "\" to type " + targetType.getTypeName(), ex);
+                }
+            }
+        }
+        throw new ArgumentConversionException(
+                String.format("No built-in converter for source type %s and target type %s",
+                        source.getClass().getTypeName(), targetType.getTypeName()));
+    }
+    
+}
+```
+
+This refactoring directly integrates the logic of `convertToTargetType` into `convert`, reducing the number of methods in the class and potentially improving the readability and maintainability of the code.

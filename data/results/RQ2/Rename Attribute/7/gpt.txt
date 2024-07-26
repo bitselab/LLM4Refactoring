@@ -1,0 +1,106 @@
+To improve the readability and clarity of the code snippet provided, we can apply a rename attribute refactoring to the attribute `idSelectString`. The name `idSelectString` is somewhat vague and does not fully convey the purpose of this attribute. A more descriptive name would be beneficial for understanding the code's intent.
+
+A suitable new name could be `uniqueKeySelectSQL`, which more accurately describes its purpose: it's a SQL string used for selecting based on unique keys.
+
+Here is the refactored code with this change:
+
+```java
+package org.hibernate.id.insert;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.hibernate.dialect.Dialect;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.EventType;
+import org.hibernate.generator.values.GeneratedValueBasicResultBuilder;
+import org.hibernate.id.PostInsertIdentityPersister;
+import org.hibernate.jdbc.Expectation;
+import org.hibernate.metamodel.mapping.EntityRowIdMapping;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.sql.model.ast.builder.TableInsertBuilderStandard;
+import org.hibernate.sql.model.ast.builder.TableMutationBuilder;
+import org.hibernate.type.Type;
+
+import static org.hibernate.generator.values.internal.GeneratedValuesHelper.getActualGeneratedModelPart;
+
+/**
+ * Uses a unique key of the inserted entity to locate the newly inserted row.
+ *
+ * @author Gavin King
+ */
+public class UniqueKeySelectingDelegate extends AbstractSelectingDelegate {
+    private final String[] uniqueKeyPropertyNames;
+    private final Type[] uniqueKeyTypes;
+
+    private final String uniqueKeySelectSQL;
+
+    /**
+     * @deprecated Use {@link #UniqueKeySelectingDelegate(EntityPersister, String[], EventType)} instead.
+     */
+    @Deprecated(forRemoval = true, since = "6.5")
+    public UniqueKeySelectingDelegate(PostInsertIdentityPersister persister, Dialect dialect, String[] uniqueKeyPropertyNames) {
+        this(persister, uniqueKeyPropertyNames, EventType.INSERT);
+    }
+
+    public UniqueKeySelectingDelegate(
+            EntityPersister persister,
+            String[] uniqueKeyPropertyNames,
+            EventType timing) {
+        super(persister, timing, true, true);
+
+        this.uniqueKeyPropertyNames = uniqueKeyPropertyNames;
+
+        uniqueKeyTypes = new Type[uniqueKeyPropertyNames.length];
+        for (int i = 0; i < uniqueKeyPropertyNames.length; i++) {
+            uniqueKeyTypes[i] = persister.getPropertyType(uniqueKeyPropertyNames[i]);
+        }
+
+        final EntityRowIdMapping rowIdMapping = persister.getRowIdMapping();
+        if (!persister.isIdentifierAssignedByInsert()
+                || persister.getInsertGeneratedProperties().size() > 1
+                || rowIdMapping != null) {
+            final List<GeneratedValueBasicResultBuilder> resultBuilders = jdbcValuesMappingProducer.getResultBuilders();
+            final List<String> columnNames = new ArrayList<>(resultBuilders.size());
+            for (GeneratedValueBasicResultBuilder resultBuilder : resultBuilders) {
+                columnNames.add(getActualGeneratedModelPart(resultBuilder.getModelPart()).getSelectionExpression());
+            }
+            uniqueKeySelectSQL = persister.getSelectByUniqueKeyString(
+                    uniqueKeyPropertyNames,
+                    columnNames.toArray(new String[0])
+            );
+        } else {
+            uniqueKeySelectSQL = persister.getSelectByUniqueKeyString(uniqueKeyPropertyNames);
+        }
+    }
+
+    protected String getSelectSQL() {
+        return uniqueKeySelectSQL;
+    }
+
+    @Override
+    public TableMutationBuilder<?> createTableMutationBuilder(
+            Expectation expectation,
+            SessionFactoryImplementor factory) {
+        return new TableInsertBuilderStandard(persister, persister.getIdentifierTableMapping(), factory);
+    }
+
+    protected void bindParameters(Object entity, PreparedStatement ps, SharedSessionContractImplementor session)
+            throws SQLException {
+        int parameterIndex = 1;
+        for (int i = 0; i < uniqueKeyPropertyNames.length; i++) {
+            uniqueKeyTypes[i].nullSafeSet(ps, persister.getPropertyValue(entity, uniqueKeyPropertyNames[i]), parameterIndex, session);
+            parameterIndex += uniqueKeyTypes[i].getColumnSpan(session.getFactory());
+        }
+    }
+}
+```
+
+### Summary of Refactoring:
+- Renamed `idSelectString` to `uniqueKeySelectSQL` to better describe its purpose as a SQL string for selecting based on unique keys.
+- Additionally, reviewed other parts of the code to ensure consistency and clarity.
+
+This change improves the clarity of the code by making the purpose of the `uniqueKeySelectSQL` variable more explicit, thereby enhancing overall readability and maintainability.

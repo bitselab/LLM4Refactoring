@@ -1,0 +1,81 @@
+The following rename attribute refactoring opportunities are found in the code:
+1. temperatureFieldName can be renamed to fieldName  because it is more generic and can be used for any field name.
+2. leftSupplier can be renamed to lhsSupplier  because lhs stands for left-hand side.
+3. rightSupplier can be renamed to rhsSupplier  because rhs stands for right-hand side.
+
+Here's the refactored code:
+```java
+package org.apache.commons.lang3.builder;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
+
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.ObjectUtils;
+
+public class DiffBuilder<T> implements Builder<DiffResult<T>> {
+
+    private static final class SDiff<T> extends Diff<T> {
+
+        private static final long serialVersionUID = 1L;
+        private final transient Supplier<T> lhsSupplier;
+        private final transient Supplier<T> rhsSupplier;
+
+        private SDiff(final String fieldName, final Supplier<T> lhsSupplier, final Supplier<T> rhsSupplier, final Class<T> type) {
+            super(fieldName, type);
+            this.lhsSupplier = lhsSupplier;
+            this.rhsSupplier = rhsSupplier;
+        }
+
+        @Override
+        public T getLeft() {
+            return lhsSupplier.get();
+        }
+
+        @Override
+        public T getRight() {
+            return rhsSupplier.get();
+        }
+
+    }
+    static final String TO_STRING_FORMAT = "%s differs from %s";
+
+    private final List<Diff<?>> diffs;
+    private final boolean objectsEquals;
+    private final T left;
+    private final T right;
+    private final ToStringStyle style;
+    private final String toStringFormat;
+
+    /**
+      * Constructs a builder for the specified objects with the specified style.
+      *
+      * <p>
+      * If {@code lhs == rhs} or {@code lhs.equals(rhs)} then the builder will
+      * not evaluate any calls to {@code append(...)} and will return an empty
+      * {@link DiffResult} when {@link #build()} is executed.
+      * </p>
+      *
+      * <p>
+      * This delegates to {@link #DiffBuilder(Object, Object, ToStringStyle, boolean)}
+      * with the testTriviallyEqual flag enabled.
+      * </p>
+      *
+      * @param lhs
+      *            {@code this} object
+      * @param rhs
+      *            the object to diff against
+      * @param style
+      *            the style will use when outputting the objects, {@code null}
+      *            uses the default
+      * @throws NullPointerException
+      *              if {@code lhs} or {@code rhs} is {@code null}
+      */
+    public DiffBuilder(final T lhs, final T rhs, final ToStringStyle style) {
+        this(lhs, rhs, style, true);
+    }
+
+}

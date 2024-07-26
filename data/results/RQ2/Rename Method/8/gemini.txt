@@ -1,0 +1,43 @@
+Absolutely! Here's the refactored code with a more descriptive method name:
+
+```java
+private static boolean hasPotentiallyOwningAssociation(Class<?> entityJavaType, SessionFactoryImplementor sessionFactory,
+                                                      ManagedType<?> managedType) {
+  for (Attribute<?, ?> attribute : managedType.getAttributes()) {
+    if (attribute.isAssociation()) {
+      Class<?> type;
+      if (attribute.isCollection()) {
+        type = ((PluralAttribute<?, ?, ?>) attribute).getElementType().getJavaType();
+      } else {
+        type = attribute.getJavaType();
+      }
+      if (entityJavaType.isAssignableFrom(type)) {
+        return true;
+      }
+    }
+    if (Attribute.PersistentAttributeType.EMBEDDED.equals(attribute.getPersistentAttributeType())) {
+      EmbeddableType<?> embeddable = sessionFactory.getJpaMetamodel().embeddable(attribute.getJavaType());
+      if (hasPotentiallyOwningAssociation(entityJavaType, sessionFactory, embeddable)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+```
+
+**Explanation of the refactoring:**
+
+- **Original method name:** `hasPotentiallyJoinTable`
+- **Refactored method name:** `hasPotentiallyOwningAssociation`
+
+**Improvements:**
+
+- **Clarity:** The new name, `hasPotentiallyOwningAssociation`, clearly describes the purpose of the method. It checks if the entity has any associations (one-to-one, one-to-many, or many-to-one) that could potentially have a join table involved. 
+- **Accuracy:** The original name, `hasPotentiallyJoinTable`, was misleading. While the method checks for associations that might have join tables, it doesn't  directly check for the existence of join tables themselves.
+- **Readability:** The new name is longer but improves readability by using more descriptive terms.
+
+**Additional notes:**
+
+- This refactoring provides a more accurate understanding of what the method does. 
+- The original name might have been focusing on join tables specifically, but the actual logic checks for owning associations that could potentially have join tables. 

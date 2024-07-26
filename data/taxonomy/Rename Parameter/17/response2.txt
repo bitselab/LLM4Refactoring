@@ -1,0 +1,28 @@
+In the provided code snippet:
+```java
+static int coverage(Object o) {
+    return switch (o) {
+        case String s  -> s.length();
+        case Integer i -> i;
+        default -> 0;
+    };
+}
+```
+The parameter `o` is used to represent an object that can be of any type. The method name `coverage` and the actions within the method (getting the length of a string, returning an integer directly, or returning zero) suggest that the function calculates some form of coverage based on the type of the object.
+
+However, the parameter name `o` is very generic and does not clearly indicate its role within the method. A more descriptive name could improve code readability and maintainability by making it clear what kind of objects are expected or what aspect of these objects the method is designed to handle.
+
+### Refactoring Proposal:
+Rename the parameter `o` to `coverageObject` to more clearly reflect its purpose as the target for the coverage calculation. This name suggests that the parameter is the object on which the coverage determination is being made, and aligns better with the function's behavior.
+
+### Refactored Code:
+```java
+static int coverage(Object coverageObject) {
+    return switch (coverageObject) {
+        case String s  -> s.length();
+        case Integer i -> i;
+        default -> 0;
+    };
+}
+```
+This refactoring makes the parameter name more intuitive and self-explanatory, which can help future maintainers of the code understand the function's intent more quickly.

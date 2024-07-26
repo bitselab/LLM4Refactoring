@@ -1,0 +1,33 @@
+ **Here's the refactored code with the `valueOf` method inlined:**
+
+```java
+package org.junit.jupiter.params.converter;
+
+class StringToEnumConverter implements StringToObjectConverter {
+
+    @Override
+    public boolean canConvert(Class<?> targetType) {
+        return targetType.isEnum();
+    }
+
+    @Override
+    public Object convert(String source, Class<?> targetType) throws Exception {
+        // Inlined content of valueOf method
+        return Enum.valueOf((Class<Enum>) targetType, source);
+    }
+}
+```
+
+ **Explanation of the changes:**
+
+1. The `valueOf` method has been removed entirely.
+2. The call to `valueOf` within the `convert` method has been replaced with the inline expression `Enum.valueOf((Class<Enum>) targetType, source)`. This directly invokes the static `valueOf` method from the `Enum` class, eliminating the need for the helper method.
+3. The cast `(Class<Enum>) targetType` has been added to ensure type safety since the `valueOf` method expects a `Class<Enum>` argument.
+
+ **Benefits of this refactoring:**
+
+- **Improved readability:** The code is more concise and easier to read without the extra method definition.
+- **Reduced complexity:** The code is simpler and less prone to errors as there's one less method to manage.
+- **Potential performance improvement:** Inlining can sometimes lead to minor performance gains by avoiding method calls.
+
+Inline method refactoring is a valuable technique for improving code clarity and maintainability. It's often applied to short, simple methods that are used only within a single class to streamline the code and make its logic more explicit.

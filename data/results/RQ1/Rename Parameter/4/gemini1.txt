@@ -1,0 +1,75 @@
+Based on the code you provided, here are some refactoring opportunities along with explanations for each:
+
+**1. Constructor Consolidation (using Builder Pattern):**
+
+- The current code has two constructors depending on whether the `format` argument is provided.
+- We can simplify this by using a builder pattern. The builder can have methods for both `date` and `format` arguments, and a `build()` method to create the final `DateFormat` object.
+
+**Refactored Code (with Builder):**
+
+```java
+public class DateFormat extends ConfigurationFunction implements OptionalArgument, EvaluatorMapper {
+
+  private final Expression field;
+  private final Expression format;
+
+  private DateFormat(Expression field, Expression format, Configuration configuration) {
+    super(source, Arrays.asList(field, format), configuration);
+    this.field = field;
+    this.format = format;
+  }
+
+  public static Builder builder(Source source, Configuration configuration) {
+    return new Builder(source, configuration);
+  }
+
+  public static class Builder {
+    private final Source source;
+    private final Configuration configuration;
+    private Expression field;
+    private Expression format;
+
+    private Builder(Source source, Configuration configuration) {
+      this.source = source;
+      this.configuration = configuration;
+    }
+
+    public Builder setDate(Expression field) {
+      this.field = field;
+      return this;
+    }
+
+    public Builder setFormat(Expression format) {
+      this.format = format;
+      return this;
+    }
+
+    public DateFormat build() {
+      return new DateFormat(field, format, configuration);
+    }
+  }
+
+  // ... rest of the class methods
+}
+```
+
+**2. Argument Ordering in Constructor:**
+
+- While not critical, consider changing the constructor argument order to `(date, format)` to align with other date-related functions where date is typically the first argument.
+
+**3. Extracting Logic from `toFormatter`:**
+
+- The logic within `toFormatter` to create a `DateFormatter` can be extracted into a separate method with a clearer name, like `createDateFormatter`.
+
+**4. Simplifying `resolveType`:**
+
+- The `resolveType` method can be potentially simplified by combining the checks for `date` and `format` expressions into a single call using boolean logic (assuming the logic is appropriate).
+
+**5. Renaming `process` Methods:**
+
+- The `process` methods can be renamed to provide more context about their functionality, such as `formatWithConstantFormatter` and `formatWithLocale`.
+
+**Remember:**
+
+- To implement these refactorings effectively, you'll need to consider the context of the code's usage, existing unit tests, and project/team coding conventions.
+-  These are suggestions based on general best practices. The most suitable refactoring approach might depend on your specific project requirements.

@@ -1,0 +1,60 @@
+ **I've identified several extract class refactoring opportunities within the provided code:**
+
+1. **Extract a class for actions wrapping:**
+   - The `ToolbarTextButtonWrapper` and `LargeIconWithTextWrapper` classes both share responsibilities for wrapping actions and creating custom components.
+   - Create a new class named `ActionWrapper` with shared functionality, and make `ToolbarTextButtonWrapper` and `LargeIconWithTextWrapper` extend it.
+
+2. **Extract a class for focus handling:**
+   - The focus-related logic within `LargeIconWithTextWrapper` could be extracted into a separate class named `FocusHandler`.
+   - This would make the `LargeIconWithTextWrapper` class more focused on its core responsibility of creating the wrapper component.
+
+3. **Extract a class for action availability checking:**
+   - The `isActionAvailable` method could be placed in a separate class named `ActionUtils`.
+   - This would centralize actions utility methods and make the `WelcomeScreenActionsUtil` class more concise.
+
+**Here's the refactored code with these changes:**
+
+```java
+package com.intellij.openapi.wm.impl.welcomeScreen;
+
+// ... other imports
+
+public final class WelcomeScreenActionsUtil {
+
+    // ... other methods
+
+    static final class ActionWrapper extends AnActionWrapper implements CustomComponentAction {
+        // Shared functionality for action wrappers
+    }
+
+    static final class ToolbarTextButtonWrapper extends ActionWrapper {
+        // ...
+    }
+
+    static final class LargeIconWithTextWrapper extends ActionWrapper {
+        private final FocusHandler focusHandler = new FocusHandler();
+
+        // ...
+    }
+
+    static final class FocusHandler {
+        // Focus-related logic
+    }
+
+    static class ActionUtils {
+        static boolean isActionAvailable(@NotNull AnAction action) {
+            // ...
+        }
+
+        static void performActionForComponent(@NotNull AnAction action, @NotNull Component component) {
+            // ...
+        }
+    }
+}
+```
+
+**These refactorings promote:**
+
+- Better cohesion and separation of concerns
+- Improved code readability and maintainability
+- Easier testing of individual components

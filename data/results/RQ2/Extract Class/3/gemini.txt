@@ -1,0 +1,60 @@
+ **Here's the refactored code after applying extract class refactorings:**
+
+**New class: InitializationCounter**
+
+```java
+package org.apache.commons.lang3.concurrent;
+
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class InitializationCounter {
+
+    private final AtomicInteger initializeCalls = new AtomicInteger();
+
+    public void increment() {
+        initializeCalls.incrementAndGet();
+    }
+
+    public int getInitializeCalls() {
+        return initializeCalls.get();
+    }
+}
+```
+
+**Refactored AbstractBackgroundInitializerTestImpl class:**
+
+```java
+// ... (other imports and class members remain the same)
+
+protected static class AbstractBackgroundInitializerTestImpl extends BackgroundInitializer<Integer> {
+    // ... (other fields and constructors remain the same)
+
+    private void checkInitialize(final AbstractBackgroundInitializerTestImpl init) throws ConcurrentException {
+        final Integer result = init.get();
+        assertEquals(1, result.intValue(), "Wrong result");
+        assertEquals(1, init.initializationCounter.getInitializeCalls(), "Wrong number of invocations");
+        assertNotNull(init.getFuture(), "No future");
+    }
+    
+    private final InitializationCounter initializationCounter = new InitializationCounter();
+
+    protected AtomicInteger initializeInternal() throws Exception {
+        // ... (other logic remains the same)
+
+        initializationCounter.increment();
+        return initializationCounter.getInitializeCalls();
+    }
+}
+```
+
+**Key changes:**
+
+- **New class:** The `InitializationCounter` class now encapsulates the logic related to counting the number of `initialize()` calls.
+- **Fields and methods moved:** The `initializeCalls` field and the `increment()` and `getInitializeCalls()` methods have been moved to the `InitializationCounter` class.
+- **Usage update:** The `AbstractBackgroundInitializerTestImpl` class now uses an instance of `InitializationCounter` to track the number of calls.
+
+**Benefits of the refactoring:**
+
+- **Improved readability:** The `AbstractBackgroundInitializerTestImpl` class is more focused on its core functionality, the initialization process, and less cluttered with code related to counting calls.
+- **Enhanced maintainability:** Changes to the counting logic can be made in a single place (`InitializationCounter`), rather than scattered throughout the `AbstractBackgroundInitializerTestImpl` class.
+- **Potential for reuse:** The `InitializationCounter` class could potentially be reused in other parts of the codebase where similar counting functionality is needed.

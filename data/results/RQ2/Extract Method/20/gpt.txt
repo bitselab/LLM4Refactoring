@@ -1,0 +1,69 @@
+In the provided code snippet from `org.springframework.core.BridgeMethodResolver`, the specified block of code appears in both `findBridgedMethod` and `getMostSpecificMethod` methods. This repeated code can be refactored into a separate method to improve readability and maintainability. The extract method refactoring focuses on removing duplication and making the code more modular.
+
+Here's the refactored code:
+
+1. **Extract Method for Bridged Method Resolution**: Extract the common logic into a method, say `resolveBridgedMethod`.
+
+Refactored Code:
+
+```java
+package org.springframework.core;
+
+// ... [imports remain unchanged] ...
+
+public final class BridgeMethodResolver {
+
+    // ... [fields and constructors remain unchanged] ...
+
+    public static Method findBridgedMethod(Method bridgeMethod) {
+        return resolveBridgedMethod(bridgeMethod, bridgeMethod.getDeclaringClass());
+    }
+
+    public static Method getMostSpecificMethod(Method bridgeMethod, @Nullable Class<?> targetClass) {
+        Method specificMethod = ClassUtils.getMostSpecificMethod(bridgeMethod, targetClass);
+        Class<?> effectiveClass = (targetClass != null ? targetClass : specificMethod.getDeclaringClass());
+        return resolveBridgedMethod(specificMethod, effectiveClass);
+    }
+
+    private static Method resolveBridgedMethod(Method method, Class<?> targetClass) {
+        boolean localBridge = (targetClass == method.getDeclaringClass());
+        if (!method.isBridge() && localBridge) {
+            return method;
+        }
+
+        Object cacheKey = (localBridge ? method : new MethodClassKey(method, targetClass));
+        Method bridgedMethod = cache.get(cacheKey);
+        if (bridgedMethod == null) {
+            bridgedMethod = findBridgedMethodInHierarchy(method, targetClass);
+            cache.put(cacheKey, bridgedMethod);
+        }
+        return bridgedMethod;
+    }
+
+    private static Method findBridgedMethodInHierarchy(Method bridgeMethod, Class<?> targetClass) {
+        List<Method> candidateMethods = gatherCandidateMethods(bridgeMethod, targetClass);
+        if (candidateMethods.isEmpty()) {
+            return bridgeMethod;
+        }
+        return determineBridgedMethod(candidateMethods, bridgeMethod, targetClass);
+    }
+
+    private static List<Method> gatherCandidateMethods(Method bridgeMethod, Class<?> targetClass) {
+        List<Method> candidateMethods = new ArrayList<>();
+        MethodFilter filter = candidate -> isBridgedCandidateFor(candidate, bridgeMethod);
+        ReflectionUtils.doWithMethods(targetClass, candidateMethods::add, filter);
+        return candidateMethods;
+    }
+
+    private static Method determineBridgedMethod(List<Method> candidateMethods, Method bridgeMethod, Class<?> targetClass) {
+        if (candidateMethods.size() == 1) {
+            return candidateMethods.get(0);
+        }
+        return searchCandidates(candidateMethods, bridgeMethod, targetClass);
+    }
+
+    // ... [rest of the methods remain unchanged] ...
+}
+```
+
+This refactoring extracts the duplicated logic into a new method `resolveBridgedMethod`, which is then called from both `findBridgedMethod` and `getMostSpecificMethod`. The additional helper methods `findBridgedMethodInHierarchy`, `gatherCandidateMethods`, and `determineBridgedMethod` further break down the process, making the code more organized and easier to understand.

@@ -1,0 +1,39 @@
+In the given code snippet, the `MapValueResolver` constructor uses the parameter name `values`, which is somewhat generic and does not fully convey the purpose or content of the parameter. A more descriptive name would improve the readability of the code. 
+
+A suitable name could be `valueMap` or `nameValueMap`, which indicates that the parameter is a map containing name-value pairs. This name provides more context about what the map represents and how it is used in the `MapValueResolver` class.
+
+Here's the refactored code with the renamed parameter:
+
+```java
+package org.springframework.validation;
+
+// ... (other imports remain unchanged)
+
+public class DataBinderConstructTests {
+
+    // ... (rest of the class remains unchanged)
+
+    private static class MapValueResolver implements DataBinder.ValueResolver {
+
+        private final Map<String, Object> map;
+
+        private MapValueResolver(Map<String, Object> nameValueMap) {
+            this.map = nameValueMap;
+        }
+
+        @Override
+        public Object resolveValue(String name, Class<?> type) {
+            return map.get(name);
+        }
+
+        @Override
+        public Set<String> getNames() {
+            return this.map.keySet();
+        }
+    }
+
+    // ... (rest of the classes remain unchanged)
+}
+```
+
+This small change enhances the readability and clarity of the code, making it easier to understand the role of the `MapValueResolver` constructor's parameter.

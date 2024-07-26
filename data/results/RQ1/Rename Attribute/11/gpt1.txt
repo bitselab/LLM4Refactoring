@@ -1,0 +1,114 @@
+The provided code snippet for `WebSocketCoreClient` is well-structured, but there are a few opportunities for refactoring to improve readability, maintainability, and efficiency. Here are the changes I would suggest:
+
+1. **Use a Single Constructor with Default Values:**
+   - The class has three constructors with overlapping functionality. This can be simplified by using a single constructor with default values.
+
+2. **Reduce Redundancy in Constructor:**
+   - The logic to initialize `webSocketComponents` can be streamlined.
+
+3. **Method Overloading for `connect`:**
+   - The `connect` method is overloaded. This is good practice, but the internal logic can be separated into private methods to reduce code duplication and increase readability.
+
+4. **Logging Improvements:**
+   - Improve logging statements to include more context if necessary.
+
+5. **Exception Messages:**
+   - The exception messages can be made more descriptive.
+
+6. **Access Modifiers:**
+   - Review and ensure that the access modifiers for methods and variables are as restrictive as possible to follow the principle of least privilege.
+
+7. **Null Checks:**
+   - Improve null checks and error handling where necessary.
+
+8. **JavaDocs and Comments:**
+   - Add JavaDocs to public methods and comments where necessary to explain complex logic.
+
+Here's the refactored code based on these suggestions:
+
+```java
+package org.eclipse.jetty.websocket.core.client;
+
+// ... [imports remain the same]
+
+public class WebSocketCoreClient extends ContainerLifeCycle {
+    // ... [class constants and variables remain the same]
+
+    public WebSocketCoreClient() {
+        this(null, new WebSocketComponents());
+    }
+
+    public WebSocketCoreClient(HttpClient httpClient, WebSocketComponents webSocketComponents) {
+        this.httpClient = Objects.requireNonNullElseGet(httpClient, HttpClientProvider::get);
+        initializeHttpClient();
+        this.components = Objects.requireNonNullElseGet(webSocketComponents, this::createDefaultWebSocketComponents);
+        initializeComponents();
+        this.classLoader = Thread.currentThread().getContextClassLoader();
+    }
+
+    private WebSocketComponents createDefaultWebSocketComponents() {
+        if (this.httpClient.isStarted()) {
+            return new WebSocketComponents(null, null, this.httpClient.getByteBufferPool(), null, null, this.httpClient.getExecutor());
+        } else {
+            return new WebSocketComponents();
+        }
+    }
+
+    private void initializeHttpClient() {
+        addBean(this.httpClient);
+        if (!this.httpClient.isStarted()) {
+            if (this.httpClient.getByteBufferPool() == null) {
+                this.httpClient.setByteBufferPool(components.getBufferPool());
+            }
+            if (this.httpClient.getExecutor() == null) {
+                this.httpClient.setExecutor(components.getExecutor());
+            }
+        }
+    }
+
+    private void initializeComponents() {
+        addBean(components);
+    }
+
+    // ... [other methods remain the same, possibly with improved exception messages and logging]
+
+    public CompletableFuture<CoreSession> connect(FrameHandler frameHandler, URI wsUri) throws IOException {
+        CoreClientUpgradeRequest request = CoreClientUpgradeRequest.from(this, wsUri, frameHandler);
+        return connect(request);
+    }
+
+    public CompletableFuture<CoreSession> connect(CoreClientUpgradeRequest request) throws IOException {
+        validateStarted();
+        validateRequestedExtensions(request);
+
+        for (Request.Listener listener : getBeans(Request.Listener.class)) {
+            request.listener(listener);
+        }
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Connecting to WebSocket at {}", request.getURI());
+        }
+
+        return request.sendAsync();
+    }
+
+    private void validateStarted() {
+        if (!isStarted()) {
+            throw new IllegalStateException(this.getClass().getSimpleName() + "@" + this.hashCode() + " is not started");
+        }
+    }
+
+    private void validateRequestedExtensions(CoreClientUpgradeRequest request) {
+        for (ExtensionConfig reqExt : request.getExtensions()) {
+            if (!components.getExtensionRegistry().isAvailable(reqExt.getName())) {
+                throw new IllegalArgumentException("Requested extension [" + reqExt.getName() + "] is not installed");
+            }
+        }
+    }
+
+    // ... [rest of the methods remain the same]
+
+}
+```
+
+This refactored code should be more maintainable and readable while preserving the original functionality.

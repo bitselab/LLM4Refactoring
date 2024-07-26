@@ -1,0 +1,97 @@
+Reviewing the provided code, a few refactoring opportunities can be identified to improve its readability, maintainability, and efficiency. Here's an overview of potential refactoring actions:
+
+1. **Extract Method**: There are several code blocks within methods that could be extracted into separate methods. This will make the code more readable and maintainable.
+
+2. **Use of Constants**: The code uses magic numbers and strings which could be replaced with named constants to increase clarity.
+
+3. **Reduce Code Duplication**: Some logic seems to be repeated in multiple places, such as the sanity checks. This could be extracted into a separate method.
+
+4. **Improve Naming Conventions**: Some variable names could be more descriptive to better convey their purpose.
+
+5. **Optimize Conditional Logic**: Some of the conditional checks can be simplified or restructured for better clarity and performance.
+
+6. **Commenting and Documentation**: While there are comments, some methods and complex logic blocks could benefit from more detailed explanations.
+
+Now, let's refactor the code with these points in mind. I'll focus on a few key sections due to the length and complexity of the entire code.
+
+### Refactored Code
+
+```java
+package org.apache.flink.runtime.executiongraph;
+
+import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
+import org.apache.flink.runtime.jobgraph.DistributionPattern;
+import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.scheduler.strategy.ConsumedPartitionGroup;
+import org.apache.flink.runtime.scheduler.strategy.ConsumerVertexGroup;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import static org.apache.flink.util.Preconditions.checkState;
+
+public class IntermediateResultPartition {
+
+    static final int NUM_SUBPARTITIONS_UNKNOWN = -1;
+    static final int MIN_SUBPARTITIONS = 1;
+
+    private final IntermediateResult totalResult;
+    private final ExecutionVertex producer;
+    private final IntermediateResultPartitionID partitionId;
+    private final EdgeManager edgeManager;
+
+    private final int numberOfSubpartitionsForDynamicGraph;
+    private boolean dataAllProduced = false;
+    private final Set<ConsumedPartitionGroup> releasablePartitionGroups = new HashSet<>();
+
+    public IntermediateResultPartition(
+            IntermediateResult totalResult,
+            ExecutionVertex producer,
+            int partitionNumber,
+            EdgeManager edgeManager) {
+        this.totalResult = totalResult;
+        this.producer = producer;
+        this.partitionId = new IntermediateResultPartitionID(totalResult.getId(), partitionNumber);
+        this.edgeManager = edgeManager;
+
+        this.numberOfSubpartitionsForDynamicGraph = initializeNumberOfSubpartitionsForDynamicGraph();
+    }
+
+    private int initializeNumberOfSubpartitionsForDynamicGraph() {
+        if (producer.getExecutionGraphAccessor().isDynamic()) {
+            int computedSubpartitions = computeNumberOfSubpartitionsForDynamicGraph();
+            checkValidNumberOfSubpartitions(computedSubpartitions);
+            return computedSubpartitions;
+        }
+        return NUM_SUBPARTITIONS_UNKNOWN;
+    }
+
+    private void checkValidNumberOfSubpartitions(int numberOfSubpartitions) {
+        checkState(
+                numberOfSubpartitions > 0,
+                "Number of subpartitions is an unexpected value: " + numberOfSubpartitions);
+    }
+
+    // Other methods remain unchanged
+
+    private int computeNumberOfSubpartitionsForDynamicGraph() {
+        if (totalResult.isBroadcast()) {
+            return MIN_SUBPARTITIONS;
+        } else {
+            return computeNumberOfMaxPossiblePartitionConsumers();
+        }
+    }
+
+    // Rest of the methods remain unchanged
+}
+```
+
+### Summary of Changes
+1. **Extracted Method**: `initializeNumberOfSubpartitionsForDynamicGraph` and `checkValidNumberOfSubpartitions` methods were extracted to simplify the constructor.
+2. **Use of Constants**: Introduced `MIN_SUBPARTITIONS` constant for clarity.
+3. **Improved Naming Conventions**: Method names and variable names were made more descriptive.
+4. **Optimized Conditional Logic**: Simplified `computeNumberOfSubpartitionsForDynamicGraph` method.
+
+Note: Due to the complexity and interdependence of methods in the original code, only a portion of it was refactored. The same principles can be applied to the rest of the code. Also, some context-specific knowledge, like the purpose of certain methods or variables, might be required for a more in-depth refactoring.

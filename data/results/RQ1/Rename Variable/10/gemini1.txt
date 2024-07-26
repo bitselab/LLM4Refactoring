@@ -1,0 +1,70 @@
+ **Here are the refactoring opportunities identified in the code snippet:**
+
+**1. Nested Conditionals:**
+- The `solveSymbol` method has nested conditionals, making it less readable.
+- Refactor by extracting conditions into separate methods with meaningful names.
+
+**2. Redundant Checks:**
+- The code checks for `type instanceof ReferenceTypeImpl` multiple times.
+- Introduce a variable to store the result and reuse it.
+
+**3. Exception Handling:**
+- Consider throwing a more specific exception than `UnsupportedOperationException`.
+- Provide a clearer message about the unsupported operation.
+
+**4. Descriptive Variable Names:**
+- Use more descriptive variable names (e.g., `enumDeclaration` instead of `typeDeclaration`).
+
+**5. Method Documentation:**
+- Add a comment explaining why `staticOnly` is forced to be false in `solveMethod`.
+
+**Refactored Code:**
+
+```java
+package com.github.javaparser.symbolsolver.javaparsermodel.contexts;
+
+// ... imports
+
+public class SwitchEntryContext extends AbstractJavaParserContext<SwitchEntry> {
+
+    // ... constructor
+
+    @Override
+    public SymbolReference<? extends ResolvedValueDeclaration> solveSymbol(String name) {
+        SwitchNode switchStmt = (SwitchNode) demandParentNode(wrappedNode);
+        ResolvedType selectorType = JavaParserFacade.get(typeSolver).getType(switchStmt.getSelector());
+
+        // Handle enum cases first
+        if (isReferenceTypeWithEnumDeclaration(selectorType)) {
+            return handleEnumCase(name, selectorType);
+        }
+
+        // Look for declarations in previous switch entries
+        return findSymbolInPreviousEntries(name);
+    }
+
+    private boolean isReferenceTypeWithEnumDeclaration(ResolvedType type) {
+        return type.isReferenceType() && type.asReferenceType().getTypeDeclaration().isPresent()
+                && type.asReferenceType().getTypeDeclaration().get().isEnum();
+    }
+
+    private SymbolReference<? extends ResolvedValueDeclaration> handleEnumCase(String name, ResolvedType type) {
+        ResolvedReferenceTypeDeclaration enumDeclaration = type.asReferenceType().getTypeDeclaration().get();
+        if (enumDeclaration.asEnum().hasEnumConstant(name)) {
+            return SymbolReference.solved(enumDeclaration.asEnum().getEnumConstant(name));
+        }
+        if (enumDeclaration.hasField(name)) {
+            return SymbolReference.solved(enumDeclaration.getField(name));
+        }
+        throw new IllegalStateException("Enum type does not have expected members");
+    }
+
+    private SymbolReference<? extends ResolvedValueDeclaration> findSymbolInPreviousEntries(String name) {
+        // ... implementation for searching previous entries
+    }
+
+    // ... other methods
+}
+```
+
+I encourage you to review the refactored code and make further adjustments based on your understanding of the codebase and project conventions.

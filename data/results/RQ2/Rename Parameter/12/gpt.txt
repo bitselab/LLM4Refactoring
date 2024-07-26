@@ -1,0 +1,53 @@
+The parameter `signingkey` in the method `findSecretKeyInLegacySecring` can be renamed to improve readability and maintain a consistent naming convention across the code. A more descriptive name would be `searchKeyIdentifier` or simply `keyIdentifier`, as it represents the identifier used to search for a key.
+
+Here's the refactored method with the renamed parameter:
+
+```java
+/**
+ * Return the first suitable key for signing in the key ring collection. For
+ * this case, we only expect there to be one key available for signing.
+ *
+ * @param keyIdentifier the identifier of the signing key
+ * @param secringFile   the secring file
+ * @return the first suitable PGP secret key found for signing
+ * @throws IOException on I/O related errors
+ * @throws PGPException on BouncyCastle errors
+ */
+private PGPSecretKey findSecretKeyInLegacySecring(String keyIdentifier,
+                                                  Path secringFile) throws IOException, PGPException {
+
+    try (InputStream in = newInputStream(secringFile)) {
+        PGPSecretKeyRingCollection pgpSec = new PGPSecretKeyRingCollection(
+                PGPUtil.getDecoderStream(new BufferedInputStream(in)),
+                new JcaKeyFingerprintCalculator());
+
+        String keyId = toFingerprint(keyIdentifier).toLowerCase(Locale.ROOT);
+        Iterator<PGPSecretKeyRing> keyrings = pgpSec.getKeyRings();
+        while (keyrings.hasNext()) {
+            PGPSecretKeyRing keyRing = keyrings.next();
+            Iterator<PGPSecretKey> keys = keyRing.getSecretKeys();
+            while (keys.hasNext()) {
+                PGPSecretKey key = keys.next();
+                // try key id
+                String fingerprint = Hex
+                        .toHexString(key.getPublicKey().getFingerprint())
+                        .toLowerCase(Locale.ROOT);
+                if (fingerprint.endsWith(keyId)) {
+                    return key;
+                }
+                // try user id
+                Iterator<String> userIDs = key.getUserIDs();
+                while (userIDs.hasNext()) {
+                    String userId = userIDs.next();
+                    if (containsSigningKey(userId, signingKey)) {
+                        return key;
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}
+```
+
+This refactoring replaces `signingkey` with `keyIdentifier`, which is more descriptive and aligns better with the typical Java naming conventions. It clearly indicates that this parameter is used to identify the key for which the method is searching.

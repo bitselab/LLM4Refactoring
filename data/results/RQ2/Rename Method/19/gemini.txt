@@ -1,0 +1,31 @@
+ **Here's the refactored code with a more descriptive method name:**
+
+```java
+package org.springframework.boot.autoconfigure.security.oauth2.client.servlet;
+
+// ... rest of the class code remains the same ...
+
+private List<Filter> extractFiltersOfType(AssertableWebApplicationContext context, Class<? extends Filter> filterType) {
+    return getSecurityFilterChain(context).getFilters().stream().filter(filterType::isInstance).toList();
+}
+
+// ... other methods remain the same ...
+```
+
+**Explanation of the change:**
+
+- **Original method name:** `getFilters`
+- **Refactored method name:** `extractFiltersOfType`
+
+**Improvements:**
+
+- **Clarity:** The new name clearly states that the method extracts filters of a specific type, making its purpose more explicit.
+- **Specificity:** It accurately reflects the use of `filterType` to filter the filters, avoiding potential ambiguity.
+- **Consistency:** It aligns with naming conventions in Java and Spring Security, where methods that extract elements often start with "extract" or "get" followed by a description of what's being extracted.
+- **Readability:** It improves readability by using a more descriptive and intuitive name.
+
+**Benefits of this refactoring:**
+
+- **Enhanced code comprehension:** Clearer method names make it easier to grasp the overall logic and flow of the code.
+- **Improved maintainability:** Descriptive names make the code easier to maintain and modify in the future.
+- **Better code collaboration:** Clearer method names facilitate communication and understanding among developers.

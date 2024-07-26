@@ -1,0 +1,118 @@
+Analyzing the provided `InternalSinkWriterMetricGroup` class for potential refactoring opportunities based on the "Extract Class" pattern, several considerations come into play:
+
+1. **Cohesion**: The `InternalSinkWriterMetricGroup` class mainly serves to manage metrics related to sink writers in the Apache Flink framework. It handles errors, counts for records, bytes, and even configurations related to IO operations.
+
+2. **Single Responsibility**: The class is dedicated to wrapping metrics functionality but does touch on various aspects like error counts and bytes sent which could be seen as separate concerns.
+
+3. **Class Size and Complexity**: Although the class manages different metrics, they are all closely related and contribute directly to its main responsibility of metric tracking for sink operations.
+
+### Potential Extract Class Refactoring
+
+From the current implementation:
+- **Metrics Handling**: One potential refactoring could be extracting the metrics handling into a separate class. This would encapsulate all operations related to metrics (like creating counters and gauges) away from the main class that should perhaps focus more on operational logic rather than metric initialization and management.
+
+Here's how the refactored code might look:
+
+#### Refactored Code:
+
+```java
+package org.apache.flink.runtime.metrics.groups;
+
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.OperatorIOMetricGroup;
+import org.apache.flink.runtime.metrics.MetricNames;
+
+@Internal
+public class MetricHandler {
+    private final MetricGroup metricGroup;
+    private final OperatorIOMetricGroup operatorIOMetricGroup;
+    private Counter numRecordsOutErrors;
+    private Counter numRecordsSendErrors;
+    private Counter numRecordsWritten;
+    private Counter numBytesWritten;
+
+    public MetricHandler(MetricGroup metricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        this.metricGroup = metricGroup;
+        this.operatorIOMetricGroup = operatorIOMetricGroup;
+        initializeMetrics();
+    }
+
+    private void initializeMetrics() {
+        numRecordsOutErrors = metricGroup.counter(MetricNames.NUM_RECORDS_OUT_ERRORS);
+        numRecordsSendErrors = metricGroup.counter(MetricNames.NUM_RECORDS_SEND_ERRORS, numRecordsOutErrors);
+        numRecordsWritten = metricGroup.counter(MetricNames.NUM_RECORDS_SEND, operatorIOMetricGroup.getNumRecordsOutCounter());
+        numBytesWritten = metricGroup.counter(MetricNames.NUM_BYTES_SEND, operatorIOMetricGroup.getNumBytesOutCounter());
+    }
+
+    public Counter getNumRecordsOutErrorsCounter() {
+        return numRecordsOutErrors;
+    }
+
+    public Counter getNumRecordsSendErrorsCounter() {
+        return numRecordsSendErrors;
+    }
+
+    public Counter getNumRecordsSendCounter() {
+        return numRecordsWritten;
+    }
+
+    public Counter getNumBytesSendCounter() {
+        return numBytesWritten;
+    }
+
+    public void setCurrentSendTimeGauge(Gauge<Long> currentSendTimeGauge) {
+        metricGroup.gauge(MetricNames.CURRENT_SEND_TIME, currentSendTimeGauge);
+    }
+}
+
+public class InternalSinkWriterMetricGroup extends ProxyMetricGroup<MetricGroup> implements SinkWriterMetricGroup {
+    private final OperatorIOMetricGroup operatorIOMetricGroup;
+    private MetricHandler metricHandler;
+
+    public InternalSinkWriterMetricGroup(MetricGroup parentMetricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        super(parentMetricGroup);
+        this.operatorIOMetricGroup = operatorIOMetricGroup;
+        this.metricHandler = new MetricHandler(parentMetricGroup, operatorIOMetricGroup);
+    }
+
+    @Override
+    public OperatorIOMetricGroup getIOMetricGroup() {
+        return operatorIOMetricGroup;
+    }
+
+    // Delegate metric-related methods to MetricHandler
+    @Override
+    public Counter getNumRecordsOutErrorsCounter() {
+        return metricHandler.getNumRecordsOutErrorsCounter();
+    }
+
+    @Override
+    public Counter getNumRecordsSendErrorsCounter() {
+        return metricHandler.getNumRecordsSendErrorsCounter();
+    }
+
+    @Override
+    public Counter getNumRecordsSendCounter() {
+        return metricHandler.getNumRecordsSendCounter();
+    }
+
+    @Override
+    public Counter getNumBytesSendCounter() {
+        return metricHandler.getNumBytesSendCounter();
+    }
+
+    @Override
+    public void setCurrentSendTimeGauge(Gauge<Long> currentSendTimeGauge) {
+        metricHandler.setCurrentSendTimeGauge(currentSendTimeGauge);
+    }
+}
+```
+
+This refactoring:
+- **Improves Readability**: By isolating metrics handling, the `InternalSinkWriterMetricGroup` class becomes clearer and focused on its core functionality.
+- **Enhances Maintainability**: Changes to metric handling are localized to the `MetricHandler` class, simplifying maintenance.
+- **Ensures Extensibility**: New metrics can be added more seamlessly without cluttering the primary class.
+
+This refactoring aligns with the principles of object-oriented design by enhancing cohesion and ensuring each class has a clear, singular responsibility.

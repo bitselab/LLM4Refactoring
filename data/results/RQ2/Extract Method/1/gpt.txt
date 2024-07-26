@@ -1,0 +1,90 @@
+The identified duplicate code snippet can be refactored by extracting it into a separate method. This new method will construct and return the message string based on the conditions provided. By doing this, we improve the code's readability and maintainability, and also adhere to the DRY (Don't Repeat Yourself) principle.
+
+Here's the refactored version of the `RegexpCheck` class:
+
+```java
+package com.puppycrawl.tools.checkstyle.checks.regexp;
+
+// ... [Other imports]
+
+@FileStatefulCheck
+public class RegexpCheck extends AbstractCheck {
+
+    // ... [Constants and fields declarations]
+
+    // ... [Setters and other methods remain unchanged]
+
+    @Override
+    public void beginTree(DetailAST rootAST) {
+        matcher = format.matcher(getFileContents().getText().getFullText());
+        matchCount = 0;
+        errorCount = 0;
+        findMatch();
+    }
+
+    private void findMatch() {
+        final boolean foundMatch = matcher.find();
+        if (foundMatch) {
+            processMatch();
+        } else if (!illegalPattern && matchCount == 0) {
+            log(1, MSG_REQUIRED_REGEXP, constructMessage());
+        }
+    }
+
+    private void processMatch() {
+        final FileText text = getFileContents().getText();
+        final LineColumn start = text.lineColumn(matcher.start());
+        final int startLine = start.getLine();
+
+        if (!isIgnore(startLine, text, start)) {
+            matchCount++;
+            if (shouldLogViolation()) {
+                logMessage(startLine);
+            }
+        }
+        if (canContinueValidation()) {
+            findMatch();
+        }
+    }
+
+    private boolean shouldLogViolation() {
+        return illegalPattern || checkForDuplicates && matchCount - 1 > duplicateLimit;
+    }
+
+    private boolean canContinueValidation() {
+        return errorCount <= errorLimit - 1;
+    }
+
+    private boolean isIgnore(int startLine, FileText text, LineColumn start) {
+        // ... Method implementation remains the same
+    }
+
+    private void logMessage(int lineNumber) {
+        log(lineNumber, getLogMessageType(), constructMessage());
+    }
+
+    private String getLogMessageType() {
+        return illegalPattern ? MSG_ILLEGAL_REGEXP : MSG_DUPLICATE_REGEXP;
+    }
+
+    private String constructMessage() {
+        String msg = (message == null || message.isEmpty()) ? format.pattern() : message;
+        if (errorCount >= errorLimit) {
+            msg = ERROR_LIMIT_EXCEEDED_MESSAGE + msg;
+        }
+        return msg;
+    }
+
+    // ... [Rest of the methods]
+}
+```
+
+### Refactoring Changes:
+
+1. **Extracted Message Construction**: Implemented `constructMessage()` to handle the construction of the message string. This method is now used in both `findMatch()` and `logMessage()`.
+
+2. **Extracted Log Message Type Determination**: Added `getLogMessageType()` to determine the type of log message key to be used, further simplifying the `logMessage()` method.
+
+3. **Simplified `processMatch` and `findMatch` Methods**: Replaced the duplicate code snippet with a call to `constructMessage()` in these methods.
+
+These refactorings not only remove the duplicate code but also make the class more modular and the methods' purposes clearer. Each method now has a single responsibility, enhancing the overall code quality.

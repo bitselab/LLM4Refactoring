@@ -1,0 +1,83 @@
+ **Here's the refactored code after applying Extract Class:**
+
+```java
+package org.hibernate.dialect.function.array;
+
+import org.hibernate.metamodel.mapping.BasicValuedMapping;
+import org.hibernate.metamodel.mapping.MappingModelExpressible;
+import org.hibernate.metamodel.model.domain.DomainType;
+import org.hibernate.query.ReturnableType;
+import org.hibernate.query.sqm.produce.function.FunctionReturnTypeResolver;
+import org.hibernate.query.sqm.tree.SqmTypedNode;
+import org.hibernate.sql.ast.tree.SqlAstNode;
+import org.hibernate.type.spi.TypeConfiguration;
+
+// New class extracted for array type resolution
+class ArrayTypeHelper {
+
+    @SuppressWarnings("unchecked")
+    public static BasicType<?> resolveArrayType(DomainType<?> elementType, TypeConfiguration typeConfiguration) {
+        @SuppressWarnings("unchecked") final BasicPluralJavaType<Object> arrayJavaType = (BasicPluralJavaType<Object>) typeConfiguration.getJavaTypeRegistry()
+                .getDescriptor(
+                        Array.newInstance(elementType.getBindableJavaType(), 0).getClass()
+                );
+        final Dialect dialect = typeConfiguration.getCurrentBaseSqlTypeIndicators().getDialect();
+        return arrayJavaType.resolveType(
+                typeConfiguration,
+                dialect,
+                (BasicType<Object>) elementType,
+                null,
+                typeConfiguration.getCurrentBaseSqlTypeIndicators()
+        );
+    }
+}
+
+public class ArrayViaElementArgumentReturnTypeResolver implements FunctionReturnTypeResolver {
+
+    public static final FunctionReturnTypeResolver INSTANCE = new ArrayViaElementArgumentReturnTypeResolver();
+
+    private ArrayViaElementArgumentReturnTypeResolver() {
+    }
+
+    @Override
+    public ReturnableType<?> resolveFunctionReturnType(
+            ReturnableType<?> impliedType,
+            Supplier<MappingModelExpressible<?>> inferredTypeSupplier,
+            List<? extends SqmTypedNode<?>> arguments,
+            TypeConfiguration typeConfiguration) {
+
+        final MappingModelExpressible<?> inferredType = inferredTypeSupplier.get();
+        if (inferredType != null) {
+            if (inferredType instanceof ReturnableType<?>) {
+                return (ReturnableType<?>) inferredType;
+            } else if (inferredType instanceof BasicValuedMapping) {
+                return (ReturnableType<?>) ((BasicValuedMapping) inferredType).getJdbcMapping();
+            }
+        }
+        if (impliedType != null) {
+            return impliedType;
+        }
+        for (SqmTypedNode<?> argument : arguments) {
+            final DomainType<?> sqmType = argument.getExpressible().getSqmType();
+            if (sqmType instanceof ReturnableType<?>) {
+                return ArrayTypeHelper.resolveArrayType(sqmType, typeConfiguration);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public BasicValuedMapping resolveFunctionReturnType(
+            Supplier<BasicValuedMapping> impliedTypeAccess,
+            List<? extends SqlAstNode> arguments) {
+        return null;
+    }
+}
+```
+
+**Key improvements in the refactored code:**
+
+- **Encapsulated array type resolution:** The logic for resolving array types is now encapsulated within the `ArrayTypeHelper` class, making it more focused and reusable.
+- **Improved readability:** The `ArrayViaElementArgumentReturnTypeResolver` class is now more concise and easier to understand, as it delegates the array type resolution to the `ArrayTypeHelper`.
+- **Enhanced maintainability:** Changes to array type resolution logic can be made in one place (`ArrayTypeHelper`) without affecting the `ArrayViaElementArgumentReturnTypeResolver` class.
+- **Potential for reuse:** The `ArrayTypeHelper` class could potentially be reused in other parts of the code that require array type resolution.

@@ -1,0 +1,181 @@
+After reviewing the provided code snippet, the variable names are largely clear and follow a consistent naming convention. However, there are a few potential areas for improvement that could enhance readability and maintainability:
+
+1. **Variable `input` in multiple test methods:** The variable name `input` is used extensively across different test methods to represent an instance of `TestNullInputStream`. Although it's not incorrect, we could make it more descriptive to reflect its specific configuration or test scenario.
+
+2. **Variable `bytes` in method `testReadByteArray()`:** The name `bytes` is used to represent a byte array buffer. It could be more descriptive, like `byteBuffer` or `testBuffer`, to clearly indicate its role as a buffer in the context of a test.
+
+3. **Use of single-letter variables (`i`, `lth`, etc.):** The use of single-letter variables like `i` for loop counters is common, but in some contexts, more descriptive names might enhance understanding, especially in complex loops or where multiple indices are involved.
+
+Here is a refactored version of the code with these changes applied:
+
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests {@link NullInputStream}.
+ */
+public class NullInputStreamTest {
+
+    private static final class TestNullInputStream extends NullInputStream {
+        public TestNullInputStream(final int size) {
+            super(size);
+        }
+
+        public TestNullInputStream(final int size, final boolean markSupported, final boolean throwEofException) {
+            super(size, markSupported, throwEofException);
+        }
+
+        @Override
+        protected int processByte() {
+            return (int) getPosition() - 1;
+        }
+
+        @Override
+        protected void processBytes(final byte[] buffer, final int offset, final int length) {
+            final int startPosition = (int) getPosition() - length;
+            for (int index = offset; index < length; index++) {
+                buffer[index] = (byte) (startPosition + index);
+            }
+        }
+    }
+
+    private static final String MARK_RESET_NOT_SUPPORTED = "mark/reset not supported";
+
+    @Test
+    public void testEOFException() throws Exception {
+        try (InputStream testStream = new TestNullInputStream(2, false, true)) {
+            assertEquals(0, testStream.read(), "Read 1");
+            assertEquals(1, testStream.read(), "Read 2");
+            assertThrows(EOFException.class, () -> testStream.read());
+        }
+    }
+
+    @Test
+    public void testMarkAndReset() throws Exception {
+        int currentPosition = 0;
+        final int readLimit = 10;
+        try (InputStream testStream = new TestNullInputStream(100, true, false)) {
+
+            assertTrue(testStream.markSupported(), "Mark Should be Supported");
+
+            final IOException noMarkException = assertThrows(IOException.class, testStream::reset);
+            assertEquals("No position has been marked", noMarkException.getMessage(), "No Mark IOException message");
+
+            for (; currentPosition < 3; currentPosition++) {
+                assertEquals(currentPosition, testStream.read(), "Read Before Mark [" + currentPosition + "]");
+            }
+
+            testStream.mark(readLimit);
+
+            for (int readIndex = 0; readIndex < 3; readIndex++) {
+                assertEquals(currentPosition + readIndex, testStream.read(), "Read After Mark [" + readIndex + "]");
+            }
+
+            testStream.reset();
+
+            for (int readIndex = 0; readIndex < readLimit + 1; readIndex++) {
+                assertEquals(currentPosition + readIndex, testStream.read(), "Read After Reset [" + readIndex + "]");
+            }
+
+            final IOException resetException = assertThrows(IOException.class, testStream::reset, "Read limit exceeded, expected IOException");
+            assertEquals("Marked position [" + currentPosition + "] is no longer valid - passed the read limit [" + readLimit + "]", resetException.getMessage(),
+                    "Read limit IOException message");
+        }
+    }
+
+    @Test
+    public void testMarkNotSupported() throws Exception {
+        final InputStream testStream = new TestNullInputStream(100, false, true);
+        assertFalse(testStream.markSupported(), "Mark Should NOT be Supported");
+
+        final UnsupportedOperationException markException = assertThrows(UnsupportedOperationException.class, () -> testStream.mark(5));
+        assertEquals(MARK_RESET_NOT_SUPPORTED, markException.getMessage(), "mark() error message");
+
+        final UnsupportedOperationException resetException = assertThrows(UnsupportedOperationException.class, testStream::reset);
+        assertEquals(MARK_RESET_NOT_SUPPORTED, resetException.getMessage(), "reset() error message");
+        testStream.close();
+    }
+
+    @Test
+    public void testRead() throws Exception {
+        final int streamSize = 5;
+        final InputStream testStream = new TestNullInputStream(streamSize);
+        for (int index = 0; index < streamSize; index++) {
+            assertEquals(streamSize - index, testStream.available(), "Check Size [" + index + "]");
+            assertEquals(index, testStream.read(), "Check Value [" + index + "]");
+        }
+        assertEquals(0, testStream.available(), "Available after contents all read");
+
+        assertEquals(-1, testStream.read(), "End of File");
+        assertEquals(0, testStream.available(), "Available after End of File");
+
+        final IOException endOfFileException = assertThrows(IOException.class, testStream::read);
+        assertEquals("Read after end of file", endOfFileException.getMessage());
+
+        testStream.close();
+        assertEquals(streamSize, testStream.available(), "Available after close");
+    }
+
+    @Test
+    public void testReadByteArray() throws Exception {
+        final byte[] testBuffer = new byte[10];
+        final InputStream testStream = new TestNullInputStream(15);
+
+        final int count1 = testStream.read(testBuffer);
+        assertEquals(testBuffer.length, count1, "Read 1");
+        for (int index = 0; index < count1; index++) {
+            assertEquals(index, testBuffer[index], "Check Bytes 1");
+        }
+
+        final int count2 = testStream.read(testBuffer);
+        assertEquals(5, count2, "Read 2");
+        for (int index = 0; index < count2; index++) {
+            assertEquals(count1 + index, testBuffer[index], "Check Bytes 2");
+        }
+
+        final int count3 = testStream.read(testBuffer);
+        assertEquals(-1, count3, "Read 3 (EOF)");
+
+        final IOException endOfFileException = assertThrows(IOException.class, () -> testStream.read(testBuffer));
+        assertEquals("Read after end of file", endOfFileException.getMessage());
+
+        testStream.close();
+
+        final int offset = 2;
+        final int length = 4;
+        final int count5 = testStream.read(testBuffer, offset, length);
+        assertEquals(length, count5, "Read 5");
+        for (int index = offset; index < length; index++) {
+            assertEquals(index, testBuffer[index], "Check Bytes 2");
+        }
+    }
+
+    @Test
+    public void testSkip() throws Exception {
+        try (InputStream testStream = new TestNullInputStream(10, true, false)) {
+            assertEquals(0, testStream.read(), "Read 1");
+            assertEquals(1, testStream.read(), "Read 2");
+            assertEquals(5, testStream.skip(5), "Skip 1");
+            assertEquals(7, testStream.read(), "Read 3");
+            assertEquals(2, testStream.skip(5), "Skip 2"); // only 2 left to skip
+            assertEquals(-1, testStream.skip(5), "Skip 3 (EOF)"); // End of file
+
+            final IOException skipException = assertThrows(IOException.class, () -> testStream.skip(5), "Expected IOException for skipping after end of file");
+            assertEquals("Skip after end of file", skipException.getMessage(), "Skip after EOF IOException message");
+        }
+    }
+}
+```
+
+These changes are relatively minor, as the initial code was already well-structured. The suggestions focus on enhancing clarity and making the purpose of certain variables more explicit.

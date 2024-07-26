@@ -1,0 +1,61 @@
+ **Here's the refactored code with the extracted method:**
+
+```java
+package org.eclipse.jgit.storage.file;
+
+// ... other imports
+
+public class FileBasedConfig extends StoredConfig {
+
+  // ... other code
+
+  @Override
+  public void load() throws IOException, ConfigInvalidException {
+    lock.readLock().lock();
+    try {
+      Boolean wasRead = FileUtils.readWithRetries(getFile(), this::processFileContent);
+      // ... rest of the load() method
+  }
+
+  private boolean processFileContent(File f) throws IOException, ConfigInvalidException {
+    FileSnapshot oldSnapshot = snapshot;
+    FileSnapshot newSnapshot = FileSnapshot.saveNoConfig(f);
+    byte[] in = IO.readFully(f);
+    ObjectId newHash = hash(in);
+    if (hash.equals(newHash)) {
+      if (oldSnapshot.equals(newSnapshot)) {
+        oldSnapshot.setClean(newSnapshot);
+      } else {
+        snapshot = newSnapshot;
+      }
+    } else {
+      String decoded;
+      if (isUtf8(in)) {
+        decoded = RawParseUtils.decode(UTF_8, in, 3, in.length);
+        utf8Bom = true;
+      } else {
+        decoded = RawParseUtils.decode(in);
+      }
+      fromText(decoded);
+      snapshot = newSnapshot;
+      hash = newHash;
+    }
+    return Boolean.TRUE;
+  }
+
+  // ... other code
+}
+```
+
+**Explanation of the changes:**
+
+1. **Extracted method:** The code block identified for extraction has been moved into a new private method named `processFileContent`.
+2. **Method placement:** The extracted method is placed within the `FileBasedConfig` class to maintain its context and access to class members.
+3. **Invocation:** The `processFileContent` method is called within the `load` method using a method reference (`this::processFileContent`), passing the file as an argument.
+4. **Return value:** The extracted method returns `Boolean.TRUE` to maintain consistency with the original code's behavior within `FileUtils.readWithRetries`.
+
+**Benefits of this refactoring:**
+
+- **Improved readability:** The `load` method is now more concise and easier to read, as the logic for processing file content is separated into a dedicated method.
+- **Better organization:** The code is more modular, with a clear separation of concerns between loading the configuration and processing file content.
+- **Enhanced maintainability:** The extracted method can be tested and modified independently, making it easier to maintain and update the code in the future.

@@ -1,0 +1,55 @@
+ **Here are some refactoring opportunities to enhance the code:**
+
+**1. Encapsulate Encoding/Decoding Logic:**
+   - Create separate helper methods or classes to encapsulate the encoding/decoding logic for GEO and CARTESIAN types.
+   - This would improve readability and maintainability by separating concerns.
+
+**2. Utilize Consistent Naming Conventions:**
+   - Rename methods for consistency (e.g., `longAsPoint` -> `decodePointFromLong`, `pointAsLong` -> `encodePointToLong`).
+   - Improve code readability and clarity.
+
+**3. Introduce a CoordinateEncoding Interface:**
+   - Define an interface to represent coordinate encoding/decoding operations.
+   - GEO and CARTESIAN could implement this interface, promoting code reusability and flexibility.
+
+**4. Handle Geometry Validation Consistently:**
+   - Address the TODO comment in `wktToWkb` to streamline geometry validation.
+   - Consider using a strategy pattern for validation, allowing different validation approaches for different coordinate types.
+
+**Refactored Code:**
+
+```java
+public enum SpatialCoordinateTypes {
+    GEO(new GeoCoordinateEncoding()),
+    CARTESIAN(new CartesianCoordinateEncoding());
+
+    private final CoordinateEncoding encoding;
+
+    SpatialCoordinateTypes(CoordinateEncoding encoding) {
+        this.encoding = encoding;
+    }
+
+    public Point decodePointFromLong(long encoded) {
+        return encoding.decodePointFromLong(encoded);
+    }
+
+    public long encodePointToLong(double x, double y) {
+        return encoding.encodePointToLong(x, y);
+    }
+
+    // Other methods using the CoordinateEncoding interface...
+}
+
+interface CoordinateEncoding {
+    Point decodePointFromLong(long encoded);
+    long encodePointToLong(double x, double y);
+}
+
+class GeoCoordinateEncoding implements CoordinateEncoding {
+    // Geo-specific encoding/decoding logic
+}
+
+class CartesianCoordinateEncoding implements CoordinateEncoding {
+    // Cartesian-specific encoding/decoding logic
+}
+```

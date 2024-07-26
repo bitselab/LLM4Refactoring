@@ -1,0 +1,50 @@
+To refactor the `createBriefReport` method for better readability and to eliminate the unnecessary `defaultResult` variable, we can inline its value directly into the `StringBuilder` operation. This change makes the code more concise without affecting its functionality.
+
+Refactored Code:
+
+```java
+public static @NotNull String createBriefReport(@NotNull LineData lineData,
+                                                List<ConditionCoverageExpression> conditions,
+                                                List<SwitchCoverageExpression> switches) {
+    StringBuilder buf = new StringBuilder();
+    buf.append(CoverageBundle.message("hits.title", lineData.getHits())).append("\n");
+    int idx = 0;
+    int hits = 0;
+
+    if (lineData.getJumps() != null) {
+        for (JumpData jumpData : lineData.getJumps()) {
+            if (idx >= conditions.size()) {
+                LOG.info("Cannot map coverage report data with PSI: there are more branches in report than in PSI");
+                return createDefaultHitsMessage(lineData);
+            }
+            ConditionCoverageExpression expression = conditions.get(idx++);
+            addJumpDataInfo(buf, jumpData, expression);
+            hits += jumpData.getTrueHits() + jumpData.getFalseHits();
+        }
+    }
+
+    if (lineData.getSwitches() != null) {
+        for (SwitchData switchData : lineData.getSwitches()) {
+            if (idx >= switches.size()) {
+                LOG.info("Cannot map coverage report data with PSI: there are more switches in report than in PSI");
+                return createDefaultHitsMessage(lineData);
+            }
+            SwitchCoverageExpression expression = switches.get(idx++);
+            addSwitchDataInfo(buf, switchData, expression, lineData.getStatus());
+            hits += IntStream.of(switchData.getHits()).sum() + switchData.getDefaultHits();
+        }
+    }
+    if (lineData.getHits() > hits && hits > 0) {
+        buf.append(JavaCoverageBundle.message("report.unknown.outcome", lineData.getHits() - hits));
+    }
+
+    return buf.toString();
+}
+```
+
+In this refactored code:
+
+- The `defaultResult` variable has been removed, and its value is directly appended to the `StringBuilder` instance `buf`.
+- This change simplifies the method by removing an intermediate variable without compromising the clarity or functionality of the code. 
+
+The rest of the method remains unchanged, as it appears to be correctly implemented and does not have any other obvious candidates for inline variable refactoring.

@@ -1,0 +1,32 @@
+The method name `capitalizeJoinHints` in the provided code snippet is somewhat misleading as it suggests that the method is specifically targeting "join" hints for capitalization. However, from the context of the method implementation, it appears that the method is actually applying a `CapitalizeQueryHintsShuttle` to the entire `RelNode` tree. This shuttle likely capitalizes more than just join hints. Therefore, a more appropriate name should be chosen to accurately reflect the method's functionality.
+
+A better name for this method could be `applyCapitalizationToQueryHints` or `capitalizeHintsInRelNode`. This name change would more accurately describe the method's purpose of applying a capitalization process to all hints within the given `RelNode`, rather than implying a specific focus on join hints.
+
+Here is the refactored code with the renamed method:
+
+```java
+package org.apache.flink.table.planner.hint;
+
+// ... (import statements remain unchanged)
+
+/** Utility class for Flink hints. */
+public abstract class FlinkHints {
+    
+    // ... (other methods and fields remain unchanged)
+
+    /**
+     * Applies capitalization to all query hints in the given RelNode.
+     * 
+     * @param root The root node of the relational expression tree where query hints will be capitalized.
+     * @return The root node with capitalized query hints.
+     */
+    public static RelNode applyCapitalizationToQueryHints(RelNode root) {
+        return root.accept(new CapitalizeQueryHintsShuttle());
+    }
+
+    // ... (rest of the methods remain unchanged)
+}
+
+```
+
+In this refactoring, the method name `applyCapitalizationToQueryHints` clearly conveys that it applies a capitalization process to all query hints within the provided `RelNode`, rather than implying a specific focus on join hints. This makes the code more readable and the intent of the method more clear to other developers or future maintainers of the code.

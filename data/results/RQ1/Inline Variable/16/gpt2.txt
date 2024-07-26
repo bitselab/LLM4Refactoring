@@ -1,0 +1,73 @@
+After reviewing the provided code, I've identified several opportunities for inline variable refactoring. Inline variable refactoring is useful when a variable is used only once or when it unnecessarily clutters the code, making it less readable. Here's the refactored code with inline variable refactorings applied:
+
+```java
+class GenericMessagingTemplateTests {
+
+    // Other class members...
+
+    @Test
+    void sendWithTimeout() {
+        SubscribableChannel channel = mock();
+        final AtomicReference<Message<?>> sent = new AtomicReference<>();
+        willAnswer(invocation -> {
+            sent.set(invocation.getArgument(0));
+            return true;
+        }).given(channel).send(any(Message.class), eq(30_000L));
+        this.template.send(channel, MessageBuilder.withPayload("request")
+                .setHeader(GenericMessagingTemplate.DEFAULT_SEND_TIMEOUT_HEADER, 30_000L)
+                .setHeader(GenericMessagingTemplate.DEFAULT_RECEIVE_TIMEOUT_HEADER, 1L)
+                .build());
+        verify(channel).send(any(Message.class), eq(30_000L));
+        assertThat(sent.get()).isNotNull();
+        assertThat(sent.get().getHeaders().containsKey(GenericMessagingTemplate.DEFAULT_SEND_TIMEOUT_HEADER)).isFalse();
+        assertThat(sent.get().getHeaders().containsKey(GenericMessagingTemplate.DEFAULT_RECEIVE_TIMEOUT_HEADER)).isFalse();
+    }
+
+    @Test
+    void sendWithTimeoutMutable() {
+        SubscribableChannel channel = mock();
+        final AtomicReference<Message<?>> sent = new AtomicReference<>();
+        willAnswer(invocation -> {
+            sent.set(invocation.getArgument(0));
+            return true;
+        }).given(channel).send(any(Message.class), eq(30_000L));
+        MessageHeaderAccessor accessor = new MessageHeaderAccessor();
+        accessor.setLeaveMutable(true);
+        accessor.setHeader(GenericMessagingTemplate.DEFAULT_SEND_TIMEOUT_HEADER, 30_000L);
+        this.template.send(channel, new GenericMessage<>("request", accessor.getMessageHeaders()));
+        verify(channel).send(any(Message.class), eq(30_000L));
+        assertThat(sent.get()).isNotNull();
+        assertThat(sent.get().getHeaders().containsKey(GenericMessagingTemplate.DEFAULT_SEND_TIMEOUT_HEADER)).isFalse();
+        assertThat(sent.get().getHeaders().containsKey(GenericMessagingTemplate.DEFAULT_RECEIVE_TIMEOUT_HEADER)).isFalse();
+    }
+
+    // Other test methods remain unchanged...
+
+    private MessageHandler createLateReplier(final CountDownLatch latch, final AtomicReference<Throwable> failure) {
+        return message -> {
+            try {
+                Thread.sleep(500);
+                ((MessageChannel) message.getHeaders().getReplyChannel()).send(new GenericMessage<>("response"));
+                failure.set(new IllegalStateException("Expected exception"));
+            } catch (InterruptedException e) {
+                failure.set(e);
+            } catch (MessageDeliveryException ex) {
+                String expected = "Reply message received but the receiving thread has exited due to a timeout";
+                if (!expected.equals(ex.getMessage())) {
+                    failure.set(new IllegalStateException("Unexpected error: '" + ex.getMessage() + "'"));
+                }
+            } finally {
+                latch.countDown();
+            }
+        };
+    }
+
+    // Remaining methods...
+}
+```
+
+Changes made:
+1. In `sendWithTimeout` and `sendWithTimeoutMutable`, the `message` variable is inlined since it's used only once.
+2. In `createLateReplier`, the `replyChannel` variable is inlined, simplifying the lambda expression.
+
+These changes improve the readability of the code by reducing unnecessary variable declarations without altering the functionality of the tests.

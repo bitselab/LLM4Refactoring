@@ -1,0 +1,34 @@
+To refactor the given code snippet by employing inline method refactorings, I will integrate the logic of the `configure` method directly into the `configuration` method. This will eliminate the unnecessary `configure` method and streamline the process of generating the `Configuration` object. Here's the refactored code:
+
+```java
+package org.hibernate.search.util.impl.integrationtest.mapper.orm;
+
+// ... [imports remain unchanged]
+
+@SuppressWarnings("resource")
+public final class DatabaseContainer {
+
+    // ... [other members of the class remain unchanged]
+
+    public static Configuration configuration() {
+        if (!SupportedDatabase.H2.equals(DATABASE)) {
+            DATABASE_CONTAINER.start();
+        }
+        Configuration configuration = DATABASE.configuration(DATABASE_CONTAINER);
+
+        if (DATABASE_CONTAINER != null && !DATABASE_CONTAINER.isRunning()) {
+            synchronized (DATABASE_CONTAINER) {
+                if (!DATABASE_CONTAINER.isRunning()) {
+                    DATABASE_CONTAINER.start();
+                }
+            }
+        }
+
+        return configuration;
+    }
+
+    // ... [rest of the class remains unchanged]
+}
+```
+
+In this refactoring, the logic inside the `configure` method is directly placed into the `configuration` method. The `configure` method is removed as its purpose is now served within `configuration`. This change improves readability by reducing the number of methods and directly presenting the logic where it's used.

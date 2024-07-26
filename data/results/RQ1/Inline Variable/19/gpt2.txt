@@ -1,0 +1,110 @@
+After reviewing the provided code snippet for potential inline variable refactorings, there are a few opportunities where this refactoring technique can be applied to improve readability. Inline variable refactoring involves replacing a variable with its initial assignment expression if the variable is used only once and the assignment expression is sufficiently clear.
+
+Here's the refactored code with inline variable refactorings applied:
+
+```java
+package org.springframework.boot.context.config;
+
+import java.io.File;
+import java.io.IOException;
+
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.FileUrlResource;
+import org.springframework.core.io.Resource;
+import org.springframework.util.Assert;
+
+/**
+ * {@link ConfigDataResource} backed by a {@link Resource}.
+ */
+public class StandardConfigDataResource extends ConfigDataResource {
+
+    private final StandardConfigDataReference reference;
+    private final Resource resource;
+    private final boolean emptyDirectory;
+
+    StandardConfigDataResource(StandardConfigDataReference reference, Resource resource) {
+        this(reference, resource, false);
+    }
+
+    StandardConfigDataResource(StandardConfigDataReference reference, Resource resource, boolean emptyDirectory) {
+        Assert.notNull(reference, "Reference must not be null");
+        Assert.notNull(resource, "Resource must not be null");
+        this.reference = reference;
+        this.resource = resource;
+        this.emptyDirectory = emptyDirectory;
+    }
+
+    StandardConfigDataReference getReference() {
+        return this.reference;
+    }
+
+    public Resource getResource() {
+        return this.resource;
+    }
+
+    public String getProfile() {
+        return this.reference.getProfile();
+    }
+
+    boolean isEmptyDirectory() {
+        return this.emptyDirectory;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        StandardConfigDataResource other = (StandardConfigDataResource) obj;
+        return this.emptyDirectory == other.emptyDirectory && isSameUnderlyingResource(this.resource, other.resource);
+    }
+
+    private boolean isSameUnderlyingResource(Resource ours, Resource other) {
+        return ours.equals(other) || isSameFile(getUnderlyingFile(ours), getUnderlyingFile(other));
+    }
+
+    private boolean isSameFile(File ours, File other) {
+        return ours != null && ours.equals(other);
+    }
+
+    @Override
+    public int hashCode() {
+        return getUnderlyingFile(this.resource) != null ? getUnderlyingFile(this.resource).hashCode() : this.resource.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        if (this.resource instanceof FileSystemResource || this.resource instanceof FileUrlResource) {
+            try {
+                return "file [" + this.resource.getFile() + "]";
+            } catch (IOException ex) {
+                // Ignore
+            }
+        }
+        return this.resource.toString();
+    }
+
+    private File getUnderlyingFile(Resource resource) {
+        try {
+            if (resource instanceof ClassPathResource || resource instanceof FileSystemResource || resource instanceof FileUrlResource) {
+                return resource.getFile().getAbsoluteFile();
+            }
+        } catch (IOException ex) {
+            // Ignore
+        }
+        return null;
+    }
+}
+```
+
+Changes Made:
+
+1. In the `hashCode` method, the `underlyingFile` variable has been inlined. Since it is used only once immediately after declaration, inlining makes the code more concise.
+
+2. The `file` variable in `getUnderlyingFile` method has been inlined as it is used only once, making the method more direct and readable.
+
+These changes should enhance the clarity of the code without altering its functionality.

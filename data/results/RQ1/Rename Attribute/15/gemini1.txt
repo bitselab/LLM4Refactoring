@@ -1,0 +1,62 @@
+ **I've identified several refactoring opportunities in the `StrictRunner` class:**
+
+**1. Delegate to Inner Class:**
+
+- The `RecordingFilter` class primarily delegates calls to its `delegate` Filter.
+- Refactor it into a private method within `StrictRunner` to reduce nesting and simplify code structure.
+
+**2. Simplify Flag Condition:**
+
+- The conditional check for `filterRequested` and `listener.isSuccessful()` can be combined concisely using `&&`.
+
+**3. Extract Variable for Clarity:**
+
+- Extract the `!filterRequested && listener.isSuccessful()` condition into a descriptively named boolean variable to enhance readability.
+
+**Here's the refactored code with those changes:**
+
+```java
+package org.mockito.internal.runners;
+
+// ... imports ...
+
+public class StrictRunner implements InternalRunner {
+
+    // ... fields ...
+
+    @Override
+    public void run(RunNotifier notifier) {
+        // ... reporter and listener setup ...
+
+        try {
+            // ... add listeners ...
+            runner.run(notifier);
+        } finally {
+            Mockito.framework().removeListener(reporter);
+        }
+
+        boolean allTestsRanSuccessfully = !filterRequested && listener.isSuccessful();
+        if (allTestsRanSuccessfully) {
+            reporter.validateUnusedStubs(testClass, notifier);
+        }
+    }
+
+    // ... other methods ...
+
+    @Override
+    public void filter(Filter filter) throws NoTestsRemainException {
+        filterRequested = delegateToFilter(filter);
+    }
+
+    private boolean delegateToFilter(Filter filter) throws NoTestsRemainException {
+        try {
+            filter.apply(runner.getDescription());
+            return false; // Filter allowed all tests to run
+        } catch (NoTestsRemainException e) {
+            return true;  // Filter excluded some tests
+        }
+    }
+}
+```
+
+**While these changes improve code clarity, consider further refactoring based on specific project guidelines and testing needs.**

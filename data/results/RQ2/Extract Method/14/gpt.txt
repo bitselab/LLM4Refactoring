@@ -1,0 +1,50 @@
+The identified code snippet appears twice in the `NFARunAutomaton` class, specifically in the methods `getNextTransition` and `getTransition`. Extracting this code into a new method would improve the maintainability and readability of the code by reducing duplication. Let's apply this refactoring:
+
+### Refactored `NFARunAutomaton` Class Snippet
+
+We'll create a method named `updateTransition` which encapsulates the logic of setting `t.dest`, `t.min`, and `t.max` based on the current transition state.
+
+```java
+@Override
+public void getNextTransition(Transition t) {
+    assert t.transitionUpto < points.length - 1 && t.transitionUpto >= -1;
+    while (dStates[t.source].transitions[++t.transitionUpto] == MISSING) {
+        // this shouldn't throw AIOOBE as long as this function is only called
+        // numTransitions times
+    }
+    updateTransition(t, t.transitionUpto);
+}
+
+@Override
+public void getTransition(int state, int index, Transition t) {
+    dStates[state].determinize();
+    int outgoingTransitions = -1;
+    t.transitionUpto = -1;
+    t.source = state;
+    while (outgoingTransitions < index && t.transitionUpto < points.length - 1) {
+        if (dStates[t.source].transitions[++t.transitionUpto] != MISSING) {
+            outgoingTransitions++;
+        }
+    }
+    assert outgoingTransitions == index;
+    updateTransition(t, t.transitionUpto);
+}
+
+private void updateTransition(Transition t, int transitionUpto) {
+    t.dest = dStates[t.source].transitions[transitionUpto];
+    t.min = points[transitionUpto];
+    if (transitionUpto == points.length - 1) {
+        t.max = alphabetSize - 1;
+    } else {
+        t.max = points[transitionUpto + 1] - 1;
+    }
+}
+```
+
+### Explanation of the Refactoring
+
+- **Method Extraction:** The duplicated code block is extracted into the `updateTransition` method. This new method takes the `Transition` object `t` and the current `transitionUpto` index as parameters.
+  
+- **Improved Readability and Maintainability:** With this refactoring, the logic for updating the transition is now in one place, making the code easier to understand and maintain. Any future changes to this logic need to be made only in the `updateTransition` method.
+
+- **Consistency:** By having a single method handle the transition updating logic, it ensures consistency across the class where this logic is applied.

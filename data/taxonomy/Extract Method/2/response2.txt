@@ -1,0 +1,61 @@
+Reviewing the given code snippet from `ClosedInputStreamTest`, it's evident that there is some duplicate logic that can be factored out using the extract method refactoring pattern. This involves identifying repetitive code blocks and encapsulating them into a new method to improve code readability and maintainability.
+
+In the provided code snippet:
+```java
+public class ClosedInputStreamTest {
+
+    @Test
+    public void testRead() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertEquals(EOF, cis.read(), "read()");
+        }
+    }
+
+    @Test
+    public void testSingleton() throws Exception {
+        try (@SuppressWarnings("deprecation")
+             ClosedInputStream cis = ClosedInputStream.CLOSED_INPUT_STREAM) {
+            assertEquals(EOF, cis.read(), "read()");
+        }
+        try (ClosedInputStream cis = ClosedInputStream.INSTANCE) {
+            assertEquals(EOF, cis.read(), "read()");
+        }
+    }
+
+}
+```
+
+The following code block is repeated across different test cases:
+```java
+assertEquals(EOF, cis.read(), "read()");
+```
+This repetition occurs within the context of a `try` block with resource management. We can extract this as a method, such as `assertReadEOF(ClosedInputStream cis)`, which encapsulates the assertion logic and can be reused in each test case.
+
+Here's the refactored code with the extracted method:
+```java
+public class ClosedInputStreamTest {
+
+    @Test
+    public void testRead() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertReadEOF(cis);
+        }
+    }
+
+    @Test
+    public void testSingleton() throws Exception {
+        try (@SuppressWarnings("deprecation")
+             ClosedInputStream cis = ClosedInputStream.CLOSED_INPUT_STREAM) {
+            assertReadEOF(cis);
+        }
+        try (ClosedInputStream cis = ClosedInputStream.INSTANCE) {
+            assertReadEOF(cis);
+        }
+    }
+
+    private void assertReadEOF(ClosedInputStream cis) throws IOException {
+        assertEquals(EOF, cis.read(), "read()");
+    }
+}
+```
+This refactoring simplifies the test methods by abstracting out the repetitive assertion into a single method, enhancing the clarity and maintainability of the test class.

@@ -1,0 +1,26 @@
+In the given `CommandLineBuilder` class, we observe a similar pattern to the previous example where inline method refactoring could be beneficial. The `toString()` method is essentially a proxy that only calls another method (`toString(String delim)`) with a fixed argument (`" "`). This pattern fits the criteria for inline method refactoring to eliminate unnecessary method layers and improve code readability and compactness.
+
+Here is the refactored code for `CommandLineBuilder` class after applying the inline method refactoring:
+
+```java
+public class CommandLineBuilder
+{
+
+    @Override
+    public String toString()
+    {
+        StringBuilder buf = new StringBuilder();
+        for (String arg : args)
+        {
+            if (buf.length() > 0)
+                buf.append(" "); // directly using the delimiter " "
+            buf.append(arg); // we assume escaping has occurred during addArg
+        }
+
+        return buf.toString();
+    }
+
+}
+```
+
+This refactoring removes the `toString(String delim)` method, incorporating its logic directly into the `toString()` method. The hardcoded delimiter `" "` is used directly in the loop where string concatenation occurs. This change keeps the class functionality intact while removing an unnecessary method call, thereby simplifying the code structure.

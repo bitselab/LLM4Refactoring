@@ -1,0 +1,37 @@
+Absolutely! Here's the refactored code using inline method refactoring:
+
+```java
+package org.apache.commons.lang3;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.apache.commons.lang3.builder.ToStringStyle;
+import org.junit.jupiter.api.AfterEach;
+
+/**
+  * All tests subclass this test.
+  */
+public class AbstractLangTest {
+
+    /**
+      * All tests should leave the {@link ToStringStyle} registry empty.
+      */
+    @AfterEach
+    public void after() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+}
+```
+
+As you can see, the `validateNullToStringStyleRegistry` method has been removed. Here's how we achieved this:
+
+1. **Locate the Calls:** We identified the only call to `validateNullToStringStyleRegistry` within the `after` method.
+2. **Inline the Method Body:** Inside the `after` method, we replaced the call to `validateNullToStringStyleRegistry` with its entire body:
+
+```java
+assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+```
+
+3. **Delete the Original Method:** Since there are no other usages of `validateNullToStringStyleRegistry`, we can safely delete the entire method definition.
+
+This refactoring improves code readability by eliminating unnecessary method calls and directly expressing the validation logic within the `after` method.

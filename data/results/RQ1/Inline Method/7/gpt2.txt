@@ -1,0 +1,107 @@
+Analyzing the provided code, I see several opportunities for inline method refactoring. Inline method refactoring is used to improve readability and maintainability by eliminating small methods that are only called once or are unnecessarily abstracting simple logic. Here are a few potential candidates for inlining:
+
+1. **Inline `getTypeName` Methods**: The two `getTypeName` static methods are simple enough and only called in a few places. Inlining these methods will make it clearer what's happening without the need to navigate to a separate method.
+
+2. **Inline `typeName` Private Method in `getBinder`**: The `typeName` method inside `getBinder` is a simple conditional logic that can be inlined for clarity.
+
+3. **Consider Inlining `getCreateArrayTypeCommand`**: This method is only called once and is relatively simple. Inlining it might improve the readability of the code where it's used.
+
+4. **Inline Simple Single-Use Methods if Applicable**: If there are other methods like `getCreateArrayTypeCommand` that are simple and only used once, they can also be considered for inlining.
+
+Let's refactor the code with these inlines. I'll show the changes for the `getTypeName` methods and the `typeName` method within `getBinder`. The other inlines will follow a similar approach. Note that for brevity, I'll focus on the specific methods being refactored and not repeat the entire class code.
+
+Here's the refactored code with inline method refactoring applied:
+
+```java
+package org.hibernate.dialect;
+
+// ... [imports]
+
+public class OracleNestedTableJdbcType implements JdbcType {
+
+    // ... [other fields and methods]
+
+    @Override
+    public <X> ValueBinder<X> getBinder(final JavaType<X> javaTypeDescriptor) {
+        final BasicPluralJavaType<X> containerJavaType = (BasicPluralJavaType<X>) javaTypeDescriptor;
+        return new BasicBinder<>(javaTypeDescriptor, this) {
+            @Override
+            protected void doBindNull(PreparedStatement st, int index, WrapperOptions options) throws SQLException {
+                String typeNameUpper = (typeName == null ? getInlineTypeName(options, containerJavaType) : typeName).toUpperCase(Locale.ROOT);
+                st.setNull(index, ARRAY, typeNameUpper);
+            }
+
+            // ... [rest of the method]
+
+            private java.sql.Array getArray(X value, BasicPluralJavaType<X> containerJavaType, WrapperOptions options)
+                    throws SQLException {
+                // ... [implementation of getArray]
+                String arrayTypeNameUpper = (typeName == null ? getInlineTypeName(options, containerJavaType) : typeName).toUpperCase(Locale.ROOT);
+                // ... [rest of the getArray method]
+            }
+        };
+    }
+
+    // ... [rest of the class]
+
+    private static String getInlineTypeName(WrapperOptions options, BasicPluralJavaType<?> containerJavaType) {
+        Dialect dialect = options.getSessionFactory().getJdbcServices().getDialect();
+        JavaType<?> elementJavaType = containerJavaType.getElementJavaType();
+        return dialect.getArrayTypeName(
+                elementJavaType.getJavaTypeClass().getSimpleName(),
+                null, // not needed by OracleDialect.getArrayTypeName(),
+                null // not needed by OracleDialect.getArrayTypeName()
+        );
+    }
+
+    @Override
+    public void addAuxiliaryDatabaseObjects(
+            JavaType<?> javaType,
+            Size columnSize,
+            Database database,
+            TypeConfiguration typeConfiguration) {
+        final Dialect dialect = database.getDialect();
+        final BasicPluralJavaType<?> pluralJavaType = (BasicPluralJavaType<?>) javaType;
+        final JavaType<?> elementJavaType = pluralJavaType.getElementJavaType();
+        String arrayTypeName = typeName==null ? getInlineTypeName(options, pluralJavaType) : typeName;
+        String elementType = typeConfiguration.getDdlTypeRegistry().getTypeName(
+                getElementJdbcType().getDdlTypeCode(),
+                dialect.getSizeStrategy().resolveSize(
+                        getElementJdbcType(),
+                        elementJavaType,
+                        columnSize.getPrecision(),
+                        columnSize.getScale(),
+                        columnSize.getLength()
+                ),
+                new BasicTypeImpl<>(elementJavaType, getElementJdbcType())
+        );
+        String[] createCommands = {
+            "create or replace type " + arrayTypeName + " as table of " + elementType
+        };
+        database.addAuxiliaryDatabaseObject(
+                new NamedAuxiliaryDatabaseObject(
+                        arrayTypeName,
+                        database.getDefaultNamespace(),
+                        createCommands,
+                        new String[]{"drop type " + arrayTypeName + " force"},
+                        emptySet(),
+                        true
+                )
+        );
+    }
+
+    // ... [rest of the class]
+}
+```
+
+In this refactoring:
+
+1. **Inline `getTypeName` Methods**: The `getTypeName` methods have been inlined into the `getInlineTypeName` private method, which is now called directly where needed.
+
+2. **Inline `typeName` Method in `getBinder`**: The
+
+`typeName` logic within the `getBinder` method has been inlined directly into the `doBindNull` and `getArray` methods.
+
+3. **Inline `getCreateArrayTypeCommand`**: The logic of `getCreateArrayTypeCommand` is now directly implemented in the `addAuxiliaryDatabaseObjects` method, enhancing its readability.
+
+By applying inline method refactoring, the code becomes more direct and easier to understand, especially for those methods that are relatively straightforward and used only in a single context. This approach can help reduce the cognitive load on developers who are trying to understand the code, as it minimizes the need to jump between different parts of the codebase to follow the logic.

@@ -1,0 +1,18 @@
+To improve the readability and clarity of the `closeWebSockets` method, we can rename the parameters to more accurately describe their roles. Specifically, renaming `webSocket` to `clientWebSocket` and `server` to `serverWebSocket` will make it clearer that one represents the client-side WebSocket and the other represents the server-side WebSocket.
+
+Here's the refactored `closeWebSockets` method with improved parameter names:
+
+```java
+private void closeWebSockets(WebSocket clientWebSocket, WebSocket serverWebSocket) {
+    serverWebSocket.close(1001, "");
+    clientListener.assertClosing(1001, "");
+    clientWebSocket.close(1000, "");
+    serverListener.assertClosing(1000, "");
+    clientListener.assertClosed(1001, "");
+    serverListener.assertClosed(1000, "");
+    clientListener.assertExhausted();
+    serverListener.assertExhausted();
+}
+```
+
+In this refactored version, `clientWebSocket` and `serverWebSocket` provide clear distinctions between the two WebSockets involved in the method. This change enhances the readability and maintainability of the code, as it becomes immediately apparent which WebSocket is on the client side and which is on the server side.

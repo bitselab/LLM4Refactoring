@@ -1,0 +1,24 @@
+Absolutely, you're right! The current method name `findLibraryNodes` doesn't clearly communicate its purpose. Here's a refactored version with a more descriptive name:
+
+```java
+@Nullable
+private static ModuleNode findModuleNodeForLibrary(@NotNull Map<String, Set<ModuleNode>> packagesDeclaredInModules,
+                                                    @NotNull Map<PsiJavaModule, ModuleNode> nodesByDescriptor,
+                                                    @NotNull Project project,
+                                                    @NotNull Library library) {
+  // ... rest of the method body remains the same ...
+}
+```
+
+**Explanation of the changes:**
+
+- **Original method name:** `findLibraryNodes`
+- **Refactored method name:** `findModuleNodeForLibrary`
+
+**Improvements:**
+
+- **Clarity:** The new name, `findModuleNodeForLibrary`, explicitly mentions the purpose of the method. It searches for a `ModuleNode` associated with a given library. 
+- **Accuracy:** The original name implied finding "nodes" for libraries, which could be interpreted as any kind of node related to the library. The new name clarifies that it specifically searches for `ModuleNode` objects. 
+- **Readability:** The new name is slightly longer but provides more context and improves readability.
+
+This refactoring enhances code comprehension and makes it easier for other developers to understand the method's functionality. 

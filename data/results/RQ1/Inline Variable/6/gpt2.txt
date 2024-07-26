@@ -1,0 +1,60 @@
+Inline method refactoring is a technique used to streamline code by eliminating intermediate variables or methods that are only used once and don't significantly enhance clarity or reusability. In the provided code snippet, there are several opportunities for inline method refactoring:
+
+1. **Inlining Single-Use Helper Methods:** If a private helper method is only used once, and its logic is straightforward, it can be inlined for clarity. However, if the method improves readability or is likely to be reused, it's better to keep it separate.
+
+2. **Inlining Variables Used Only Once:** Variables that are assigned and used only once in close proximity can often be inlined.
+
+Here's an example of how some parts of the code could be refactored:
+
+**Original Code:**
+```java
+@Test
+public void testAddMountTable() throws IOException {
+    MountTable newEntry = MountTable.newInstance(
+            "/testpath", Collections.singletonMap("ns0", "/testdir"),
+            Time.now(), Time.now());
+
+    RouterClient client = routerContext.getAdminClient();
+    MountTableManager mountTable = client.getMountTableManager();
+
+    // Existing mount table size
+    List<MountTable> records = getMountTableEntries(mountTable);
+    assertEquals(records.size(), mockMountTable.size());
+
+    // Add
+    AddMountTableEntryRequest addRequest =
+            AddMountTableEntryRequest.newInstance(newEntry);
+    AddMountTableEntryResponse addResponse =
+            mountTable.addMountTableEntry(addRequest);
+    assertTrue(addResponse.getStatus());
+
+    // New mount table size
+    List<MountTable> records2 = getMountTableEntries(mountTable);
+    assertEquals(records2.size(), mockMountTable.size() + 1);
+}
+```
+
+**Refactored Code:**
+```java
+@Test
+public void testAddMountTable() throws IOException {
+    AddMountTableEntryRequest addRequest = AddMountTableEntryRequest.newInstance(
+        MountTable.newInstance("/testpath", Collections.singletonMap("ns0", "/testdir"), Time.now(), Time.now())
+    );
+    MountTableManager mountTable = routerContext.getAdminClient().getMountTableManager();
+
+    int initialSize = getMountTableEntries(mountTable).size();
+    assertEquals(initialSize, mockMountTable.size());
+
+    assertTrue(mountTable.addMountTableEntry(addRequest).getStatus());
+    assertEquals(getMountTableEntries(mountTable).size(), initialSize + 1);
+}
+```
+
+In this refactoring:
+- The variable `newEntry` is inlined directly into the `addRequest` initialization.
+- The variable `client` is eliminated, and the chain call is used directly.
+- The variable `addResponse` is inlined into the `assertTrue` call.
+- Renamed `records` and `records2` to `initialSize` for clarity, and inlined them.
+
+These changes make the code more concise without losing readability. However, care should be taken not to overuse inlining, as it can sometimes make the code harder to understand or debug. It's important to strike a balance between conciseness and clarity.

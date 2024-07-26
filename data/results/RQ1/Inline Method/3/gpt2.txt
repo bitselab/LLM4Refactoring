@@ -1,0 +1,27 @@
+In the provided code snippet, an inline method refactoring can be applied. The method `validateNullToStringStyleRegistry` is only called once and its body is quite simple. Inlining this method will make the code more straightforward and reduce the overall complexity by eliminating an unnecessary method call. Here's the refactored code with the inline method refactoring applied:
+
+```java
+package org.apache.commons.lang3;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.apache.commons.lang3.builder.ToStringStyle;
+import org.junit.jupiter.api.AfterEach;
+
+/**
+ * All tests subclass this test.
+ */
+public class AbstractLangTest {
+
+    /**
+     * All tests should leave the {@link ToStringStyle} registry empty.
+     */
+    @AfterEach
+    public void after() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+
+}
+```
+
+In this refactored version, the `after` method directly includes the assertion that was previously in `validateNullToStringStyleRegistry`. This change makes the code more concise without affecting its readability or functionality.

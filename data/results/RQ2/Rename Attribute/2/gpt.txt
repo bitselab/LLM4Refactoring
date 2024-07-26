@@ -1,0 +1,179 @@
+To improve the readability of the code through rename attribute refactoring, I will change the name of the `maxLength` attribute to something more descriptive. A good choice would be `maximumReadLimit`, as it clearly describes the purpose of the attribute – to limit the maximum number of bytes to be read.
+
+Here is the complete refactored code with the renamed attribute:
+
+```java
+package org.apache.commons.io.input;
+
+import static org.apache.commons.io.IOUtils.EOF;
+
+import java.io.IOException;
+import java.io.InputStream;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.build.AbstractStreamBuilder;
+
+/**
+ * [existing class comments]
+ */
+public class BoundedInputStream extends ProxyInputStream {
+
+    // TODO For 3.0, extend CountingInputStream. Or, add a max feature to CountingInputStream.
+
+    public static class Builder extends AbstractStreamBuilder<BoundedInputStream, Builder> {
+
+        /** The max count of bytes to read. Renamed from maxLength for clarity. */
+        private long maximumReadLimit = EOF;  // Renamed from maxLength
+
+        @SuppressWarnings("resource")
+        @Override
+        public BoundedInputStream get() throws IOException {
+            return new BoundedInputStream(getInputStream(), maximumReadLimit, propagateClose);
+        }
+
+        public Builder setMaxCount(final long maxCount) {
+            this.maximumReadLimit = maxCount;  // Updated reference to renamed attribute
+            return this;
+        }
+
+        public Builder setPropagateClose(final boolean propagateClose) {
+            this.propagateClose = propagateClose;
+            return this;
+        }
+
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    private final long maxCount;
+
+    private boolean propagateClose = true;
+
+    @Deprecated
+    public BoundedInputStream(final InputStream in) {
+        this(in, EOF);
+    }
+
+    @Deprecated
+    public BoundedInputStream(final InputStream inputStream, final long maxCount) {
+        this(inputStream, maxCount, true);
+    }
+
+    @SuppressWarnings("resource")
+    private BoundedInputStream(final InputStream inputStream, final long maxCount, final boolean propagateClose) {
+        super(new CountingInputStream(inputStream));
+        this.maxCount = maxCount;
+        this.propagateClose = propagateClose;
+    }
+
+    private CountingInputStream getCountingInputStream() {
+        return (CountingInputStream) in;
+    }
+
+    @Override
+    public int available() throws IOException {
+        if (isMaxCount()) {
+            onMaxLength(maxCount, getCount());
+            return 0;
+        }
+        return in.available();
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (propagateClose) {
+            in.close();
+        }
+    }
+
+    public long getCount() {
+        return getCountingInputStream().getByteCount();
+    }
+
+    public long getMaxCount() {
+        return maxCount;
+    }
+
+    @Deprecated
+    public long getMaxLength() {
+        return maxCount;
+    }
+
+    public long getRemaining() {
+        return getMaxCount() - getCount();
+    }
+
+    private boolean isMaxCount() {
+        return maxCount >= 0 && getCount() >= maxCount;
+    }
+
+    public boolean isPropagateClose() {
+        return propagateClose;
+    }
+
+    @Override
+    public synchronized void mark(final int readLimit) {
+        in.mark(readLimit);
+    }
+
+    @Override
+    public boolean markSupported() {
+        return in.markSupported();
+    }
+
+    protected void onMaxLength(final long maxLength, final long count) throws IOException {
+        // for subclasses
+    }
+
+    @Override
+    public int read() throws IOException {
+        if (isMaxCount()) {
+            onMaxLength(maxCount, getCount());
+            return EOF;
+        }
+        return super.read();
+    }
+
+    @Override
+    public int read(final byte[] b) throws IOException {
+        return read(b, 0, b.length);
+    }
+
+    @Override
+    public int read(final byte[] b, final int off, final int len) throws IOException {
+        if (isMaxCount()) {
+            onMaxLength(maxCount, getCount());
+            return EOF;
+        }
+        return super.read(b, off, (int) toReadLen(len));
+    }
+
+    @Override
+    public synchronized void reset() throws IOException {
+        in.reset();
+    }
+
+    @Deprecated
+    public void setPropagateClose(final boolean propagateClose) {
+        this.propagateClose = propagateClose;
+    }
+
+    @Override
+    public long skip(final long n) throws IOException {
+        return super.skip(toReadLen(n));
+    }
+
+    private long toReadLen(final long len) {
+        return maxCount >= 0 ? Math.min(len, maxCount - getCount()) : len;
+    }
+
+    @Override
+    public String toString() {
+        return in.toString();
+    }
+}
+```
+
+In this refactoring, the `maxLength` attribute in the `Builder` inner class has been renamed to `maximumReadLimit`. This change should make the code more readable and the purpose of the attribute clearer.

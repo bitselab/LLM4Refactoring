@@ -1,0 +1,52 @@
+In the provided code snippet, the `doAdd(String failureMessage)` method in the `ContextualFailureCollectorImpl` class is a good candidate for inline method refactoring. This method is relatively straightforward and only contains a conditional check followed by an action. By inlining this method, we can simplify the code and improve its readability.
+
+Here's how the refactored code would look after applying the inline method refactoring:
+
+### Original `ContextualFailureCollectorImpl` Class:
+
+```java
+private void doAdd(String failureMessage) {
+    if (root.shouldAddFailure()) {
+        failureMessages.add(failureMessage);
+    }
+}
+```
+
+### Refactored Usage within `ContextualFailureCollectorImpl`:
+
+In the refactored version, I will replace the calls to `doAdd(String failureMessage)` with its body, thereby eliminating the need for the `doAdd` method.
+
+```java
+@Override
+public void add(Throwable t) {
+    if (t instanceof SearchException) {
+        SearchException e = (SearchException) t;
+        ContextualFailureCollectorImpl failureCollector = this;
+        EventContext eventContext = e.context();
+        if (eventContext != null) {
+            failureCollector = failureCollector.withContext(e.context());
+        }
+        // Inline method refactoring applied here
+        if (root.shouldAddFailure()) {
+            failureMessages.add(e.messageWithoutContext());
+        }
+    } else {
+        // Inline method refactoring applied here
+        if (root.shouldAddFailure()) {
+            failureMessages.add(t.getMessage());
+        }
+    }
+}
+
+@Override
+public void add(String failureMessage) {
+    // Inline method refactoring applied here
+    if (root.shouldAddFailure()) {
+        failureMessages.add(failureMessage);
+    }
+}
+```
+
+In this refactored version, the `doAdd` method is no longer needed, as its functionality is now directly included in the `add(Throwable t)` and `add(String failureMessage)` methods. This makes the code more straightforward and reduces the overall complexity of the `ContextualFailureCollectorImpl` class.
+
+Remember, the goal of inline method refactoring is to make the code more readable and maintainable, especially when the method being inlined is simple and not adding significant clarity or abstraction.

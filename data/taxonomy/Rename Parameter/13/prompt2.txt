@@ -1,0 +1,42 @@
+Rename parameter refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename parameter refactoring pattern is to rename parameters that are inconsistent with their types. Here is an example of the rename parameter refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public String forDbDeleteById(String tableName, String[] primaryKey) {
+    tableName = tableName.trim();
+    trimPrimaryKeys(primaryKey);
+    StringBuilder sql = new StringBuilder("delete from ").append(tableName).append(" where ");
+    for (int i = 0; i < primaryKey.length; i++) {
+        if (i > 0)
+            sql.append(" and ");
+        sql.append(primaryKey[i]).append(" = ?");
+    }
+    return sql.toString();
+}
+```
+The source code after refactoring is:
+```
+public String forDbDeleteById(String tableName, String[] pKeys) {
+    tableName = tableName.trim();
+    trimPrimaryKeys(pKeys);
+    StringBuilder sql = new StringBuilder("delete from ").append(tableName).append(" where ");
+    for (int i = 0; i < pKeys.length; i++) {
+        if (i > 0)
+            sql.append(" and ");
+        sql.append(pKeys[i]).append(" = ?");
+    }
+    return sql.toString();
+}
+```
+In this example, the developer renamed the parameter "requirementNowMet" to "requirement".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename parameter refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+private static void assertFailingWithMessage(Events testEvent, String msg) {
+    testEvent//
+            .assertStatistics(stats -> stats.failed(1))//
+            .assertThatEvents().haveExactly(1, finishedWithFailure(message(msg)));
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

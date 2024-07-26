@@ -1,0 +1,58 @@
+To refactor the provided code using inline method refactoring, we'll focus on the `get` method marked as deprecated. This method currently serves as an overload for the `get` method but has been marked for removal. The goal of inline refactoring is to simplify the code by removing this method and integrating its logic into the places where it's called, if necessary.
+
+However, from the provided snippet, it's not clear where the deprecated `get` method is being called. If it's not being used anywhere else in the code, we can safely remove it. If it is being used, we should replace those calls with the logic contained within the method.
+
+### Proposed Refactored Code
+```java
+package org.springframework.boot.web.server;
+
+// ... [import statements]
+
+public final class WebServerSslBundle implements SslBundle {
+
+    // ... [other fields and methods]
+
+    /**
+     * Get the {@link SslBundle} that should be used for the given {@link Ssl} instance.
+     * @param ssl the source ssl instance
+     * @return a {@link SslBundle} instance
+     * @throws NoSuchSslBundleException if a bundle lookup fails
+     */
+    public static SslBundle get(Ssl ssl) throws NoSuchSslBundleException {
+        return get(ssl, null);
+    }
+
+    /**
+     * Get the {@link SslBundle} that should be used for the given {@link Ssl} instance.
+     * @param ssl the source ssl instance
+     * @param sslBundles the bundles that should be used when {@link Ssl#getBundle()} is
+     * set
+     * @return a {@link SslBundle} instance
+     * @throws NoSuchSslBundleException if a bundle lookup fails
+     */
+    public static SslBundle get(Ssl ssl, SslBundles sslBundles) throws NoSuchSslBundleException {
+        // Inline the logic from the deprecated get method
+        Assert.state(Ssl.isEnabled(ssl), "SSL is not enabled");
+        String keyPassword = ssl.getKeyPassword();
+        String bundleName = ssl.getBundle();
+        if (StringUtils.hasText(bundleName)) {
+            Assert.state(sslBundles != null,
+                    () -> "SSL bundle '%s' was requested but no SslBundles instance was provided"
+                            .formatted(bundleName));
+            return sslBundles.getBundle(bundleName);
+        }
+        SslStoreBundle stores = createStoreBundle(ssl);
+        return new WebServerSslBundle(stores, keyPassword, ssl);
+    }
+
+    // ... [rest of the methods]
+
+}
+```
+
+### Explanation
+- The deprecated `get` method has been removed.
+- The logic of the deprecated method is integrated into the other `get` method.
+- If the deprecated method was called elsewhere in the code, those calls need to be replaced with calls to the updated `get` method.
+
+This refactoring should make the code cleaner and more maintainable by removing the deprecated method and integrating its logic into the existing method. It also aligns with the intention to remove the deprecated method in future versions.

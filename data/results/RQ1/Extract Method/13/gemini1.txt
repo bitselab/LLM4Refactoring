@@ -1,0 +1,31 @@
+## Refactoring Opportunities in AutoCloseTests.java
+
+Here are some refactoring opportunities in the provided code:
+
+**1. Extract Test Method Assertions:**
+
+Several test methods (`assertFailingWithMessage`, `assertMissingCloseMethod`)  share similar logic for asserting failures with specific messages.  We can extract this logic into a separate helper method to improve readability and maintainability.
+
+**2. Refactor recorder usage:**
+
+The `recorder` list is a static field and might lead to unintended side effects if multiple tests are run concurrently. Consider using a thread-local variable or a different approach to isolate recorder data for each test.
+
+**3. Organize Test Classes:**
+
+There are many subclasses extending other test classes with similar structures. Consider using a single base class with abstract methods or interfaces to reduce code duplication.
+
+**Here's an example of refactoring the `assertFailingWithMessage` method:**
+
+```java
+private static void assertFailingTest(Events testEvents, String msg) {
+  testEvents
+      .assertStatistics(stats -> stats.failed(1))
+      .assertThatEvents().haveExactly(1, finishedWithFailure(message(msg)));
+}
+```
+
+This refactored method can be reused throughout the class to simplify assertions.
+
+**Refactoring the recorder usage and test class organization would require a more significant code restructuring. It's recommended to analyze the specific needs and test execution environment before implementing those changes.**
+
+**Overall, the code is well-structured and includes comments explaining the logic. The suggested refactorings are focused on improving maintainability and reducing duplication.**

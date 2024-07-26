@@ -1,0 +1,52 @@
+After reviewing the provided code snippet, there are several opportunities for the "Extract Variable" refactoring to improve readability and maintainability. This type of refactoring is beneficial in cases where a certain expression is repeated multiple times, making the code harder to read and potentially leading to bugs if the expression needs to be updated in the future.
+
+I'll focus on extracting repeated expressions into variables, particularly in the `testNumBackendCalls`, `testSeekAndReadWithConf`, and other similar methods. Here's how these refactorings can be applied:
+
+1. **Extracting File Size and Buffer Size Calculations**: The calculation for `fileSize` and `footerReadBufferSize` is repeated across different methods. These can be extracted into separate methods or calculated once and stored in a variable at the beginning of the loop.
+
+2. **Extracting Repeated Calculations in `seekReadAndTest` Method**: In this method, expressions like `actualContentLength - AbfsInputStream.FOOTER_SIZE` and `seekPos + length` are used multiple times. These can be extracted into variables for better readability.
+
+Let's apply these refactorings to a part of the code:
+
+```java
+// Example of Extract Variable Refactoring
+
+private void testNumBackendCalls(boolean optimizeFooterRead)
+        throws Exception {
+    int fileIdx = 0;
+    for (int i = 0; i <= 4; i++) {
+        for (int j = 0; j <= 2; j++) {
+            int fileSize = calculateFileSize(i);
+            int footerReadBufferSize = calculateBufferSize(j);
+            final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+            Path testFilePath = createPathAndFileWithContent(fs, fileIdx++, fileSize);
+            int length = AbfsInputStream.FOOTER_SIZE;
+            FutureDataInputStreamBuilder builder = getParameterizedBuilder(
+                    testFilePath, fs, footerReadBufferSize);
+            // ... [rest of the method] ...
+        }
+    }
+}
+
+private int calculateFileSize(int i) {
+    return (int) Math.pow(2, i) * 256 * ONE_KB;
+}
+
+private int calculateBufferSize(int j) {
+    return (int) Math.pow(2, j) * 256 * ONE_KB;
+}
+
+// Refactoring in seekReadAndTest method
+private void seekReadAndTest(final AzureBlobFileSystem fs, final Path testFilePath, final int seekPos, final int length, final byte[] fileContent, int footerReadBufferSize) throws Exception {
+    // ... [code before] ...
+    
+    long footerStart = max(0, actualContentLength - AbfsInputStream.FOOTER_SIZE);
+    long endPosition = seekPos + length;
+    boolean isOptimizationOn = conf.optimizeFooterRead() && seekPos >= footerStart;
+    long actualLength = endPosition > actualContentLength ? length - (endPosition - actualContentLength) : length;
+
+    // ... [rest of the method] ...
+}
+```
+
+These changes make the code more readable and maintainable. For the complete code, similar refactorings should be applied wherever repetitive expressions are found. Remember, after refactoring, it's crucial to run tests to ensure that the functionality remains consistent.

@@ -1,0 +1,95 @@
+## Refactored Code with Renamed Variables
+
+Here's the refactored code with some renamed variables for improved readability:
+
+```java
+package com.github.javaparser.symbolsolver.javaparsermodel.contexts;
+
+import com.github.javaparser.ast.nodeTypes.SwitchNode;
+import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.stmt.SwitchEntry;
+import com.github.javaparser.ast.stmt.SwitchStmt;
+import com.github.javaparser.resolution.SymbolDeclarator;
+import com.github.javaparser.resolution.TypeSolver;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
+import com.github.javaparser.resolution.model.SymbolReference;
+import com.github.javaparser.resolution.model.typesystem.ReferenceTypeImpl;
+import com.github.javaparser.resolution.types.ResolvedType;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFactory;
+
+import java.util.List;
+
+import static com.github.javaparser.resolution.Navigator.demandParentNode;
+
+/**
+ * @author Federico Tomassetti
+ */
+public class SwitchEntryContext extends AbstractJavaParserContext<SwitchEntry> {
+
+  public SwitchEntryContext(SwitchEntry wrappedNode, TypeSolver typeSolver) {
+    super(wrappedNode, typeSolver);
+  }
+
+  @Override
+  public SymbolReference<? extends ResolvedValueDeclaration> solveSymbol(String name) {
+    SwitchNode switchNode = (SwitchNode) demandParentNode(wrappedNode);
+    ResolvedType switchType = JavaParserFacade.get(typeSolver).getType(switchNode.getSelector());
+    if (switchType.isReferenceType() && switchType.asReferenceType().getTypeDeclaration().isPresent()) {
+      ResolvedReferenceTypeDeclaration typeDeclaration = switchType.asReferenceType().getTypeDeclaration().get();
+      if (typeDeclaration.isEnum()) {
+        if (switchType instanceof ReferenceTypeImpl) {
+          ReferenceTypeImpl referenceType = (ReferenceTypeImpl) switchType;
+          if (referenceType.getTypeDeclaration().isPresent()) {
+            ResolvedReferenceTypeDeclaration usedTypeDeclaration = referenceType.getTypeDeclaration().get();
+            if (usedTypeDeclaration.asEnum().hasEnumConstant(name)) {
+              return SymbolReference.solved(usedTypeDeclaration.asEnum().getEnumConstant(name));
+            }
+            if (usedTypeDeclaration.hasField(name)) {
+              return SymbolReference.solved(usedTypeDeclaration.getField(name));
+            }
+          } else {
+            // Consider IllegalStateException or similar?
+          }
+        } else {
+          throw new UnsupportedOperationException();
+        }
+      }
+    }
+
+    // look for declaration in this and previous switch entry statements
+    for (SwitchEntry entry : switchNode.getEntries()) {
+      for (Statement statement : entry.getStatements()) {
+        SymbolDeclarator symbolDeclarator = JavaParserFactory.getSymbolDeclarator(statement, typeSolver);
+        SymbolReference<? extends ResolvedValueDeclaration> symbolReference = solveWith(symbolDeclarator, name);
+        if (symbolReference.isSolved()) {
+          return symbolReference;
+        }
+      }
+      // once we reach this switch entry statement, stop: we do not want to look in later switch entry statements
+      if (entry == wrappedNode) {
+        break;
+      }
+    }
+
+    return solveSymbolInParentContext(name);
+  }
+
+  @Override
+  public SymbolReference<ResolvedMethodDeclaration> solveMethod(String name, List<ResolvedType> argumentTypes, boolean staticOnly) {
+    // TODO: Document why staticOnly is forced to be false.
+    return solveMethodInParentContext(name, argumentTypes, false);
+  }
+}
+```
+
+Here are the specific changes made:
+
+* **`switchStmt` -> `switchNode`:** More accurate name for the AST node type.
+* **`type` -> `switchType`:** Clarifies the type being resolved related to the switch node.
+* **`typeDeclaration` -> `usedTypeDeclaration`:**  Differentiates from the general `typeDeclaration` used earlier.
+* **`seStmt` -> `entry`:** Shorter and clearer name for the loop iterator.
+
+These changes

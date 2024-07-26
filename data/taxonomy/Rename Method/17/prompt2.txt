@@ -1,0 +1,83 @@
+Rename method refactorings are frequently employed to modify low-quality identifieres to improve readability.
+##################################################
+A rename method refactoring pattern is to rename methods whose names are inconsistent with their bodies. Here is an example of the rename method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private void handleMessage(ImportKeyResult result) {
+    if (result == null) {
+        Log.e(Constants.TAG, "result == null");
+        return;
+    }
+    if (ACTION_IMPORT_KEY_FROM_KEYSERVER_AND_RETURN_RESULT.equals(getIntent().getAction())
+            || ACTION_IMPORT_KEY_FROM_FILE_AND_RETURN.equals(getIntent().getAction())) {
+        Intent intent = new Intent();
+        intent.putExtra(ImportKeyResult.EXTRA_RESULT, result);
+        ImportKeysActivity.this.setResult(RESULT_OK, intent);
+        ImportKeysActivity.this.finish();
+        return;
+    }
+    if (ACTION_IMPORT_KEY_FROM_KEYSERVER_AND_RETURN_TO_SERVICE.equals(getIntent().getAction())) {
+        ImportKeysActivity.this.setResult(RESULT_OK, mPendingIntentData);
+        ImportKeysActivity.this.finish();
+        return;
+    }
+
+    result.createNotify(ImportKeysActivity.this)
+            .show((ViewGroup) findViewById(R.id.import_snackbar));
+}
+```
+The source code after refactoring is:
+```
+private void handleResult(ImportKeyResult result) {
+    if (result == null) {
+        Log.e(Constants.TAG, "result == null");
+        return;
+    }
+    if (ACTION_IMPORT_KEY_FROM_KEYSERVER_AND_RETURN_RESULT.equals(getIntent().getAction())
+            || ACTION_IMPORT_KEY_FROM_FILE_AND_RETURN.equals(getIntent().getAction())) {
+        Intent intent = new Intent();
+        intent.putExtra(ImportKeyResult.EXTRA_RESULT, result);
+        ImportKeysActivity.this.setResult(RESULT_OK, intent);
+        ImportKeysActivity.this.finish();
+        return;
+    }
+    if (ACTION_IMPORT_KEY_FROM_KEYSERVER_AND_RETURN_TO_SERVICE.equals(getIntent().getAction())) {
+        ImportKeysActivity.this.setResult(RESULT_OK, mPendingIntentData);
+        ImportKeysActivity.this.finish();
+        return;
+    }
+
+    result.createNotify(ImportKeysActivity.this)
+            .show((ViewGroup) findViewById(R.id.import_snackbar));
+}
+```
+In this example, the developer renamed the method "handleMessage" to "handleResult".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+@ParameterizedTest
+@ValueSource(ints = {11, 17, 21})
+void loadFromJava17(int javaVersion) throws IOException {
+    Path javaHome = Paths.get(System.getProperty("user.home"), "openjdk" + javaVersion);
+    assumeTrue(Files.isDirectory(javaHome), "Couldn't find java" + javaVersion + " installation at " + javaHome);
+
+    Path jrtfsPath = javaHome.resolve("lib/jrt-fs.jar");
+    assertTrue(Files.isRegularFile(jrtfsPath), "java" + javaVersion + " installation is incomplete. " + jrtfsPath + " not found!");
+    String classPath = jrtfsPath.toString();
+
+    try (ClasspathClassLoader loader = new ClasspathClassLoader(classPath, null)) {
+        assertEquals(javaHome.toString(), loader.javaHome);
+        try (InputStream stream = loader.getResourceAsStream("java/lang/Object.class")) {
+            assertNotNull(stream);
+            try (DataInputStream data = new DataInputStream(stream)) {
+                assertClassFile(data, javaVersion);
+            }
+        }
+
+        // should not fail for resources without a package
+        assertNull(loader.getResourceAsStream("ClassInDefaultPackage.class"));
+    }
+}
+
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

@@ -1,0 +1,110 @@
+The provided code snippet from the Apache Flink project demonstrates a fairly standard implementation of a metric group class. Here are a few refactoring opportunities that I've identified:
+
+1. **Duplication in Constructor Overloading**: The constructors `InternalSinkWriterMetricGroup(MetricGroup, OperatorIOMetricGroup)` and `mockWriterMetricGroup(MetricGroup, OperatorIOMetricGroup)` are essentially doing the same task. This duplication can be reduced.
+
+2. **Factory Methods**: The static methods `wrap` and `mockWriterMetricGroup` are acting as factory methods. This is good practice, but their implementation can be streamlined.
+
+3. **Visibility of the Constructors**: If the intention is to only allow creation of instances through factory methods, the visibility of the constructors can be changed to private.
+
+4. **Documentation**: The code lacks inline documentation. Adding comments to explain the purpose and usage of methods and fields can increase code readability and maintainability.
+
+Let's refactor the code based on these observations.
+
+### Refactored Code
+
+```java
+package org.apache.flink.runtime.metrics.groups;
+
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.OperatorIOMetricGroup;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
+import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
+import org.apache.flink.runtime.metrics.MetricNames;
+
+/**
+ * Special {@link org.apache.flink.metrics.MetricGroup} representing an Operator.
+ * This class handles metrics related to sink writers.
+ */
+@Internal
+public class InternalSinkWriterMetricGroup extends ProxyMetricGroup<MetricGroup>
+        implements SinkWriterMetricGroup {
+
+    private final Counter numRecordsOutErrors;
+    private final Counter numRecordsSendErrors;
+    private final Counter numRecordsWritten;
+    private final Counter numBytesWritten;
+    private final OperatorIOMetricGroup operatorIOMetricGroup;
+
+    // Private constructor to enforce the use of factory methods.
+    private InternalSinkWriterMetricGroup(
+            MetricGroup parentMetricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        super(parentMetricGroup);
+        this.operatorIOMetricGroup = operatorIOMetricGroup;
+        this.numRecordsOutErrors = parentMetricGroup.counter(MetricNames.NUM_RECORDS_OUT_ERRORS);
+        this.numRecordsSendErrors = parentMetricGroup.counter(MetricNames.NUM_RECORDS_SEND_ERRORS);
+        this.numRecordsWritten = parentMetricGroup.counter(MetricNames.NUM_RECORDS_SEND);
+        this.numBytesWritten = parentMetricGroup.counter(MetricNames.NUM_BYTES_SEND);
+    }
+
+    // Factory method for creating an instance from an OperatorMetricGroup.
+    public static InternalSinkWriterMetricGroup wrap(OperatorMetricGroup operatorMetricGroup) {
+        return new InternalSinkWriterMetricGroup(
+                operatorMetricGroup, operatorMetricGroup.getIOMetricGroup());
+    }
+
+    // Factory method for testing, creating a mock metric group.
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup mockWriterMetricGroup(MetricGroup metricGroup) {
+        return new InternalSinkWriterMetricGroup(
+                metricGroup, UnregisteredMetricsGroup.createOperatorIOMetricGroup());
+    }
+
+    @Override
+    public OperatorIOMetricGroup getIOMetricGroup() {
+        return operatorIOMetricGroup;
+    }
+
+    @Override
+    public Counter getNumRecordsOutErrorsCounter() {
+        return numRecordsOutErrors;
+    }
+
+    @Override
+    public Counter getNumRecordsSendErrorsCounter() {
+        return numRecordsSendErrors;
+    }
+
+    @Override
+    public Counter getNumRecordsSendCounter() {
+        return numRecordsWritten;
+    }
+
+    @Override
+    public Counter getNumBytesSendCounter() {
+        return numBytesWritten;
+    }
+
+    @Override
+    public void setCurrentSendTimeGauge(Gauge<Long> currentSendTimeGauge) {
+        parentMetricGroup.gauge(MetricNames.CURRENT_SEND_TIME, currentSendTimeGauge);
+    }
+}
+```
+
+
+
+### Changes Made:
+
+1. **Reduced Constructor Duplication**: Removed the overloaded constructor and retained only one private constructor. This avoids duplication and enforces the use of factory methods.
+
+2. **Simplified Factory Methods**: The `wrap` and `mockWriterMetricGroup` methods are streamlined to only use the private constructor. This makes the creation process more consistent and easier to maintain.
+
+3. **Private Constructor**: Changed the visibility of the constructor to private. This enforces the use of factory methods for object creation, which is a cleaner and more controlled way of instantiating objects.
+
+4. **Added Documentation**: Included inline comments to improve understanding and maintainability of the code. This helps other developers quickly understand the purpose and functionality of the class and its methods.
+
+These changes should improve the readability, maintainability, and overall design of the code.

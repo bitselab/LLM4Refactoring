@@ -1,0 +1,69 @@
+Upon reviewing the provided code for potential inline method refactoring opportunities, I've identified a few areas where this technique can be applied to simplify the code and improve readability. Inline method refactoring involves integrating the method's body into the places where the method is called and removing the method itself, which is useful when the method's body is as clear as its name.
+
+Here are the refactoring opportunities I noticed:
+
+1. **Inline `shouldAddFailure` in `RootFailureCollector`:** The `shouldAddFailure` method in `RootFailureCollector` is a single line of code and can be inlined for clarity.
+
+2. **Inline `withDefaultContext` in `ContextualFailureCollectorImpl`:** The `withDefaultContext` method is simply a proxy to another method and can be inlined.
+
+3. **Inline `appendContextTo` in `ContextualFailureCollectorImpl`:** The `appendContextTo` method in `ContextualFailureCollectorImpl` is simple and only called in one place, making it a candidate for inlining.
+
+Let's apply these refactorings:
+
+### Original `RootFailureCollector`:
+
+```java
+private boolean shouldAddFailure() {
+    return failureCount.incrementAndGet() <= FAILURE_LIMIT;
+}
+```
+
+### Refactored Usage in `ContextualFailureCollectorImpl`:
+
+```java
+private void doAdd(String failureMessage) {
+    if (failureCount.incrementAndGet() <= FAILURE_LIMIT) {
+        failureMessages.add(failureMessage);
+    }
+}
+```
+
+### Original `ContextualFailureCollectorImpl`:
+
+```java
+@Override
+ContextualFailureCollectorImpl withDefaultContext() {
+    return this;
+}
+```
+
+### Refactored Usage:
+
+```java
+// Usage Example:
+// Instead of calling withDefaultContext(), use 'this' directly
+```
+
+### Original `appendContextTo` Method:
+
+```java
+@Override
+void appendContextTo(StringJoiner joiner) {
+    parent.appendContextTo( joiner );
+    joiner.add( context.render() );
+}
+```
+
+### Refactored Usage:
+
+```java
+private void doAdd(Throwable failure, String failureMessage) {
+    StringJoiner contextJoiner = new StringJoiner(CommonEventContextMessages.INSTANCE.contextSeparator());
+    parent.appendContextTo(contextJoiner);
+    contextJoiner.add(context.render());
+    log.newCollectedFailure(root.process, contextJoiner.toString(), failure);
+    doAdd(failureMessage);
+}
+```
+
+In these examples, I've inlined the methods directly into their usage points. This approach can lead to more readable and understandable code, especially when the method is simple and used only in a few places. It's important to ensure that inlining does not decrease readability or introduce other issues like code duplication.

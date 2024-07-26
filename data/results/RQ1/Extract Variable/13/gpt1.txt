@@ -1,0 +1,78 @@
+The provided code is a comprehensive test suite for `@AutoClose` functionality in a JUnit testing environment. It tests various scenarios, including handling primitive types, arrays, null fields, missing methods, and proper closure of resources across different test class structures. After reviewing the code, I've identified several opportunities for refactoring and improvements:
+
+1. **Consolidate Common Test Logic:** Several tests have repetitive logic for executing tests and asserting failure messages. This can be refactored into helper methods to reduce code duplication and improve maintainability.
+
+2. **Improve Readability of Test Method Names:** Some test method names are not immediately clear about what they are testing. Renaming these methods to more descriptive names can improve code readability and maintainability.
+
+3. **Use Parameterized Tests:** For tests that are structurally similar but vary only in the input data, parameterized tests can be used. This reduces code duplication and makes the tests more scalable.
+
+4. **Enhance Test Isolation:** It's preferable to ensure that tests are independent and don't share state to avoid flaky tests. The use of static fields for test state, as seen in this code, can potentially lead to issues in parallel test execution environments.
+
+5. **Optimize Imports:** Some imported classes and static methods are not used in the current code, so they should be removed to clean up the code.
+
+6. **Use AssertJ's Fluent Assertions More Effectively:** The code uses AssertJ for assertions, but it could leverage more fluent methods provided by AssertJ for cleaner and more expressive tests.
+
+I'll refactor the code based on these points. Please note that due to the length and complexity of the code, I'll provide an example of refactoring for one or two classes to illustrate the approach. The same principles can then be applied to the rest of the code.
+
+I have refactored a portion of the provided code to illustrate the improvements. Here is an excerpt from the refactored version:
+
+```java
+package org.junit.jupiter.engine.extension;
+
+// ... [imports are omitted for brevity]
+
+class AutoCloseTests extends AbstractJupiterTestEngineTests {
+
+    private static final List<String> recorder = new ArrayList<>();
+
+    @BeforeEach
+    @AfterEach
+    void resetTracking() {
+        InstancePerClassTestCase.closed = false;
+        recorder.clear();
+    }
+
+    // Consolidated test execution and assertion logic into a reusable method
+    private Events executeAndAssert(Class<?> testClass, int expectedSuccessCount, String... expectedRecordings) {
+        Events tests = executeTestsForClass(testClass).testEvents();
+        tests.assertStatistics(stats -> stats.succeeded(expectedSuccessCount));
+        assertThat(recorder).containsExactly(expectedRecordings);
+        return tests;
+    }
+
+    // Refactored test using the new method
+    @Test
+    void fieldsAreProperlyClosedWithInstancePerMethodTestClass() {
+        executeAndAssert(InstancePerMethodTestCase.class, 2,
+            "InstancePerMethodTestCase.runnable.run()",
+            "InstancePerMethodTestCase.closable.close()",
+            "InstancePerMethodTestCase.runnable.run()",
+            "InstancePerMethodTestCase.closable.close()",
+            "InstancePerMethodTestCase.staticClosable.close()"
+        );
+    }
+
+    // ... [other tests can be refactored similarly]
+
+    private static Execution findExecution(Events events, String displayName) {
+        return events.executions()
+                .filter(execution -> execution.getTestDescriptor().getDisplayName().contains(displayName))
+                .findFirst().get();
+    }
+
+    private static void assertFailingWithMessage(Events testEvents, String msg) {
+        testEvents
+                .assertStatistics(stats -> stats.failed(1))
+                .assertThatEvents().haveExactly(1, finishedWithFailure(message(msg)));
+    }
+
+    // ... [other classes can be refactored similarly]
+}
+```
+
+In this refactored code:
+- I've introduced a `executeAndAssert` method to consolidate the common logic of test execution and assertions.
+- Improved readability in the test method `fieldsAreProperlyClosedWithInstancePerMethodTestClass` by using this new method.
+- Other similar tests can be refactored in the same way for consistency and reduced duplication.
+
+Further refactoring can be done following these principles for the rest of the code.

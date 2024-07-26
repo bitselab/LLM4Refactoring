@@ -1,0 +1,55 @@
+After reviewing the provided code snippet, I identified several opportunities for extract variable refactoring, which can enhance readability and maintainability. Here are the suggested changes:
+
+1. **Repeated Use of `uriBuilderFactory.uriString(uriTemplate)`**:
+   In `DefaultRequestBodyUriSpec` class, the expression `uriBuilderFactory.uriString(uriTemplate)` is used multiple times in different methods. This can be refactored to a local variable in each method to avoid repetition.
+
+2. **Repeated Creation of `ResponseEntity` Object**:
+   In the `handlerEntityFlux` method of `DefaultResponseSpec` class, the creation of a new `ResponseEntity` object is repeated. Extracting this into a separate method can improve readability.
+
+3. **Repeated Use of `Mono.defer(() -> releaseIfNotConsumed(response).then(Mono.empty()))`**:
+   This expression is used multiple times in `exchangeToMono` and `exchangeToFlux` methods. Extracting it to a method improves readability.
+
+Refactored Code Snippet Example:
+
+```java
+// In DefaultRequestBodyUriSpec class
+
+@Override
+public RequestBodySpec uri(String uriTemplate, Object... uriVariables) {
+    UriBuilder uriBuilder = getUriBuilder(uriTemplate);  // Extracted variable
+    attribute(URI_TEMPLATE_ATTRIBUTE, uriBuilder.toUriString());
+    return uri(uriBuilder.build(uriVariables));
+}
+
+private UriBuilder getUriBuilder(String uriTemplate) {
+    return uriBuilderFactory.uriString(uriTemplate);  // Extracted method
+}
+
+// Similar refactoring in other methods of DefaultRequestBodyUriSpec class
+
+// In DefaultResponseSpec class
+
+private <T> Mono<? extends ResponseEntity<Flux<T>>> handlerEntityFlux(ClientResponse response, Flux<T> body) {
+    ResponseEntity<Flux<T>> entity = createResponseEntity(response, body);  // Extracted method call
+    Mono<ResponseEntity<Flux<T>>> result = applyStatusHandlers(response);
+    return (result != null ? result.defaultIfEmpty(entity) : Mono.just(entity));
+}
+
+private <T> ResponseEntity<Flux<T>> createResponseEntity(ClientResponse response, Flux<T> body) {
+    return new ResponseEntity<>(   // Extracted method
+        body.onErrorResume(WebClientUtils.WRAP_EXCEPTION_PREDICATE, exceptionWrappingFunction(response)),
+        response.headers().asHttpHeaders(),
+        response.statusCode()
+    );
+}
+
+// In exchangeToMono and exchangeToFlux methods
+
+private Mono<Void> releaseIfNotConsumedEmpty(ClientResponse response) {
+    return Mono.defer(() -> releaseIfNotConsumed(response).then(Mono.empty())); // Extracted method
+}
+
+// Replace the original expression with the method call in exchangeToMono and exchangeToFlux methods
+```
+
+These refactoring changes enhance code clarity by reducing duplication and making the code easier to understand and maintain. It's crucial to test the refactored code to ensure that the functionality remains consistent with the original implementation.

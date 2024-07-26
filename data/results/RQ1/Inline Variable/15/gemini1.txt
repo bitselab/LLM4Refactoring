@@ -1,0 +1,65 @@
+ **I've identified a few potential refactoring opportunities in the provided code:**
+
+1. **Encapsulate Field Handling:**
+   - Create a separate class (e.g., `FieldDef`) to encapsulate field-related logic, including field name, generator, and type.
+   - Replace the `fields` map and type-specific counters with a collection of `FieldDef` objects in the `Docs` class.
+   - This will improve code organization and make it easier to manage field definitions.
+
+2. **Unify Document Creation Methods:**
+   - The `inputDocument()` and `document()` methods are very similar, only differing in the returned document type.
+   - Create a single method that generates a `SolrDocument` and optionally wraps it in a `SolrInputDocument` if needed.
+   - This reduces code duplication and simplifies maintenance.
+
+3. **Simplify Field Handling in `field()` Methods:**
+   - Refactor the `field` methods to directly use a `FieldDef` object, avoiding manual field name generation based on type.
+   - This centralizes field-related logic within the `FieldDef` class and streamlines the code.
+
+4. **Extract Common Thread Pool Logic:**
+   - Refactor the thread pool creation and management into a separate utility class or a dedicated method within the `Docs` class.
+   - This promotes code reusability and better separation of concerns.
+
+5. **Consider Using a Streaming Approach for Large Datasets:**
+   - Instead of pre-generating all documents in memory, explore a streaming approach where documents are generated on demand, potentially reducing memory usage and improving performance for large datasets.
+
+**Here's a refactored version of the code incorporating some of these suggestions:**
+
+```java
+// ... imports ...
+
+public class Docs {
+    private final ThreadLocal<SolrRandomnessSource> random;
+    private final Collection<FieldDef> fields = new ArrayList<>();
+    // ... other fields ...
+
+    // ... constructors ...
+
+    public Docs field(FieldDef fieldDef) {
+        fields.add(fieldDef);
+        return this;
+    }
+
+    public Iterator<SolrInputDocument> preGenerate(int numDocs) throws InterruptedException {
+        // ... create thread pool ...
+
+        // ... submit tasks to create documents ...
+
+        // ... collect results and return iterator ...
+    }
+
+    // ... other methods using FieldDef ...
+
+    private SolrDocument createDocument() {
+        SolrDocument doc = new SolrDocument();
+        SolrRandomnessSource randomSource = random.get();
+        for (FieldDef field : fields) {
+            doc.addField(field.getName(), field.getGenerator().generate(randomSource));
+        }
+        return doc;
+    }
+}
+```
+**Additional Considerations:**
+
+- Consider using a build tool like Maven for dependency management and a code formatter like SpotBugs for static code analysis.
+- Write unit tests to ensure code correctness and maintainability.
+- Explore alternative libraries for random data generation or thread pooling if suitable for your use case.

@@ -1,0 +1,55 @@
+In the provided code snippet from the `AspectJExpressionPointcut` class, the variable `mi` within the `matches` method is a good candidate for renaming to improve readability. The name `mi` is somewhat cryptic and does not immediately convey its purpose or type. A more descriptive name would enhance the readability and maintainability of the code.
+
+Let's rename `mi` to `currentMethodInvocation` to more accurately describe what it represents:
+
+```java
+public boolean matches(Method method, Class<?> targetClass, Object... args) {
+    obtainPointcutExpression();
+    ShadowMatch shadowMatch = getTargetShadowMatch(method, targetClass);
+
+    ProxyMethodInvocation pmi = null;
+    Object targetObject = null;
+    Object thisObject = null;
+    try {
+        MethodInvocation currentMethodInvocation = ExposeInvocationInterceptor.currentInvocation();
+        if (currentMethodInvocation.getMethod() == method) {
+            targetObject = currentMethodInvocation.getThis();
+            if (!(currentMethodInvocation instanceof ProxyMethodInvocation currPmi)) {
+                throw new IllegalStateException("MethodInvocation is not a Spring ProxyMethodInvocation: " + currentMethodInvocation);
+            }
+            pmi = currPmi;
+            thisObject = pmi.getProxy();
+        }
+    }
+    catch (IllegalStateException ex) {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Could not access current invocation - matching with limited context: " + ex);
+        }
+    }
+
+    try {
+        JoinPointMatch joinPointMatch = shadowMatch.matchesJoinPoint(thisObject, targetObject, args);
+
+        if (pmi != null && thisObject != null) {
+            RuntimeTestWalker originalMethodResidueTest = getRuntimeTestWalker(getShadowMatch(method, method));
+            if (!originalMethodResidueTest.testThisInstanceOfResidue(thisObject.getClass())) {
+                return false;
+            }
+            if (joinPointMatch.matches()) {
+                bindParameters(pmi, joinPointMatch);
+            }
+        }
+
+        return joinPointMatch.matches();
+    }
+    catch (Throwable ex) {
+        if (logger.isDebugEnabled()) {
+            logger.debug("Failed to evaluate join point for arguments " + Arrays.toString(args) +
+                    " - falling back to non-match", ex);
+        }
+        return false;
+    }
+}
+```
+
+This change makes it immediately clear that the variable represents a `MethodInvocation` instance. Such meaningful naming is particularly helpful for maintainability and for other developers who might work on this code in the future.

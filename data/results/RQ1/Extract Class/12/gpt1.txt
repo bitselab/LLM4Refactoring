@@ -1,0 +1,74 @@
+Reviewing the provided code snippet, it seems well-structured and follows good coding practices. However, there are a few opportunities for refactoring to improve readability and maintainability:
+
+1. **Extract Method Refactoring**: The `writeBody` method can be refactored to extract the logic for sorting `positionsByOffset`. This improves readability and encapsulates the sorting behavior.
+
+2. **Use of Constants**: The class already defines constants `OID_VERSION_SHA1` and `DEFAULT_OID_VERSION`. Ensure these are used consistently and check if any other magic numbers or repeated literals can be replaced with constants.
+
+3. **Possible use of Generics**: The `IndexPositionsByOffsetComparator` class uses a raw type for `objectsByIndexPos`. We could use generics to ensure type safety.
+
+4. **Final Keyword for Immutable Variables**: Consider using the `final` keyword for variables and parameters that are not modified, which enhances readability by indicating immutability.
+
+Let's apply these refactoring changes to the code:
+```java
+package org.eclipse.jgit.internal.storage.file;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.List;
+
+import org.eclipse.jgit.transport.PackedObjectInfo;
+import org.eclipse.jgit.util.IntList;
+import org.eclipse.jgit.util.IntList.IntComparator;
+
+/**
+ * Writes reverse index files following the version 1 format.
+ */
+final class PackReverseIndexWriterV1 extends PackReverseIndexWriter {
+    private static final int OID_VERSION_SHA1 = 1;
+    private static final int DEFAULT_OID_VERSION = OID_VERSION_SHA1;
+
+    PackReverseIndexWriterV1(final OutputStream dst) {
+        super(dst);
+    }
+
+    @Override
+    protected void writeHeader() throws IOException {
+        out.write(MAGIC);
+        dataOutput.writeInt(VERSION_1);
+        dataOutput.writeInt(DEFAULT_OID_VERSION);
+    }
+
+    @Override
+    protected void writeBody(final List<? extends PackedObjectInfo> objectsByIndexPos) throws IOException {
+        IntList positionsByOffset = sortIndexPositionsByOffset(objectsByIndexPos);
+        for (int i = 0; i < positionsByOffset.size(); i++) {
+            int indexPosition = positionsByOffset.get(i);
+            dataOutput.writeInt(indexPosition);
+        }
+    }
+
+    private IntList sortIndexPositionsByOffset(final List<? extends PackedObjectInfo> objectsByIndexPos) {
+        IntList positionsByOffset = IntList.filledWithRange(0, objectsByIndexPos.size());
+        positionsByOffset.sort(new IndexPositionsByOffsetComparator(objectsByIndexPos));
+        return positionsByOffset;
+    }
+
+    private static class IndexPositionsByOffsetComparator implements IntComparator {
+        private final List<? extends PackedObjectInfo> objectsByIndexPos;
+
+        private IndexPositionsByOffsetComparator(final List<? extends PackedObjectInfo> objectsByIndexPos) {
+            this.objectsByIndexPos = objectsByIndexPos;
+        }
+
+        @Override
+        public int compare(final int firstIndexPosition, final int secondIndexPosition) {
+            return Long.compare(getOffset(firstIndexPosition), getOffset(secondIndexPosition));
+        }
+
+        private long getOffset(final int indexPosition) {
+            return objectsByIndexPos.get(indexPosition).getOffset();
+        }
+    }
+}
+```
+This refactored code should maintain the same functionality as the original while improving readability and maintainability.

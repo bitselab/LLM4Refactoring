@@ -1,0 +1,63 @@
+ **I've identified several refactoring opportunities in the provided code:**
+
+**1. Extract Helper Methods:**
+
+- **Extract `createStatementDetails` to a helper method:** This method encapsulates the logic of creating a `PreparedStatementDetails` instance, improving readability and reducing code duplication.
+- **Extract `getTableMapping` to a helper method:** This method isolates the table mapping lookup logic, making it easier to understand and test.
+
+**2. Simplify Comparator Creation:**
+
+- **Use a lambda expression for comparator creation:** This concise approach simplifies the comparator creation process.
+
+**3. Consider Streamlining `createStatementDetailsMap`:**
+
+- **Explore using Streams for map creation:** Streams might offer a more concise and expressive way to create the `statementMap`.
+
+**4. Address Potential Null Checks:**
+
+- **Assess the necessity of `map.get(tableName)` null check:** Evaluate whether this check is redundant and could be removed.
+
+**Refactored Code (Example):**
+
+```java
+public class PreparedStatementGroupStandard implements PreparedStatementGroup {
+  // ... other code ...
+
+  private static PreparedStatementDetails createStatementDetails(
+      PreparableMutationOperation jdbcMutation,
+      GeneratedValuesMutationDelegate generatedValuesDelegate,
+      SharedSessionContractImplementor session) {
+    // ... logic for creating PreparedStatementDetails ...
+  }
+
+  private static TableMapping getTableMapping(List<PreparableMutationOperation> jdbcMutations, String name) {
+    // ... logic for locating TableMapping ...
+  }
+
+  private static SortedMap<String, PreparedStatementDetails> createStatementDetailsMap(
+      List<PreparableMutationOperation> jdbcMutations,
+      MutationType mutationType,
+      GeneratedValuesMutationDelegate generatedValuesDelegate,
+      SharedSessionContractImplementor session) {
+    final Comparator<String> comparator = Comparator.comparingInt((tableName) ->
+      getTableMapping(jdbcMutations, tableName).getRelativePosition(mutationType)
+    );
+
+    return jdbcMutations.stream()
+        .collect(Collectors.toMap(
+            jdbcMutation -> jdbcMutation.getTableDetails().getTableName(),
+            jdbcMutation -> createStatementDetails(jdbcMutation, generatedValuesDelegate, session),
+            (existing, replacement) -> existing,
+            TreeMap::new
+        ));
+  }
+
+  // ... other code ...
+}
+```
+
+**Additional Recommendations:**
+
+- **Prioritize Readability:** Focus on refactorings that enhance code clarity and maintainability.
+- **Conduct Thorough Testing:** Refactor incrementally and ensure thorough testing to avoid introducing new errors.
+- **Adhere to Coding Standards:** Maintain consistency with existing coding conventions and best practices.

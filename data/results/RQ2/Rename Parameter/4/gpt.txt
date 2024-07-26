@@ -1,0 +1,18 @@
+To improve the readability of the `DateFormat` constructor in the provided code, the parameter name `first` can be renamed to a more descriptive term. The name `first` is ambiguous, especially in the context of a date format function, where the parameters represent a format pattern and a date expression.
+
+A more descriptive name for `first` could be `formatOrDate`. This name clearly indicates that the parameter can either be a format pattern or a date expression. Here's the refactored constructor with the parameter renamed:
+
+```java
+public DateFormat(
+        Source source,
+        @Param(optional = true, name = "format", type = { "keyword" }, description = "A valid date pattern") Expression formatOrDate,
+        @Param(name = "date", type = { "date" }, description = "Date expression") Expression date,
+        Configuration configuration
+) {
+    super(source, date != null ? List.of(formatOrDate, date) : List.of(formatOrDate), configuration);
+    this.field = date != null ? date : formatOrDate;
+    this.format = date != null ? formatOrDate : null;
+}
+```
+
+This change makes the constructor more understandable, as it now clearly conveys that the first parameter can be either a format string or a date, depending on whether the second parameter is provided. As always, after making such changes, ensure to thoroughly test the code to confirm that its functionality remains correct and unchanged.

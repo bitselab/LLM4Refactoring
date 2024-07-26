@@ -1,0 +1,37 @@
+In the provided code snippet, the `validateNullToStringStyleRegistry` method contains only one statement, making it a candidate for inline method refactoring based on the given pattern. Here is the refactored code:
+
+**Original Code:**
+```java
+public class AbstractLangTest {
+
+    /**
+     * All tests should leave the {@link ToStringStyle} registry empty.
+     */
+    @AfterEach
+    public void after() {
+        validateNullToStringStyleRegistry();
+    }
+
+    void validateNullToStringStyleRegistry() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+
+}
+```
+
+**Refactored Code:**
+```java
+public class AbstractLangTest {
+
+    /**
+     * All tests should leave the {@link ToStringStyle} registry empty.
+     */
+    @AfterEach
+    public void after() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+
+}
+```
+
+In this refactored version, the `validateNullToStringStyleRegistry` method has been removed, and its content has been directly inlined into the `after` method.

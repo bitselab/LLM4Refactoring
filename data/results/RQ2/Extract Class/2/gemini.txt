@@ -1,0 +1,83 @@
+ **Here's the refactored code after applying extract class refactorings:**
+
+**New class: ExceptionProvider**
+
+```java
+package org.apache.commons.io.input;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.file.FileSystemNotFoundException;
+import java.util.stream.Stream;
+
+public class ExceptionProvider {
+
+    public static Stream<Class<? extends Throwable>> getThrowableClasses() {
+        return Stream.of(
+                IOException.class,
+                FileNotFoundException.class,
+                FileSystemNotFoundException.class,
+                RuntimeException.class,
+                IllegalArgumentException.class,
+                IllegalStateException.class,
+                Error.class,
+                ExceptionInInitializerError.class,
+                CustomException.class
+        );
+    }
+
+    static final class CustomException extends Exception {
+
+        private static final long serialVersionUID = 1L;
+
+    }
+}
+```
+
+**Refactored BrokenInputStreamTest class:**
+
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.io.InputStream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+public class BrokenInputStreamTest {
+
+    private static BrokenInputStream createBrokenInputStream(final Throwable exception) {
+        if (exception instanceof IOException) {
+            return new BrokenInputStream((IOException) exception);
+        }
+        return new BrokenInputStream(exception);
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.input.ExceptionProvider#getThrowableClasses")
+    public void testAvailable(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource")
+        final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.available()));
+    }
+
+    // ... (rest of the test methods using ExceptionProvider)
+}
+```
+
+**Key changes:**
+
+- **Extracted class:** The code related to providing exception classes has been extracted into a separate class called `ExceptionProvider`.
+- **Method moved:** The `parameters()` method is now located in the `ExceptionProvider` class.
+- **Usage update:** The `BrokenInputStreamTest` class now uses the `ExceptionProvider` to get the stream of exception classes.
+
+**Benefits of the refactoring:**
+
+- **Improved readability:** The `BrokenInputStreamTest` class is now more focused on its core testing logic, as the exception-related code has been moved to a separate class.
+- **Enhanced maintainability:** Changes to exception handling can be made in a single place (`ExceptionProvider`), rather than scattered throughout the test class.
+- **Potential for reuse:** The `ExceptionProvider` class could potentially be reused in other parts of the codebase where different exception types need to be provided.

@@ -1,0 +1,21 @@
+To refactor the given code snippet using inline method refactoring, we will eliminate the `valueOf` method and directly call the `Enum.valueOf` method within the `convert` method. This will make the code more concise and directly express its intention. Here's how the refactored code looks:
+
+```java
+package org.junit.jupiter.params.converter;
+
+class StringToEnumConverter implements StringToObjectConverter {
+
+    @Override
+    public boolean canConvert(Class<?> targetType) {
+        return targetType.isEnum();
+    }
+
+    @Override
+    public Object convert(String source, Class<?> targetType) throws Exception {
+        return Enum.valueOf((Class<Enum>) targetType, source);
+    }
+
+}
+```
+
+In this refactored version, the `convert` method directly calls `Enum.valueOf` with the necessary casting to `Class<Enum>`. This refactoring reduces the method count and simplifies the class without altering its functionality.

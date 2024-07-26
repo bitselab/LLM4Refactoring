@@ -1,0 +1,57 @@
+In the provided code snippet, the expression `inputStream.readAllBytes()` is called multiple times, which is not only a repetition but also potentially inefficient as it reads the stream more than once. To refactor this, we can extract this expression into a variable. This refactoring will improve both the readability and the efficiency of the code.
+
+Here's the refactored version of the `updateConfigSetFile` method:
+
+```java
+@EndPoint(method = PUT, path = API_PATH, permission = CONFIG_EDIT_PERM)
+public void updateConfigSetFile(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
+    ensureConfigSetUploadEnabled();
+
+    final String configSetName = req.getPathTemplateValues().get("name");
+    boolean overwritesExisting = configSetService.checkConfigExists(configSetName);
+    boolean requestIsTrusted = isTrusted(req.getUserPrincipal(), coreContainer.getAuthenticationPlugin());
+
+    // Get upload parameters
+    String singleFilePath = req.getPathTemplateValues().getOrDefault(FILEPATH_PLACEHOLDER, "");
+    boolean allowOverwrite = req.getParams().getBool(ConfigSetParams.OVERWRITE, true);
+    boolean cleanup = req.getParams().getBool(ConfigSetParams.CLEANUP, false);
+    final InputStream inputStream = ensureNonEmptyInputStream(req);
+
+    // Read the input stream bytes once and store in a variable
+    byte[] fileContent = inputStream.readAllBytes();
+
+    String fixedSingleFilePath = singleFilePath;
+    if (fixedSingleFilePath.charAt(0) == '/') {
+        fixedSingleFilePath = fixedSingleFilePath.substring(1);
+    }
+
+    if (fixedSingleFilePath.isEmpty()) {
+        throw new SolrException(
+                SolrException.ErrorCode.BAD_REQUEST,
+                "The file path provided for upload, '" + singleFilePath + "', is not valid.");
+    } else if (ZkMaintenanceUtils.isFileForbiddenInConfigSets(fixedSingleFilePath)
+            || FileTypeMagicUtil.isFileForbiddenInConfigset(fileContent)) {
+        throw new SolrException(
+                SolrException.ErrorCode.BAD_REQUEST,
+                "The file type provided for upload, '"
+                        + singleFilePath
+                        + "', is forbidden for use in configSets.");
+    } else if (cleanup) {
+        // Cleanup is not allowed while using singleFilePath upload
+        throw new SolrException(
+                SolrException.ErrorCode.BAD_REQUEST,
+                "ConfigSet uploads do not allow cleanup=true when file path is used.");
+    } else {
+        // Create a node for the configuration in config
+        // For creating the baseNode, the cleanup parameter is only allowed to be true when
+        // singleFilePath is not passed.
+        createBaseNode(configSetService, overwritesExisting, requestIsTrusted, configSetName);
+        configSetService.uploadFileToConfig(configSetName, fixedSingleFilePath, fileContent, allowOverwrite);
+    }
+}
+```
+
+In this refactored version:
+- The `fileContent` variable is extracted and holds the result of `inputStream.readAllBytes()`.
+- This variable is then used in the conditional checks and the `uploadFileToConfig` method call, thus avoiding multiple reads of the input stream.
+- This approach is more efficient, especially for large files, and makes the code cleaner and more maintainable.

@@ -1,0 +1,43 @@
+In the provided code, the snippet `FieldUtils.readField(field, getLeft(), true)` appears multiple times in the `appendFields` method. To improve code readability and reusability, we can apply the "Extract Method" refactoring technique. By creating a new method to encapsulate this repeated code, we can simplify the `appendFields` method and reduce duplication.
+
+Here's the refactored code with the extract method refactoring applied:
+
+```java
+package org.apache.commons.lang3.builder;
+
+// ... [import statements remain the same] ...
+
+public class ReflectionDiffBuilder<T> implements Builder<DiffResult<T>> {
+
+    // ... [other class members and methods remain the same] ...
+
+    private void appendFields(final Class<?> clazz) {
+        for (final Field field : FieldUtils.getAllFields(clazz)) {
+            if (accept(field)) {
+                try {
+                    Object leftValue = readFieldValue(field, getLeft());
+                    Object rightValue = readFieldValue(field, getRight());
+                    diffBuilder.append(field.getName(), leftValue, rightValue);
+                } catch (final IllegalAccessException e) {
+                    // this can't happen. Would get a Security exception instead
+                    // throw a runtime exception in case the impossible happens.
+                    throw new IllegalArgumentException("Unexpected IllegalAccessException: " + e.getMessage(), e);
+                }
+            }
+        }
+    }
+
+    private Object readFieldValue(Field field, T object) throws IllegalAccessException {
+        return FieldUtils.readField(field, object, true);
+    }
+
+    // ... [rest of the methods remain the same] ...
+
+}
+```
+
+In this refactoring:
+- A new method `readFieldValue` is created. It takes a `Field` and an object of type `T`, and returns the value of the field from the object.
+- This new method is used in the `appendFields` method to replace the direct calls to `FieldUtils.readField(field, getLeft(), true)` and `FieldUtils.readField(field, getRight(), true)`.
+
+This refactoring makes the code more modular, easier to understand, and reduces the potential for errors if changes to field reading logic are needed in the future.

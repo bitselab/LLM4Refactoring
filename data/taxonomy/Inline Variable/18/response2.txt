@@ -1,0 +1,225 @@
+Upon reviewing the provided code snippet, a potential inline variable refactoring opportunity was identified. The variable `jsonFromParams` is only used once, and directly after its declaration. Inline variable refactoring can be applied here to enhance readability and simplicity.
+
+Here is the refactored version of the original code:
+
+```java
+public static void processParams(
+        SolrRequestHandler handler,
+        SolrQueryRequest req,
+        SolrParams defaults,
+        SolrParams appends,
+        SolrParams invariants) {
+
+    boolean searchHandler = handler instanceof SearchHandler;
+    SolrParams params = req.getParams();
+
+    // Handle JSON stream for search requests
+    if (searchHandler && req.getContentStreams() != null) {
+
+        Map<String, String[]> map = MultiMapSolrParams.asMultiMap(params, false);
+
+        if (!(params instanceof MultiMapSolrParams || params instanceof ModifiableSolrParams)) {
+            // need to set params on request since we weren't able to access the original map
+            params = new MultiMapSolrParams(map);
+            req.setParams(params);
+        }
+
+        // params from the query string should come after (and hence override) JSON content streams
+        for (ContentStream cs : req.getContentStreams()) {
+            // if BinaryResponseParser.BINARY_CONTENT_TYPE, let the following fail below - we may have
+            // adjusted the content without updating the content type
+            // problem in this case happens in a few tests, one seems to happen with kerberos and remote
+            // node query (HttpSolrCall's request proxy)
+
+            String contentType = cs.getContentType();
+            if (contentType == null || !contentType.contains("/json")) {
+                throw new SolrException(
+                        SolrException.ErrorCode.BAD_REQUEST,
+                        "Bad contentType for search handler :" + contentType + " request=" + req);
+            }
+
+            try {
+                String jsonString = StrUtils.stringFromReader(cs.getReader());
+                MultiMapSolrParams.addParam(JSON, jsonString, map);
+            } catch (IOException e) {
+                throw new SolrException(
+                        SolrException.ErrorCode.BAD_REQUEST,
+                        "Exception reading content stream for request:" + req,
+                        e);
+            }
+        }
+
+        // append existing "json" params
+        if (map.remove(JSON) != null) {
+            for (String json : map.remove(JSON)) {
+                MultiMapSolrParams.addParam(JSON, json, map);
+            }
+        }
+    }
+
+    String[] jsonS = params.getParams(JSON);
+
+    boolean hasAdditions =
+            defaults != null || invariants != null || appends != null || jsonS != null;
+
+    // short circuit processing
+    if (!hasAdditions && !params.getBool("expandMacros", true)) {
+        return; // nothing to do...
+    }
+
+    boolean isShard = params.getBool("isShard", false);
+
+    Map<String, String[]> newMap = MultiMapSolrParams.asMultiMap(params, hasAdditions);
+
+    // see if the json has a "params" section
+    // TODO: we should currently *not* do this if this is a leaf of a distributed search since it
+    // could overwrite parameters set by the top-level
+    // The parameters we extract will be propagated anyway.
+    if (jsonS != null && !isShard) {
+        for (String json : jsonS) {
+            getParamsFromJSON(newMap, json);
+        }
+    }
+
+    // first populate defaults, etc..
+    if (defaults != null) {
+        Map<String, String[]> defaultsMap = MultiMapSolrParams.asMultiMap(defaults);
+        for (Map.Entry<String, String[]> entry : defaultsMap.entrySet()) {
+            String key = entry.getKey();
+            if (!newMap.containsKey(key)) {
+                newMap.put(key, entry.getValue());
+            }
+        }
+    }
+
+    if (appends != null) {
+        Map<String, String[]> appendsMap = MultiMapSolrParams.asMultiMap(appends);
+
+        for (Map.Entry<String, String[]> entry : appendsMap.entrySet()) {
+            String key = entry.getKey();
+            String[] arr = newMap.get(key);
+            if (arr == null) {
+                newMap.put(key, entry.getValue());
+            } else {
+                String[] appendArr = entry.getValue();
+                String[] newArr = new String[arr.length + appendArr.length];
+                System.arraycopy(arr, 0, newArr, 0, arr.length);
+                System.arraycopy(appendArr, 0, newArr, arr.length, appendArr.length);
+                newMap.put(key, newArr);
+            }
+        }
+    }
+
+    if (invariants != null) {
+        newMap.putAll(MultiMapSolrParams.asMultiMap(invariants));
+    }
+
+    if (!isShard) { // Don't expand macros in shard requests
+        String[] doMacrosStr = newMap.get("expandMacros");
+        boolean doMacros = true;
+        if (doMacrosStr != null) {
+            doMacros = "true".equals(doMacrosStr[0]);
+        }
+
+        if (doMacros) {
+            newMap = MacroExpander.expand(newMap);
+        }
+    }
+    // Set these params as soon as possible so if there is an error processing later, things like
+    // "wt=json" will take effect from the defaults.
+    SolrParams newParams =
+            new MultiMapSolrParams(newMap); // newMap may still change below, but that should be OK
+    req.setParams(newParams);
+
+    // Skip the rest of the processing (including json processing for now) if this isn't a search
+    // handler. For example json.command started to be used  in SOLR-6294, and that caused errors
+    // here.
+    if (!searchHandler) return;
+
+    Map<String, Object> json = null;
+    // Handle JSON body first, so query params will always overlay on that
+    jsonS = newMap.get(JSON);
+    if (jsonS != null) {
+        if (json == null) {
+            json = new LinkedHashMap<>();
+        }
+        mergeJSON(json, JSON, jsonS, new ObjectUtil.ConflictHandler());
+    }
+    for (Map.Entry<String, String[]> entry : newMap.entrySet()) {
+        String key = entry.getKey();
+        // json.nl, json.wrf are existing query parameters
+        if (key.startsWith("json.") && !("json.nl".equals(key) || "json.wrf".equals(key))) {
+            if (json == null) {
+                json = new LinkedHashMap<>();
+            }
+            mergeJSON(json, key, entry.getValue(), new ObjectUtil.ConflictHandler());
+        }
+    }
+
+    // implement compat for existing components...
+    JsonQueryConverter jsonQueryConverter = new JsonQueryConverter();
+
+    if (json != null && !isShard) {
+        for (Map.Entry<String, Object> entry : json.entrySet()) {
+            String key = entry.getKey();
+            String out = null;
+            boolean isQuery = false;
+            boolean arr = false;
+            if ("query".equals(key)) {
+                out = "q";
+                isQuery = true;
+                // if the value is not a String, then it'll get converted to a localParams query String.
+                // Only the "lucene" query parser can parse it.  Ignore anything else that may exist.
+                if (!(entry.getValue() instanceof String)) {
+                    String[] queryParsers = {"lucene"};
+                    newMap.put(QueryParsing.DEFTYPE, queryParsers);
+                }
+            } else if ("filter".equals(key)) {
+                out = "fq";
+                arr = true;
+                isQuery = true;
+            } else if ("fields".equals(key)) {
+                out = "fl";
+                arr = true;
+            } else if ("offset".equals(key)) {
+                out = "start";
+            } else if ("limit".equals(key)) {
+                out = "rows";
+            } else if (SORT.equals(key)) {
+                out = SORT;
+            } else if ("queries".equals(key)) {
+                Object queriesJsonObj = entry.getValue();
+                if (queriesJsonObj instanceof Map && queriesJsonObj != null) {
+                    @SuppressWarnings("unchecked")
+                    final Map<String, Object> queriesAsMap = (Map<String, Object>) queriesJsonObj;
+                    for (Map.Entry<String, Object> queryJsonProperty : queriesAsMap.entrySet()) {
+                        out = queryJsonProperty.getKey();
+                        arr = true;
+                        isQuery = true;
+                        convertJsonPropertyToLocalParams(
+                                newMap, jsonQueryConverter, queryJsonProperty, out, isQuery, arr);
+                    }
+                    continue;
+                } else {
+                    throw new SolrException(
+                            SolrException.ErrorCode.BAD_REQUEST,
+                            "Expected Map for 'queries', received " + queriesJsonObj);
+                }
+            } else if ("params".equals(key) || "facet".equals(key)) {
+                // handled elsewhere
+                continue;
+            } else {
+                throw new SolrException(
+                        SolrException.ErrorCode.BAD_REQUEST,
+                        "Unknown top-level key in JSON request : " + key);
+            }
+            convertJsonPropertyToLocalParams(newMap, jsonQueryConverter, entry, out, isQuery, arr);
+        }
+    }
+
+    if (json != null) {
+        req.setJSON(json);
+    }
+}
+```
+In this refactoring, `jsonFromParams` was removed and replaced with a direct call to `map.remove(JSON)` in the loop where `jsonFromParams` was originally used. This modification aligns with the objective of inline variable refactoring by reducing the number of intermediate variables and making the code slightly more concise and directly expressive of its intent.

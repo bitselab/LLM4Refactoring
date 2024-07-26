@@ -1,0 +1,24 @@
+ **Here's the refactored code with the unnecessary variable "expected" removed using inline variable refactoring:**
+
+```java
+public void testMergedFieldInfos_empty() throws IOException {
+  Directory dir = newDirectory();
+  IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
+
+  IndexReader reader = DirectoryReader.open(writer);
+  FieldInfos actual = FieldInfos.getMergedFieldInfos(reader);
+
+  assertSame(FieldInfos.EMPTY, actual);  // Inline "expected" variable
+
+  reader.close();
+  writer.close();
+  dir.close();
+}
+```
+
+**Explanation of the refactoring:**
+
+- The original code declared a variable `expected` and assigned it the value `FieldInfos.EMPTY`.
+- The `assertSame` method was then used to compare `expected` with `actual`.
+- Inlining the variable eliminates the need for the `expected` variable altogether. We can directly use `FieldInfos.EMPTY` within the method call.
+- This improves readability by reducing the number of variables to track and making the code more concise.

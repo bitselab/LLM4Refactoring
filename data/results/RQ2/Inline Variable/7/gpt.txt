@@ -1,0 +1,75 @@
+To improve the readability of the `MutationExecutorStandard` constructor in the provided Java code snippet, we can apply inline variable refactoring. This technique is particularly useful in cases where a variable is only used once and its removal does not reduce code clarity. 
+
+In the specified section, the variable `selfExecutingMutation` is a good candidate for inline refactoring. It is immediately added to a list and does not add significant clarity to the code. Let's refactor this part and any other similar opportunities in the constructor. 
+
+Here's the refactored code:
+
+```java
+public MutationExecutorStandard(
+        MutationOperationGroup mutationOperationGroup,
+        BatchKeyAccess batchKeySupplier,
+        int batchSize,
+        SharedSessionContractImplementor session) {
+    this.mutationOperationGroup = mutationOperationGroup;
+    this.generatedValuesDelegate = mutationOperationGroup.asEntityMutationOperationGroup() != null ?
+            mutationOperationGroup.asEntityMutationOperationGroup().getMutationDelegate() :
+            null;
+
+    final BatchKey batchKey = batchKeySupplier.getBatchKey();
+
+    // Split the table operations into batchable and non-batchable
+    // 1. Batchable statements are handled via Batch
+    // 2. Non-batchable statements are handled locally
+
+    List<PreparableMutationOperation> batchedJdbcMutations = null;
+    List<PreparableMutationOperation> nonBatchedJdbcMutations = null;
+    List<SelfExecutingUpdateOperation> selfExecutingMutations = null;
+
+    boolean hasAnyNonBatchedJdbcOperations = false;
+
+    for (int i = mutationOperationGroup.getNumberOfOperations() - 1; i >= 0; i--) {
+        MutationOperation operation = mutationOperationGroup.getOperation(i);
+        if (operation instanceof SelfExecutingUpdateOperation) {
+            if (selfExecutingMutations == null) {
+                selfExecutingMutations = new ArrayList<>();
+            }
+            selfExecutingMutations.add(0, (SelfExecutingUpdateOperation) operation);
+        } else {
+            PreparableMutationOperation preparableMutationOperation = (PreparableMutationOperation) operation;
+            TableMapping tableDetails = operation.getTableDetails();
+            boolean canBeBatched;
+
+            if (tableDetails.isIdentifierTable() && hasAnyNonBatchedJdbcOperations) {
+                canBeBatched = false;
+            }
+            else {
+                canBeBatched = preparableMutationOperation.canBeBatched(batchKey, batchSize);
+            }
+
+            if (canBeBatched) {
+                if (batchedJdbcMutations == null) {
+                    batchedJdbcMutations = new ArrayList<>();
+                }
+                batchedJdbcMutations.add(0, preparableMutationOperation);
+                statementLocationMap.put(tableDetails.getTableName(), StatementLocation.BATCHED);
+            } else {
+                hasAnyNonBatchedJdbcOperations = true;
+                if (nonBatchedJdbcMutations == null) {
+                    nonBatchedJdbcMutations = new ArrayList<>();
+                }
+                nonBatchedJdbcMutations.add(0, preparableMutationOperation);
+                statementLocationMap.put(tableDetails.getTableName(), StatementLocation.NON_BATCHED);
+            }
+        }
+    }
+
+    // ... (rest of the constructor)
+}
+```
+
+Key Changes:
+1. **Inlined `selfExecutingMutation` Variable**: The variable `selfExecutingMutation` was inlined directly into the `add` method call of the `selfExecutingMutations` list. This streamlines the code, as the variable is only used once and its presence does not add significant clarity.
+
+2. **Simplified Casting**: When adding to `selfExecutingMutations`, the casting is done directly within the `add` method.
+
+These changes improve readability and maintain the original functionality of the code. Note that this refactoring focuses on a specific part of the code due to its length. Similar inline variable refactorings can be applied throughout the code wherever applicable.

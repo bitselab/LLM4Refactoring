@@ -1,0 +1,68 @@
+To refactor the given code, we can create a new class that encapsulates the behavior related to mocking `AbfsRestOperation`, `AbfsHttpOperation`, and `AbfsClient`. This new class will help to improve readability and maintainability of the code by segregating the mocking logic into a separate, reusable component.
+
+Let's name this new class `MockHelper`. It will contain two static methods: `addGeneralMockBehaviourToRestOpAndHttpOp` and `addGeneralMockBehaviourToAbfsClient`. The `TestAbfsRestOperationMockFailures` class will then use `MockHelper` to set up mocks instead of directly implementing the mock setup logic.
+
+Here's the refactored code:
+
+### New `MockHelper` Class
+```java
+package org.apache.hadoop.fs.azurebfs.services;
+
+import java.io.IOException;
+import java.net.HttpURLConnection;
+
+import org.apache.hadoop.fs.azurebfs.contracts.services.ExponentialRetryPolicy;
+import org.mockito.Mockito;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
+
+public class MockHelper {
+
+    public static void addGeneralMockBehaviourToRestOpAndHttpOp(final AbfsRestOperation abfsRestOperation,
+                                                                final AbfsHttpOperation httpOperation) throws IOException {
+        HttpURLConnection httpURLConnection = Mockito.mock(HttpURLConnection.class);
+        Mockito.doNothing().when(httpURLConnection)
+                .setRequestProperty(nullable(String.class), nullable(String.class));
+        Mockito.doReturn(httpURLConnection).when(httpOperation).getConnection();
+        Mockito.doReturn("").when(abfsRestOperation).getClientLatency();
+        Mockito.doReturn(httpOperation).when(abfsRestOperation).createHttpOperation();
+    }
+
+    public static void addGeneralMockBehaviourToAbfsClient(final AbfsClient abfsClient,
+                                                           final ExponentialRetryPolicy retryPolicy) throws IOException {
+        Mockito.doReturn(OAuth).when(abfsClient).getAuthType();
+        Mockito.doReturn("").when(abfsClient).getAccessToken();
+        AbfsThrottlingIntercept intercept = Mockito.mock(
+                AbfsThrottlingIntercept.class);
+        Mockito.doReturn(intercept).when(abfsClient).getIntercept();
+        Mockito.doNothing()
+                .when(intercept)
+                .sendingRequest(any(), nullable(AbfsCounters.class));
+        Mockito.doNothing().when(intercept).updateMetrics(any(), any());
+
+        Mockito.doReturn(retryPolicy).when(abfsClient).getRetryPolicy();
+        Mockito.doReturn(true)
+                .when(retryPolicy)
+                .shouldRetry(nullable(Integer.class), nullable(Integer.class));
+        Mockito.doReturn(false).when(retryPolicy).shouldRetry(0, HTTP_OK);
+        Mockito.doReturn(false).when(retryPolicy).shouldRetry(1, HTTP_OK);
+        Mockito.doReturn(false).when(retryPolicy).shouldRetry(2, HTTP_OK);
+    }
+}
+```
+
+### Modified `TestAbfsRestOperationMockFailures` Class
+In the `TestAbfsRestOperationMockFailures` class, replace the direct calls to `addGeneralMockBehaviourToRestOpAndHttpOp` and `addGeneralMockBehaviourToAbfsClient` with calls to `MockHelper.addGeneralMockBehaviourToRestOpAndHttpOp` and `MockHelper.addGeneralMockBehaviourToAbfsClient`.
+
+For example, in the `testClientRequestIdForStatusRetry` method, the call to `addGeneralMockBehaviourToAbfsClient` would be replaced with:
+```java
+MockHelper.addGeneralMockBehaviourToAbfsClient(abfsClient, retryPolicy);
+```
+
+Similarly, in the `testClientRequestIdForTimeoutRetry` method, replace the call to `addGeneralMockBehaviourToRestOpAndHttpOp` with:
+```java
+MockHelper.addGeneralMockBehaviourToRestOpAndHttpOp(abfsRestOperation, httpOperation);
+```
+
+This refactoring will make the `TestAbfsRestOperationMockFailures` class cleaner and more focused on its primary purpose, while delegating the mock setup responsibilities to the `MockHelper` class.

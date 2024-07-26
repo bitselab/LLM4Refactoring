@@ -1,0 +1,29 @@
+In the given code snippet:
+
+```java
+private static class MapValueResolver implements DataBinder.ValueResolver {
+
+    private final Map<String, Object> map;
+
+    private MapValueResolver(Map<String, Object> values) {
+        this.map = values;
+    }
+}
+```
+
+The parameter name `values` in the constructor of `MapValueResolver` does not match the field name `map`. To align the parameter name with the field name as per the rename parameter refactoring pattern you've described, it would be beneficial to rename `values` to `map`. This change enhances consistency and improves the readability of the code by directly indicating that the parameter is used to initialize the `map` field.
+
+Here's the refactored code:
+
+```java
+private static class MapValueResolver implements DataBinder.ValueResolver {
+
+    private final Map<String, Object> map;
+
+    private MapValueResolver(Map<String, Object> map) {
+        this.map = map;
+    }
+}
+```
+
+With this refactoring, the parameter name directly reflects its use and matches the corresponding class field name, adhering to the pattern of renaming parameters for clarity and consistency.

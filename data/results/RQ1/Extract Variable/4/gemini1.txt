@@ -1,0 +1,163 @@
+The provided code snippet demonstrates good practices but there's room for improvement in terms of readability and maintainability. Here's a refactored version with the following enhancements:
+
+**1. Improve Variable Naming:**
+   - Use more descriptive variable names like `searchTextFieldName`, `numericFieldName`, and `vectorFieldName` instead of generic names like `textField`, `numericField`, and `vectorField`.
+   - Replace `q` with a more specific name like `searchQuery` when referring to the search query builder.
+
+**2. Extract Doc Creation Logic:**
+   - Encapsulate the document creation logic within a separate method `createTestDocs` to improve code organization.
+
+**3. Reduce Code Duplication:**
+   - The assertions within the search response validation block are repeated. Refactor this into a separate method `assertSearchProfileResponse` to avoid redundancy.
+
+**4. Simplify Random KNN Search Creation:**
+   - Consider using a lambda expression instead of a separate anonymous inner class for creating the `KnnSearchBuilder` within the random list generation.
+
+Here's the refactored code incorporating these suggestions:
+
+```java
+package org.elasticsearch.search.profile.dfs;
+
+import org.apache.lucene.tests.util.English;
+import org.elasticsearch.action.index.IndexRequestBuilder;
+import org.elasticsearch.action.search.SearchType;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.search.profile.ProfileResult;
+import org.elasticsearch.search.profile.SearchProfileDfsPhaseResult;
+import org.elasticsearch.search.profile.SearchProfileShardResult;
+import org.elasticsearch.search.profile.query.CollectorResult;
+import org.elasticsearch.search.profile.query.QueryProfileShardResult;
+import org.elasticsearch.search.vectors.KnnSearchBuilder;
+import org.elasticsearch.test.ESIntegTestCase;
+import org.elasticsearch.xcontent.XContentFactory;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+
+import static org.elasticsearch.search.profile.query.RandomQueryGenerator.randomQueryBuilder;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertResponse;
+import static org.hamcrest.Matchers.emptyOrNullString;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
+
+public class DfsProfilerIT extends ESIntegTestCase {
+
+  private static final int KNN_DIM = 3;
+
+  public void testProfileDfs() throws Exception {
+    String searchTextFieldName = "text_field";
+    String numericFieldName = "number";
+    String vectorFieldName = "vector";
+    String indexName = "text-dfs-profile";
+
+    createIndex(indexName, vectorFieldName);
+    ensureGreen();
+
+    int numDocs = randomIntBetween(10, 50);
+    IndexRequestBuilder[] docs = createTestDocs(numDocs, searchTextFieldName, numericFieldName, vectorFieldName);
+    indexRandom(true, docs);
+    refresh();
+
+    int iters = between(5, 10);
+    for (int i = 0; i < iters; i++) {
+      QueryBuilder searchQuery = randomQueryBuilder(List.of(searchTextFieldName), List.of(numericFieldName), numDocs, 3);
+      if (randomBoolean()) {
+        new KnnSearchBuilder(
+            vectorFieldName,
+            new float[] { randomFloat(), randomFloat(), randomFloat() },
+            randomIntBetween(5, 10),
+            50,
+            randomBoolean() ? null : randomFloat()
+        ).addFilterQuery(searchQuery);
+      }
+      logger.info("Query: {}", searchQuery);
+
+      assertSearchProfileResponse(
+          prepareSearch()
+              .setQuery(searchQuery)
+              .setTrackTotalHits(true)
+              .setProfile(true)
+              .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
+              .setKnnSearch(randomList(2, 5, () -> new KnnSearchBuilder(
+                  vectorFieldName,
+                  new float[] { randomFloat(), randomFloat(), randomFloat() },
+                  randomIntBetween(5, 10),
+                  50,
+                  randomBoolean() ? null : randomFloat()
+              )))
+      );
+    }
+  }
+
+    private void createIndex(String name, String vectorField) throws IOException {
+    assertAcked(
+        prepareCreate(name).setMapping(
+            XContentFactory.jsonBuilder()
+                .startObject()
+                .startObject("properties")
+                .startObject(vectorField)
+                .field("type", "dense_vector")
+                .field("dims", KNN_DIM)
+                .field("index", true)
+                .field("similarity", "cosine")
+                .endObject()
+                .endObject()
+                .endObject()
+        )
+    );
+  }
+
+  private IndexRequestBuilder[] createTestDocs(int numDocs, String searchTextFieldName, String numericFieldName, String vectorFieldName) {
+    IndexRequestBuilder[] docs = new IndexRequestBuilder[numDocs];
+    Random random = new Random();
+    for (int i = 0; i < numDocs; i++) {
+      docs[i] = prepareIndex("text-dfs-profile").setId(String.valueOf(i))
+          .setSource(
+              searchTextFieldName,
+              English.intToEnglish(i),
+              numericFieldName,
+              i,
+              vectorFieldName,
+              new float[] { random.nextFloat(), random.nextFloat(), random.nextFloat() }
+          );
+    }
+    return docs;
+  }
+
+  private void assertSearchProfileResponse(SearchResponse response) {
+    assertNotNull("Profile response element should not be null", response.getProfileResults());
+    assertThat("Profile response should not be an empty array", response.getProfileResults().size(), not(0));
+    for (Map.Entry<String, SearchProfileShardResult> shard : response.getProfileResults().entrySet()) {
+      for (QueryProfileShardResult searchProfiles : shard.getValue().getQueryProfileResults()) {
+        for (ProfileResult result : searchProfiles.getQueryResults()) {
+          assertNotNull(result.getQueryName());
+          assertNotNull(result.getLuceneDescription());
+          assertThat(result.getTime(), greaterThan(0L));
+        }
+        CollectorResult result = searchProfiles.getCollectorResult();
+        assertThat(result.getName(), is(not(emptyOrNullString())));
+        assertThat(result.getTime(), greaterThan(0L));
+      }
+      SearchProfileDfsPhaseResult searchProfileDfsPhaseResult = shard.getValue().getSearchProfileDfsPhaseResult();
+      assertThat(searchProfileDfsPhaseResult, is(notNullValue()));
+      for (QueryProfileShardResult queryProfileShardResult : searchProfileDfsPhaseResult.getQueryProfileShardResult()) {
+        for (ProfileResult result : queryProfileShardResult.getQueryResults()) {
+          assertNotNull(result.getQueryName());
+          assertNotNull(result.getLuceneDescription());
+          assertThat(result.getTime(), greaterThan(0L));
+        }
+        CollectorResult result = queryProfileShardResult.getCollectorResult();
+        assertThat(result.getName(), is(not(emptyOrNullString())));
+        assertThat(result.getTime(), greaterThan(0L));
+      }
+      ProfileResult statsResult = searchProfileDfsPhaseResult.getDfsShardResult();
+      assertThat(statsResult.getQueryName(), equalTo("statistics"));
+    }
+  }
+}

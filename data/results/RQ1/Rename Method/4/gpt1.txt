@@ -1,0 +1,115 @@
+The provided code snippet from the `org.elasticsearch.xpack.ql.util` package is fairly well-structured and follows good coding practices, but there are still some opportunities for refactoring to enhance readability, maintainability, and possibly performance. Here's a refactored version of the code:
+
+1. **Extract Repeated Code into Methods**: The methods `longAsWkb` and `wktToWkb` both contain similar lines of code for converting geometry to WKB (Well-Known Binary). This can be refactored into a private method to reduce duplication.
+
+2. **Use Early Return**: In methods `wkbAsLong` and `wktToWkb`, using an early return can make the flow clearer and reduce nested conditions.
+
+3. **Consistent Exception Handling**: In `wktToWkb`, there's a catch block for a generic `Exception`. It might be more informative to catch specific exceptions and handle them accordingly.
+
+4. **Private Static Constants**: In the `CARTESIAN` enum, `MAX_VAL_ENCODED` and `MIN_VAL_ENCODED` are constants and should be declared as `private static final`.
+
+5. **Code Comments and TODOs**: Address any TODOs present in the code and add comments where necessary for complex logic, especially in the encoding and decoding methods, to improve readability and maintainability.
+
+6. **Method Naming**: Some method names like `pointAsLong` and `longAsPoint` could be more descriptive to clearly indicate their purpose.
+
+Here's the refactored code:
+
+```java
+package org.elasticsearch.xpack.ql.util;
+
+import org.apache.lucene.geo.GeoEncodingUtils;
+import org.apache.lucene.geo.XYEncodingUtils;
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.geometry.Geometry;
+import org.elasticsearch.geometry.Point;
+import org.elasticsearch.geometry.utils.GeometryValidator;
+import org.elasticsearch.geometry.utils.WellKnownBinary;
+import org.elasticsearch.geometry.utils.WellKnownText;
+
+import java.nio.ByteOrder;
+
+import static org.apache.lucene.geo.GeoEncodingUtils.encodeLatitude;
+import static org.apache.lucene.geo.GeoEncodingUtils.encodeLongitude;
+
+public enum SpatialCoordinateTypes {
+    GEO {
+        @Override
+        public Point encodeLongToPoint(long encoded) {
+            return new Point(GeoEncodingUtils.decodeLongitude((int) encoded), GeoEncodingUtils.decodeLatitude((int) (encoded >>> 32)));
+        }
+
+        @Override
+        public long decodePointToLong(double x, double y) {
+            int latitudeEncoded = encodeLatitude(y);
+            int longitudeEncoded = encodeLongitude(x);
+            return (((long) latitudeEncoded) << 32) | (longitudeEncoded & 0xFFFFFFFFL);
+        }
+    },
+    CARTESIAN {
+        private static final int MAX_VAL_ENCODED = XYEncodingUtils.encode((float) XYEncodingUtils.MAX_VAL_INCL);
+        private static final int MIN_VAL_ENCODED = XYEncodingUtils.encode((float) XYEncodingUtils.MIN_VAL_INCL);
+
+        @Override
+        public Point encodeLongToPoint(long encoded) {
+            final int x = validateCoordinate((int) (encoded >>> 32));
+            final int y = validateCoordinate((int) (encoded & 0xFFFFFFFF));
+            return new Point(XYEncodingUtils.decode(x), XYEncodingUtils.decode(y));
+        }
+
+        private int validateCoordinate(int coordinate) {
+            if (coordinate > MAX_VAL_ENCODED || coordinate < MIN_VAL_ENCODED) {
+                throw new IllegalArgumentException("Invalid encoded value for cartesian point");
+            }
+            return coordinate;
+        }
+
+        @Override
+        public long decodePointToLong(double x, double y) {
+            final long xi = XYEncodingUtils.encode((float) x);
+            final long yi = XYEncodingUtils.encode((float) y);
+            return (yi & 0xFFFFFFFFL) | xi << 32;
+        }
+    };
+
+    public abstract Point encodeLongToPoint(long encoded);
+
+    public abstract long decodePointToLong(double x, double y);
+
+    public long convertWkbToLong(BytesRef wkb) {
+        Geometry geometry = WellKnownBinary.fromWKB(GeometryValidator.NOOP, false, wkb.bytes, wkb.offset, wkb.length);
+        if (!(geometry instanceof Point)) {
+            throw new IllegalArgumentException("Unsupported geometry: " + geometry.type());
+        }
+        return decodePointToLong(((Point) geometry).getX(), ((Point) geometry).getY());
+    }
+
+    public BytesRef convertLongToWkb(long encoded) {
+        return convertGeometryToWKB(encodeLongToPoint(encoded));
+    }
+
+    public String convertGeometryToWkt(Geometry geometry) {
+        return WellKnownText.toWKT(geometry);
+    }
+
+    public BytesRef convertGeometryToWKB(Geometry geometry) {
+        return new BytesRef(WellKnownBinary.toWKB(geometry, ByteOrder.LITTLE_ENDIAN));
+    }
+
+    public BytesRef convertWktToWkb(String wkt) {
+        try {
+            Geometry geometry = WellKnownText.fromWKT(GeometryValidator.NOOP, false, wkt);
+
+
+            return convertGeometryToWKB(geometry);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("WKT parsing failed: " + e.getMessage(), e);
+        }
+    }
+
+    public String convertWkbToWkt(BytesRef wkb) {
+        return WellKnownText.fromWKB(wkb.bytes, wkb.offset, wkb.length);
+    }
+}
+```
+
+This refactoring enhances the code's clarity and maintainability while preserving its original functionality.

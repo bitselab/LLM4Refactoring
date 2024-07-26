@@ -1,0 +1,16 @@
+You're absolutely right. The variable `mockRow` in the `mappingRowSimpleObject` test method is a good candidate for inline refactoring. Here's the refactored code:
+
+```java
+@Test
+void mappingRowSimpleObject() {
+  BeanPropertyRowMapper<Person> mapper = new BeanPropertyRowMapper<>(Person.class);
+
+  Person result = mapper.apply(SIMPLE_PERSON_ROW);
+
+  assertThat(result.firstName).as("firstName").isEqualTo("John");
+  assertThat(result.lastName).as("lastName").isEqualTo("Doe");
+  assertThat(result.age).as("age").isEqualTo(30);
+}
+```
+
+By inlining the `mockRow` variable, we directly pass the `SIMPLE_PERSON_ROW` constant to the `apply` method, making the code more concise and easier to read. This refactoring doesn't alter the functionality of the test but improves its clarity.

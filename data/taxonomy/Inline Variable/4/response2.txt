@@ -1,0 +1,26 @@
+In the provided code snippet, we can look for opportunities to inline variables that are used only once, similar to the example you provided earlier. The goal is to reduce unnecessary temporary variables which do not enhance code clarity or maintainability. Here’s the original code:
+
+```java
+@Inject
+public LocalAction(TransportService transportService, RepositoriesService repositoriesService, ActionFilters actionFilters) {
+    super(INSTANCE.name(), actionFilters, transportService.getTaskManager());
+    this.repositoriesService = repositoriesService;
+    final var threadPool = transportService.getThreadPool();
+    this.retentionExecutor = threadPool.executor(ThreadPool.Names.MANAGEMENT);
+}
+```
+
+In this code, `threadPool` is a variable that is used only once to obtain an executor from it. We can apply the inline variable refactoring pattern here:
+
+### Refactored Code
+
+```java
+@Inject
+public LocalAction(TransportService transportService, RepositoriesService repositoriesService, ActionFilters actionFilters) {
+    super(INSTANCE.name(), actionFilters, transportService.getTaskManager());
+    this.repositoriesService = repositoriesService;
+    this.retentionExecutor = transportService.getThreadPool().executor(ThreadPool.Names.MANAGEMENT);
+}
+```
+
+In the refactored version, the temporary variable `threadPool` has been removed, and its only use has been inlined into the statement where `retentionExecutor` is set. This makes the code slightly more concise without sacrificing readability or maintainability.

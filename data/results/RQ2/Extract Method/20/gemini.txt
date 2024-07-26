@@ -1,0 +1,49 @@
+Absolutely! Here's the refactored code of `BridgeMethodResolver` with the extracted method:
+
+```java
+public final class BridgeMethodResolver {
+
+  private static final Map<Object, Method> cache = new ConcurrentReferenceHashMap<>();
+
+  private BridgeMethodResolver() {}
+
+  public static Method findBridgedMethod(Method bridgeMethod) {
+    Class<?> targetClass = bridgeMethod.getDeclaringClass();
+    return findBridgedMethod(bridgeMethod, targetClass);
+  }
+
+  /**
+   * Finds the bridged method for the given bridge method considering the target class.
+   * 
+   * @param bridgeMethod the bridge method to find the original for
+   * @param targetClass the target class to search for the bridged method
+   * @return the original method (either the bridged method or the passed-in method
+   *         if no more specific one could be found)
+   */
+  private static Method findBridgedMethod(Method bridgeMethod, Class<?> targetClass) {
+    boolean localBridge = (targetClass == bridgeMethod.getDeclaringClass());
+    if (!bridgeMethod.isBridge() && localBridge) {
+      return bridgeMethod;
+    }
+
+    Object cacheKey = (localBridge ? bridgeMethod : new MethodClassKey(bridgeMethod, targetClass));
+    Method bridgedMethod = cache.get(cacheKey);
+    if (bridgedMethod == null) {
+      // Logic to find the bridged method remains the same
+      // ...
+
+      if (bridgedMethod == null) {
+        // A bridge method was passed in but we couldn't find the bridged method.
+        // Let's proceed with the passed-in method and hope for the best...
+        bridgedMethod = bridgeMethod;
+      }
+      cache.put(cacheKey, bridgedMethod);
+    }
+    return bridgedMethod;
+  }
+
+  // Other methods from the original class...
+}
+```
+
+The original logic to find the bridged method is now encapsulated within the new private method `findBridgedMethod(Method bridgeMethod, Class<?> targetClass)`. This improves code readability and maintainability by separating the logic for handling local bridges and searching for the actual bridged method.

@@ -1,0 +1,92 @@
+The code you've shared is quite extensive and seems to be a part of the Apache Solr project. It's primarily focused on loading and configuring Solr from `solr.xml`. Refactoring such a large and complex piece of code requires careful consideration of its context and usage. However, I can suggest some general refactoring opportunities based on common best practices:
+
+1. **Split Large Methods into Smaller Ones**: Some methods in this class are quite long and perform multiple tasks. Breaking them into smaller, more focused methods can improve readability and maintainability.
+
+2. **Reduce Code Duplication**: There are places where similar code is repeated, such as error handling in `fromInputStream` methods. This can be refactored into a separate method.
+
+3. **Use Java 8 Features**: The code can leverage Java 8 features like streams and lambda expressions for more concise and readable code, especially in methods like `loadProperties` and `forEachNamedListEntry`.
+
+4. **Improve Exception Handling**: The current approach to exception handling can be made more specific and informative, particularly in large methods where multiple exceptions can occur.
+
+5. **Consolidate Configuration Parsing**: There are various methods for parsing different sections of the configuration file. These can potentially be consolidated or restructured for better cohesion and reduced complexity.
+
+6. **Optimize Imports**: There are a lot of imports, and it's possible that not all of them are used. Optimizing imports can clean up unnecessary dependencies.
+
+7. **JavaDocs and Comments**: While there are some comments and JavaDoc present, ensuring that all public methods and complex logic are well-documented will improve the code's readability and maintainability.
+
+Given the length and complexity of the code, I will refactor a small section to demonstrate these principles. I'll focus on the `fromInputStream` method:
+
+Original Code:
+```java
+public static NodeConfig fromInputStream(
+        Path solrHome, InputStream is, Properties substituteProps) {
+    return fromInputStream(solrHome, is, substituteProps, false);
+}
+
+public static NodeConfig fromInputStream(
+        Path solrHome, InputStream is, Properties substituteProps, boolean fromZookeeper) {
+    SolrResourceLoader loader = new SolrResourceLoader(solrHome);
+    if (substituteProps == null) {
+        substituteProps = new Properties();
+    }
+    try {
+        byte[] buf = is.readAllBytes();
+        try (ByteArrayInputStream dup = new ByteArrayInputStream(buf)) {
+            XmlConfigFile config =
+                    new XmlConfigFile(loader, null, new InputSource(dup), null, substituteProps);
+            return fromConfig(
+                    solrHome,
+                    substituteProps,
+                    new DataConfigNode(new DOMConfigNode(config.getDocument().getDocumentElement())),
+                    loader);
+        }
+    } catch (SolrException exc) {
+        throw exc;
+    } catch (Exception e) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+    }
+}
+```
+
+Refactored Code:
+```java
+public static NodeConfig fromInputStream(
+        Path solrHome, InputStream is, Properties substituteProps) {
+    return fromInputStream(solrHome, is, defaultIfNull(substituteProps), false);
+}
+
+private static Properties defaultIfNull(Properties props) {
+    return props == null ? new Properties() : props;
+}
+
+public static NodeConfig fromInputStream(
+        Path solrHome, InputStream is, Properties substituteProps, boolean fromZookeeper) {
+    SolrResourceLoader loader = new SolrResourceLoader(solrHome);
+    try {
+        XmlConfigFile config = readXmlConfigFile(is, loader, substituteProps);
+        return fromConfig(
+                solrHome,
+                substituteProps,
+                new DataConfigNode(new DOMConfigNode(config.getDocument().getDocumentElement())),
+                loader);
+    } catch (SolrException exc) {
+        throw exc;
+    } catch (Exception e) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+    }
+}
+
+private static XmlConfigFile readXmlConfigFile(InputStream is, SolrResourceLoader loader, Properties props) 
+        throws IOException, SAXException {
+    byte[] buf = is.readAllBytes();
+    try (ByteArrayInputStream dup = new ByteArrayInputStream(buf)) {
+        return new XmlConfigFile(loader, null, new InputSource(dup), null, props);
+    }
+}
+```
+
+In this refactoring:
+- I extracted the null check for `substituteProps` into a separate method `defaultIfNull`.
+- I extracted the XML file reading logic into a separate method `readXmlConfigFile`.
+
+This refactoring improves readability and makes each method more focused on a single responsibility. The same principles can be applied to other parts of the code as well.

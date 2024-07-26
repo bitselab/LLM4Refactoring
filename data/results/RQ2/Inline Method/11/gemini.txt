@@ -1,0 +1,47 @@
+ **Here's the refactored code with the `toString(String delim)` method inlined:**
+
+```java
+package org.eclipse.jetty.start;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+public class CommandLineBuilder {
+
+  // ... other code ...
+
+  public List<String> getArgs() {
+    return args;
+  }
+
+  @Override
+  public String toString() {
+    // Inline the logic from toString(String delim)
+    StringBuilder buf = new StringBuilder();
+    for (String arg : args) {
+      if (buf.length() > 0) {
+        buf.append(" "); // Use a default delimiter of " "
+      }
+      buf.append(arg); // Assume escaping has occurred during addArg
+    }
+
+    return buf.toString();
+  }
+
+  // ... other methods ...
+}
+```
+
+**Changes made:**
+
+1. The `toString(String delim)` method has been removed.
+2. Its logic for constructing the string representation using a delimiter has been integrated directly into the default `toString()` method.
+3. The default delimiter is now " ", but this can be adjusted as needed within `toString()`.
+
+**Benefits of this refactoring:**
+
+- **Improved readability:** The code is more concise and easier to follow with one less method to consider.
+- **Reduced code size:** There's one less method to maintain.
+- **Simplified usage:** The default `toString()` method now provides the same functionality as the previously parameterized version, making it more convenient to use in most cases.

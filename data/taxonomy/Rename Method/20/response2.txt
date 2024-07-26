@@ -1,0 +1,39 @@
+The method `getInterfaceParameterAnnotations` aims to retrieve all parameter annotations for methods that are inherited or overridden from interfaces and superclasses. The method's primary purpose is to accumulate annotations that are relevant when a method in a class overrides another method from its superclass or interfaces. However, the name `getInterfaceParameterAnnotations` might suggest that it only retrieves annotations from interfaces, which is not entirely accurate as it also involves superclass methods.
+
+A more descriptive and accurate method name could be `getInheritedParameterAnnotations` since this name encapsulates both interface and superclass methods, reflecting the comprehensive functionality of gathering inherited annotations.
+
+Here's the refactored code with the new method name:
+
+```java
+private List<Annotation[][]> getInheritedParameterAnnotations() {
+    List<Annotation[][]> parameterAnnotations = this.inheritedParameterAnnotations;
+    if (parameterAnnotations == null) {
+        parameterAnnotations = new ArrayList<>();
+        Class<?> clazz = this.method.getDeclaringClass();
+        while (clazz != null) {
+            for (Class<?> ifc : clazz.getInterfaces()) {
+                for (Method candidate : ifc.getMethods()) {
+                    if (isOverrideFor(candidate)) {
+                        parameterAnnotations.add(candidate.getParameterAnnotations());
+                    }
+                }
+            }
+            clazz = clazz.getSuperclass();
+            if (clazz == Object.class) {
+                clazz = null;
+            }
+            if (clazz != null) {
+                for (Method candidate : clazz.getMethods()) {
+                    if (isOverrideFor(candidate)) {
+                        parameterAnnotations.add(candidate.getParameterAnnotations());
+                    }
+                }
+            }
+        }
+        this.inheritedParameterAnnotations = parameterAnnotations;
+    }
+    return parameterAnnotations;
+}
+```
+
+This renaming clearly indicates the method's purpose of collecting parameter annotations from both interfaces and superclasses, thereby improving code readability and maintainability.

@@ -1,0 +1,78 @@
+ **I'll provide the refactored code, incorporating the inline method refactoring, and explain the changes made:**
+
+```java
+package org.springframework.boot.web.server;
+
+import org.springframework.boot.ssl.NoSuchSslBundleException;
+import org.springframework.boot.ssl.SslBundle;
+import org.springframework.boot.ssl.SslBundleKey;
+import org.springframework.boot.ssl.SslBundles;
+import org.springframework.boot.ssl.SslManagerBundle;
+import org.springframework.boot.ssl.SslOptions;
+import org.springframework.boot.ssl.SslStoreBundle;
+import org.springframework.boot.ssl.jks.JksSslStoreBundle;
+import org.springframework.boot.ssl.jks.JksSslStoreDetails;
+import org.springframework.boot.ssl.pem.PemSslStoreBundle;
+import org.springframework.boot.ssl.pem.PemSslStoreDetails;
+import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
+
+/**
+ * {@link SslBundle} backed by {@link Ssl}.
+ *
+ * @author Scott Frederick
+ * @author Phillip Webb
+ * @since 3.1.0
+ */
+public final class WebServerSslBundle implements SslBundle {
+
+    // ... other fields and methods remain unchanged ...
+
+    /**
+     * Get the {@link SslBundle} that should be used for the given {@link Ssl} instance.
+     * @param ssl the source ssl instance
+     * @return a {@link SslBundle} instance
+     * @throws NoSuchSslBundleException if a bundle lookup fails
+     */
+    public static SslBundle get(Ssl ssl) throws NoSuchSslBundleException {
+        return get(ssl, null);
+    }
+
+    /**
+     * Get the {@link SslBundle} that should be used for the given {@link Ssl} instance.
+     * @param ssl the source ssl instance
+     * @param sslBundles the bundles that should be used when {@link Ssl#getBundle()} is
+     * set
+     * @return a {@link SslBundle} instance
+     * @throws NoSuchSslBundleException if a bundle lookup fails
+     */
+    public static SslBundle get(Ssl ssl, SslBundles sslBundles) throws NoSuchSslBundleException {
+        Assert.state(Ssl.isEnabled(ssl), "SSL is not enabled");
+        String keyPassword = ssl.getKeyPassword();
+        String bundleName = ssl.getBundle();
+        if (StringUtils.hasText(bundleName)) {
+            Assert.state(sslBundles != null,
+                           () -> "SSL bundle '%s' was requested but no SslBundles instance was provided"
+                                      .formatted(bundleName));
+            return sslBundles.getBundle(bundleName);
+        }
+        SslStoreBundle stores = createStoreBundle(ssl);
+        return new WebServerSslBundle(stores, keyPassword, ssl);
+    }
+
+    // ... other methods remain unchanged ...
+
+}
+```
+
+**Explanation of Changes:**
+
+1. **Removed the Deprecated Method:** The unnecessary method `get(Ssl ssl, SslBundles sslBundles, SslStoreProvider sslStoreProvider)` has been entirely removed.
+2. **Inlined the Method Body:** The logic within the removed method has been directly integrated into the `get(Ssl ssl, SslBundles sslBundles)` method, eliminating the need for the extra method call.
+3. **Preserved Functionality:** The refactored code maintains the same functionality as the original code, but with improved readability and a more concise structure.
+
+**Benefits of Inline Method Refactoring:**
+
+- **Improved Readability:** Inline method refactoring often makes code easier to read and understand by reducing the number of methods and method calls.
+- **Reduced Method Overhead:** Eliminating unnecessary methods can potentially improve performance slightly, as there's less method invocation overhead.
+- **Simplified Code:** It can make the code structure simpler and more maintainable, as there are fewer methods to track and manage.

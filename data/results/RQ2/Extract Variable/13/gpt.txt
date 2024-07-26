@@ -1,0 +1,25 @@
+The `recordInvocation` method in the `AutoCloseSpy` class can be improved with extract variable refactoring. The expression `this.prefix + this.invokedMethod` is used multiple times, which is a clear indication that it can be extracted into a local variable. This not only makes the code cleaner but also avoids potential errors in maintaining or changing the same string concatenation in multiple places.
+
+Here's the refactored `recordInvocation` method:
+
+```java
+private void recordInvocation(String methodName) {
+    if (this.invokedMethod != null) {
+        throw new IllegalStateException("Already closed via " + this.invokedMethod);
+    }
+    this.invokedMethod = methodName;
+    
+    // Extracted variable
+    String fullMethodName = this.prefix + this.invokedMethod;
+
+    recorder.add(fullMethodName);
+
+    if (this.fail) {
+        throw new RuntimeException(fullMethodName);
+    }
+}
+```
+
+In this refactoring:
+- The repeated concatenation `this.prefix + this.invokedMethod` is replaced with a single variable `fullMethodName`.
+- This change enhances the readability of the code and makes it easier to maintain or modify the concatenated string in the future.

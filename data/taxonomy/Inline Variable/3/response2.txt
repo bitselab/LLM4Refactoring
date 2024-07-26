@@ -1,0 +1,24 @@
+Analyzing the provided code snippet, I can identify a potential inline variable refactoring opportunity. The variables `lhsString` and `rhsString` are used only once in the construction of `expectedOutput`. Following the inline variable refactoring pattern you described, we can directly substitute these variables in the `String.format` method call to simplify the code. Here is the refactored code:
+
+```java
+@Test
+public void testToStringSpecifyStyleOutput() {
+    final DiffResult<SimpleClass> result = SIMPLE_FALSE.diff(SIMPLE_TRUE);
+    assertEquals(result.getToStringStyle(), SHORT_STYLE);
+
+    // @formatter:off
+    final String expectedOutput = String.format("%s differs from %s", 
+        new ToStringBuilder(SIMPLE_FALSE, ToStringStyle.MULTI_LINE_STYLE)
+            .append(SimpleClass.getFieldName(), SIMPLE_FALSE.booleanField)
+            .build(),
+        new ToStringBuilder(SIMPLE_TRUE, ToStringStyle.MULTI_LINE_STYLE)
+            .append(SimpleClass.getFieldName(), SIMPLE_TRUE.booleanField)
+            .build()
+    );
+    // @formatter:on
+
+    assertEquals(expectedOutput, result.toString(ToStringStyle.MULTI_LINE_STYLE));
+}
+```
+
+This refactoring directly uses the results of `ToStringBuilder` methods inside the `String.format` call, thus removing the need for the intermediate variables `lhsString` and `rhsString`. This change maintains the original functionality while simplifying the method and improving readability by reducing the number of lines and local variables.

@@ -1,0 +1,28 @@
+In the provided code snippet, an opportunity for extract variable refactoring is present. This refactoring will improve the readability of the code by breaking down complex expressions into simpler, named variables. Here's how you could refactor the code:
+
+Original Code:
+```java
+@Override
+protected String getStartLogMessage() {
+    StringBuilder message = new StringBuilder(super.getStartLogMessage());
+    message.append(" with context path '");
+    message.append(StringUtils.hasText(this.contextPath) ? this.contextPath : "/");
+    message.append("'");
+    return message.toString();
+}
+```
+
+Refactored Code:
+```java
+@Override
+protected String getStartLogMessage() {
+    StringBuilder message = new StringBuilder(super.getStartLogMessage());
+    String contextDisplay = StringUtils.hasText(this.contextPath) ? this.contextPath : "/";
+    message.append(" with context path '");
+    message.append(contextDisplay);
+    message.append("'");
+    return message.toString();
+}
+```
+
+In the refactored version, the conditional expression that determines the context path to be displayed is extracted into the variable `contextDisplay`. This makes the code easier to understand at a glance, especially for someone unfamiliar with the original logic.

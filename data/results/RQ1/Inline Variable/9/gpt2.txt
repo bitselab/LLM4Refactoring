@@ -1,0 +1,80 @@
+Reviewing the provided code snippet for potential inline variable refactorings, the focus is on identifying variables that are immediately returned or passed into a method and do not add to readability. Inline refactoring here can help reduce the code's verbosity without losing clarity.
+
+Here are some identified opportunities for inline variable refactoring:
+
+1. **Method `isApplicableTo`**: 
+   - The condition checks can be directly returned without assigning them to variables.
+
+2. **Method `getTracesDirectory`**: 
+   - The `dirName` variable can be inlined, as it's used only once immediately after declaration.
+
+3. **Method `generateReport` in the anonymous `Task.Backgroundable` class**: 
+   - The `settings` variable is used only once and can be inlined.
+
+4. **Method `createCoverageViewExtension`**: 
+   - Directly return the new instance of `JavaCoverageViewExtension` without storing it in a variable.
+
+5. **Method `isSourceMapNeeded`**: 
+   - Inline the call to `extension.isSourceMapNeeded(configuration)` within the loop.
+
+Refactoring these areas will streamline the code. Below is an example of how these methods could be refactored:
+
+```java
+@Override
+public boolean isApplicableTo(@NotNull final RunConfigurationBase conf) {
+    return conf instanceof CommonJavaRunConfigurationParameters
+            || (RunTargetsEnabled.get()
+                && conf instanceof TargetEnvironmentAwareRunProfile
+                && willRunOnTarget((TargetEnvironmentAwareRunProfile)conf))
+            || JavaCoverageEngineExtension.EP_NAME.getExtensionList().stream()
+                .anyMatch(extension -> extension.isApplicableTo(conf));
+}
+
+private static File getTracesDirectory(CoverageSuite coverageSuite) {
+    final File parentDir = new File(coverageSuite.getCoverageDataFileName()).getParentFile();
+    return new File(parentDir, FileUtilRt.getNameWithoutExtension(new File(coverageSuite.getCoverageDataFileName()).getName()));
+}
+
+@Override
+public void generateReport(@NotNull final Project project,
+                           @NotNull final DataContext dataContext,
+                           @NotNull final CoverageSuitesBundle currentSuite) {
+    ProgressManager.getInstance().run(new Task.Backgroundable(project, JavaCoverageBundle.message("generating.coverage.report")) {
+        final Exception[] myExceptions = new Exception[1];
+
+        @Override
+        public void run(@NotNull final ProgressIndicator indicator) {
+            try {
+                ((JavaCoverageRunner)currentSuite.getSuites()[0].getRunner()).generateReport(currentSuite, project);
+            } catch (IOException | ReportGenerationFailedException e) {
+                myExceptions[0] = e;
+            }
+        }
+
+        @Override
+        public void onSuccess() {
+            if (myExceptions[0] != null) {
+                Messages.showErrorDialog(project, myExceptions[0].getMessage(), CommonBundle.getErrorTitle());
+                return;
+            }
+            if (ExportToHTMLSettings.getInstance(project).OPEN_IN_BROWSER) {
+                BrowserUtil.browse(new File(ExportToHTMLSettings.getInstance(project).OUTPUT_DIRECTORY, "index.html"));
+            }
+        }
+    });
+}
+
+@Override
+public CoverageViewExtension createCoverageViewExtension(Project project,
+                                                         CoverageSuitesBundle suiteBundle,
+                                                         CoverageViewManager.StateBean stateBean) {
+    return new JavaCoverageViewExtension(JavaCoverageAnnotator.getInstance(project), project, suiteBundle, stateBean);
+}
+
+public static boolean isSourceMapNeeded(RunConfigurationBase<?> configuration) {
+    return JavaCoverageEngineExtension.EP_NAME.getExtensionList().stream()
+           .anyMatch(extension -> extension.isSourceMapNeeded(configuration));
+}
+```
+
+These changes enhance the code's compactness and readability while maintaining its original logic and functionality.

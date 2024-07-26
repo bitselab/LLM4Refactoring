@@ -1,0 +1,88 @@
+The given code snippet from `ArrayViaElementArgumentReturnTypeResolver` class in a Hibernate dialect package indicates a potential for an "Extract Class" refactoring. The method `resolveArrayType` seems like a candidate for extraction into a new class because it encapsulates specific functionality that is somewhat independent of the other methods in the class.
+
+The goal of this refactoring is to improve readability and maintainability by separating concerns. Here is how you can refactor the code:
+
+### New Class: `ArrayTypeResolver`
+
+This class will encapsulate the logic of `resolveArrayType`.
+
+```java
+package org.hibernate.dialect.function.array;
+
+import org.hibernate.metamodel.model.domain.DomainType;
+import org.hibernate.type.spi.TypeConfiguration;
+import org.hibernate.query.ReturnableType;
+import org.hibernate.metamodel.mapping.BasicValuedMapping;
+
+public class ArrayTypeResolver {
+
+    public static ReturnableType<?> resolveArrayType(DomainType<?> elementType, TypeConfiguration typeConfiguration) {
+        @SuppressWarnings("unchecked")
+        BasicPluralJavaType<Object> arrayJavaType = (BasicPluralJavaType<Object>) typeConfiguration.getJavaTypeRegistry()
+                .getDescriptor(
+                        Array.newInstance(elementType.getBindableJavaType(), 0).getClass()
+                );
+        Dialect dialect = typeConfiguration.getCurrentBaseSqlTypeIndicators().getDialect();
+        return arrayJavaType.resolveType(
+                typeConfiguration,
+                dialect,
+                (BasicType<Object>) elementType,
+                null,
+                typeConfiguration.getCurrentBaseSqlTypeIndicators()
+        );
+    }
+}
+```
+
+### Refactored `ArrayViaElementArgumentReturnTypeResolver` Class
+
+In the original class, replace the `resolveArrayType` method with a call to the new `ArrayTypeResolver` class.
+
+```java
+package org.hibernate.dialect.function.array;
+
+// ... other imports remain the same ...
+
+public class ArrayViaElementArgumentReturnTypeResolver implements FunctionReturnTypeResolver {
+
+    public static final FunctionReturnTypeResolver INSTANCE = new ArrayViaElementArgumentReturnTypeResolver();
+
+    private ArrayViaElementArgumentReturnTypeResolver() {
+    }
+
+    @Override
+    public ReturnableType<?> resolveFunctionReturnType(
+            ReturnableType<?> impliedType,
+            Supplier<MappingModelExpressible<?>> inferredTypeSupplier,
+            List<? extends SqmTypedNode<?>> arguments,
+            TypeConfiguration typeConfiguration) {
+        // ... existing implementation ...
+
+        for (SqmTypedNode<?> argument : arguments) {
+            DomainType<?> sqmType = argument.getExpressible().getSqmType();
+            if (sqmType instanceof ReturnableType<?>) {
+                return ArrayTypeResolver.resolveArrayType(sqmType, typeConfiguration);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public BasicValuedMapping resolveFunctionReturnType(
+            Supplier<BasicValuedMapping> impliedTypeAccess,
+            List<? extends SqlAstNode> arguments) {
+        // existing implementation remains unchanged
+        return null;
+    }
+
+    // The resolveArrayType method is now removed from this class
+}
+```
+
+### Explanation:
+
+- **New Class `ArrayTypeResolver`**: This class now contains the `resolveArrayType` method, which is responsible for resolving the array type based on given element types and type configuration. This encapsulation makes the code more modular and follows the Single Responsibility Principle.
+  
+- **Refactored `ArrayViaElementArgumentReturnTypeResolver` Class**: In this class, the `resolveArrayType` method is replaced by a call to `ArrayTypeResolver.resolveArrayType`. This change simplifies the `ArrayViaElementArgumentReturnTypeResolver` class, making it more focused on its primary responsibilities.
+
+This refactoring makes the overall structure of the codebase clearer and more maintainable. Each class now has a more focused and distinct responsibility. However, it's crucial to ensure that the new class integrates well with the existing codebase and that any changes are thoroughly tested.

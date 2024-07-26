@@ -1,0 +1,21 @@
+In the given code snippet, there's a clear opportunity for a rename parameter refactoring to improve consistency and readability. The parameter name `joinHintNeedRemove` in the constructor of `ClearOuterQueryHintShuttle` does not align well with the field it initializes, which is named `queryHintNeedRemove`. This inconsistency can be confusing for other developers who might expect the parameter name to reflect the field name it is associated with.
+
+Here's the refactored code with the parameter name updated to match the field name:
+
+```java
+private static class ClearOuterQueryHintShuttle extends RelShuttleImpl {
+    // the current inherit path about the query hint that needs to be removed
+    private final Deque<Integer> currentInheritPath;
+
+    // the query hint that needs to be removed
+    private final RelHint queryHintNeedRemove;
+
+    public ClearOuterQueryHintShuttle(RelHint queryHintNeedRemove) {
+        this.queryHintNeedRemove = queryHintNeedRemove;
+        this.currentInheritPath = new ArrayDeque<>();
+        this.currentInheritPath.addAll(queryHintNeedRemove.inheritPath);
+    }
+}
+```
+
+By renaming the parameter from `joinHintNeedRemove` to `queryHintNeedRemove`, the code becomes clearer and more consistent with the naming conventions within the class, making it easier for anyone reading the code to understand the relationship between the parameter and the class field it is initializing.

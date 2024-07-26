@@ -1,0 +1,42 @@
+In the provided code snippet from `ITestAzureBlobFileSystemAttributes`, the method `testGetSetXAttrHelper` is a private method that is only called once, from the method `testSetGetXAttr`. This setup fits the inline method refactoring pattern where a private method called only once may be inlined to simplify the code.
+
+Here is how the code would look after applying the inline method refactoring:
+
+```java
+public class ITestAzureBlobFileSystemAttributes extends AbstractAbfsIntegrationTest {
+
+    @Test
+    public void testSetGetXAttr() throws Exception {
+        AzureBlobFileSystem fs = getFileSystem();
+        AbfsConfiguration conf = fs.getAbfsStore().getAbfsConfiguration();
+        Assume.assumeTrue(getIsNamespaceEnabled(fs));
+
+        byte[] attributeValue1 = fs.getAbfsStore().encodeAttribute("hi");
+        byte[] attributeValue2 = fs.getAbfsStore().encodeAttribute("你好");
+        String attributeName1 = "user.asciiAttribute";
+        String attributeName2 = "user.unicodeAttribute";
+        Path testFile = path("setGetXAttr");
+
+        // after creating a file, the xAttr should not be present
+        touch(testFile);
+        assertNull(fs.getXAttr(testFile, attributeName1));
+
+        // after setting the xAttr on the file, the value should be retrievable
+        fs.registerListener(
+                new TracingHeaderValidator(conf.getClientCorrelationId(),
+                        fs.getFileSystemId(), FSOperationType.SET_ATTR, true, 0));
+        fs.setXAttr(testFile, attributeName1, attributeValue1);
+        fs.setListenerOperation(FSOperationType.GET_ATTR);
+        assertArrayEquals(attributeValue1, fs.getXAttr(testFile, attributeName1));
+        fs.registerListener(null);
+
+        // after setting a second xAttr on the file, the first xAttr values should not be overwritten
+        fs.setXAttr(testFile, attributeName2, attributeValue2);
+        assertArrayEquals(attributeValue1, fs.getXAttr(testFile, attributeName1));
+        assertArrayEquals(attributeValue2, fs.getXAttr(testFile, attributeName2));
+    }
+
+}
+```
+
+By inlining the `testGetSetXAttrHelper` method, the code removes an intermediate layer of abstraction which can enhance clarity, particularly when the logic is directly related to the test itself and does not require reuse. This refactoring makes it easier to read and understand the direct flow of the test operations within the test method.

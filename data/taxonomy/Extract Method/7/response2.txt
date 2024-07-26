@@ -1,0 +1,66 @@
+To refactor the duplicated code snippet you pointed out, we can create a new method that encapsulates the functionality. This new method will handle the retrieval of an object using the `doRefresh` method and throwing an exception if the result is null. Here's how we can refactor the code:
+
+1. **Create a New Method**: Define a new method called `refreshAndCheck` that takes the required parameters and performs the duplicated operation.
+2. **Replace Duplicated Code**: Replace all instances of the duplicated code with a call to the new method.
+
+Here is the refactored code, including the new method and its usage in the `DefaultRefreshEventListener` class:
+
+```java
+package org.hibernate.event.internal;
+
+import org.hibernate.HibernateException;
+// imports remain unchanged
+
+public class DefaultRefreshEventListener implements RefreshEventListener {
+    private static final CoreMessageLogger LOG = CoreLogging.messageLogger(DefaultRefreshEventListener.class);
+
+    public void onRefresh(RefreshEvent event) throws HibernateException {
+        onRefresh(event, RefreshContext.create());
+    }
+
+    public void onRefresh(RefreshEvent event, RefreshContext refreshedAlready) {
+        // method implementation remains unchanged
+        if (persistenceContext.reassociateIfUninitializedProxy(object)) {
+            // other code remains unchanged
+
+            // Replaced duplicated code with a method call
+            refreshAndCheck(event, source, object, null, persister, lazyInitializer, id, persistenceContext);
+
+            if (isTransient) {
+                source.setReadOnly(object, source.isDefaultReadOnly());
+            }
+        } else {
+            final Object entity = persistenceContext.unproxyAndReassociate(object);
+            if (refreshedAlready.add(entity)) {
+                refresh(event, refreshedAlready, entity);
+            } else {
+                LOG.trace("Already refreshed");
+            }
+        }
+    }
+
+    private static void refresh(RefreshEvent event, RefreshContext refreshedAlready, Object object) {
+        // method implementation remains unchanged
+
+        // Replaced duplicated code with a method call
+        refreshAndCheck(event, source, object, entry, persister, null, id, persistenceContext);
+    }
+
+    // New method to eliminate duplicated code
+    private static void refreshAndCheck(RefreshEvent event, EventSource source, Object object, EntityEntry entry, EntityPersister persister, LazyInitializer lazyInitializer, Object id, PersistenceContext persistenceContext) {
+        final Object result = source.getLoadQueryInfluencers().fromInternalFetchProfile(
+            CascadingFetchProfile.REFRESH,
+            () -> doRefresh(event, source, object, entry, persister, lazyInitializer, id, persistenceContext)
+        );
+        UnresolvableObjectException.throwIfNull(result, id, persister.getEntityName());
+    }
+
+    // rest of the methods remain unchanged
+}
+```
+
+**Explanation of Changes**:
+- **Method `refreshAndCheck`**: This method encapsulates the logic to refresh an entity and ensure the result is not null. It takes parameters relevant to the refresh operation and executes the code that was duplicated.
+- **Usage**: Replaced each instance of the duplicated code in the `onRefresh` and `refresh` methods with a call to `refreshAndCheck`, simplifying the main logic flow and reducing code duplication, thereby improving maintainability.
+
+This refactor not only makes the code cleaner but also reduces the risk of bugs in the future if changes are needed in the refresh and check logic, as they only need to be made in one place.

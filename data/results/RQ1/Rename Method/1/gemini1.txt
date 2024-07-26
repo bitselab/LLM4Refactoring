@@ -1,0 +1,28 @@
+ **Here's a review of the code snippet, identifying potential refactoring opportunities:**
+
+**1. Responsibilities:**
+- The `CommonUtil` class contains a mix of utility methods, some related to file path handling, string manipulation, and reflection.
+- This could be refactored to separate those concerns into more focused classes or packages.
+
+**2. Unused Constant:**
+- The constant `EMPTY_INT_ARRAY` is declared but never used. It should be removed.
+
+**3. Reinventing Existing Functionality:**
+- The method `getFileNameWithoutExtension` replicates a function already available in libraries like Guava or Apache Commons IO. It's generally better to leverage existing, well-tested libraries for common tasks.
+
+**4. Method Scope:**
+- The method `getCheckstyleResource` is intended for internal testing but is declared as `public`. It should be made `private` or `protected` to limit its visibility.
+
+**5. Repetitive Exception Handling:**
+- Several methods have similar patterns of exception handling, such as wrapping exceptions in `IllegalStateException`. Consider creating a helper method to consolidate this logic for better readability.
+
+**6. Missing Comments:**
+- Some methods lack clear comments explaining their purpose and usage. Adding comments would improve code maintainability.
+
+**7. Potential for Refactoring:**
+- Consider using Java 8 streams and method references for cleaner code in methods like `relativizeAndNormalizePath`.
+- Explore using Java's `Path` API for more convenient file path operations.
+- Refactor related methods into separate classes based on their functionality (e.g., file path handling, string manipulation).
+- Look for opportunities to apply design patterns like Strategy or Template Method for greater flexibility.
+
+**Overall, the code demonstrates a good understanding of utility classes and exception handling. By addressing the identified areas, the code could be further improved in terms of organization, clarity, and maintainability.**

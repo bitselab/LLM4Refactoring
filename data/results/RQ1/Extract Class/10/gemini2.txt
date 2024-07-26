@@ -1,0 +1,94 @@
+Here are some potential extract class refactoring opportunities in the provided code:
+
+1. **Extract a class for postings array:**
+   - The `FreqProxTermsWriterPerField.FreqProxPostingsArray` class seems tightly coupled with `TermsHashPerField`. 
+   - It manages the internal structure of the postings array used for storing term frequencies and document IDs.
+   - Create a separate class named `PostingsArray` to encapsulate this functionality.
+
+2. **Extract a class for term writing logic:**
+   - The methods `newTerm` and `addTerm` within `TermsHashPerField` handle writing logic for new and existing terms, respectively.
+   - These methods could be refactored into a dedicated class named `TermWriter` to improve code organization and potential reuse. 
+
+3. **Extract a class for byte reading logic:**
+   - The `assertDocAndFreq` method is responsible for reading and interpreting term frequencies and document IDs from the byte slice reader.
+   - Encapsulating this logic in a separate class named `ByteReader` would promote better separation of concerns.
+
+Here's the refactored code with these changes:
+
+```java
+package org.apache.lucene.index;
+
+// ... other imports
+
+public class TestTermsHashPerField extends LuceneTestCase {
+
+  private static TermsHashPerField createNewHash(AtomicInteger newCalled, AtomicInteger addCalled) {
+    IntBlockPool intBlockPool = new IntBlockPool();
+    ByteBlockPool byteBlockPool = new ByteBlockPool(new ByteBlockPool.DirectAllocator());
+    TermBlockPool termBlockPool = new TermBlockPool(new ByteBlockPool.DirectAllocator());
+
+    TermsHashPerField hash = new TermsHashPerField(
+        1,
+        intBlockPool,
+        byteBlockPool,
+        termBlockPool,
+        Counter.newCounter(),
+        null,
+        "testfield",
+        IndexOptions.DOCS_AND_FREQS
+    );
+    return hash;
+  }
+
+  boolean assertDocAndFreq(ByteSliceReader reader, PostingsArray postingsArray, int prevDoc, int termId, int doc, int frequency) throws IOException {
+    // ... (delegate reading logic to ByteReader)
+  }
+
+  public void testAddAndUpdateTerm() throws IOException {
+    // ... (use TermWriter for writing logic)
+  }
+
+  public static class TermsHashPerField {
+    private final PostingsArray postingsArray;
+    private final TermWriter termWriter;
+
+    // ... other fields and methods
+
+    void newTerm(int termID, int docID) {
+      termWriter.newTerm(termID, docID);
+    }
+
+    void addTerm(int termID, int docID) {
+      termWriter.addTerm(termID, docID);
+    }
+
+    // ... other methods
+  }
+
+  public static class PostingsArray {
+    // ... fields representing the postings array structure
+  }
+
+  public static class TermWriter {
+    private final TermsHashPerField hash;
+
+    public TermWriter(TermsHashPerField hash) {
+      this.hash = hash;
+    }
+
+    void newTerm(int termID, int docID) {
+      // ... writing logic for new terms
+    }
+
+    void addTerm(int termID, int docID) {
+      // ... writing logic for existing terms
+    }
+  }
+
+  public static class ByteReader {
+    // ... methods for reading byte slices and interpreting data
+  }
+}
+```
+
+These refactorings improve code maintainability and readability by separating functionalities into focused classes. They also promote potential code reuse if the extracted functionalities are applicable in other contexts.

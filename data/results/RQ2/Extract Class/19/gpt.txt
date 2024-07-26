@@ -1,0 +1,51 @@
+The code snippet you've provided from the `JacksonProperties` class in the Spring Boot configuration for Jackson demonstrates a classic scenario for applying the Extract Class refactoring technique. The specific segment of the code dealing with `EnumFeature` and `JsonNodeFeature` configurations is a good candidate for extraction. 
+
+The goal of this refactoring is to create a new class that encapsulates the functionalities related to these features, thus making the `JacksonProperties` class more focused and easier to manage. 
+
+Here's the refactored code:
+
+1. **Create a New Class for Feature Configurations**: This new class, let's call it `FeatureConfigurations`, will hold the configurations related to `EnumFeature` and `JsonNodeFeature`.
+
+2. **Move the Relevant Fields and Methods to the New Class**: The `enumFeatures` and `jsonNode` maps along with their getter methods will be moved to the new class.
+
+3. **Reference the New Class in `JacksonProperties`**: `JacksonProperties` will now have an instance of `FeatureConfigurations`.
+
+Refactored Code:
+
+```java
+package org.springframework.boot.autoconfigure.jackson;
+
+// ... other imports ...
+
+@ConfigurationProperties(prefix = "spring.jackson")
+public class JacksonProperties {
+    // ... other fields ...
+
+    private final FeatureConfigurations featureConfigurations = new FeatureConfigurations();
+
+    // ... other methods ...
+
+    public FeatureConfigurations getFeatureConfigurations() {
+        return this.featureConfigurations;
+    }
+}
+
+class FeatureConfigurations {
+    private final Map<EnumFeature, Boolean> enumFeatures = new EnumMap<>(EnumFeature.class);
+    private final Map<JsonNodeFeature, Boolean> jsonNode = new EnumMap<>(JsonNodeFeature.class);
+
+    public Map<EnumFeature, Boolean> getEnum() {
+        return this.enumFeatures;
+    }
+
+    public Map<JsonNodeFeature, Boolean> getJsonNode() {
+        return this.jsonNode;
+    }
+}
+```
+
+In this refactoring:
+
+- The `FeatureConfigurations` class encapsulates the configuration logic for enum and JsonNode features.
+- The `JacksonProperties` class becomes more focused on its primary responsibilities.
+- This approach follows the Single Responsibility Principle, enhancing the code's maintainability and readability.

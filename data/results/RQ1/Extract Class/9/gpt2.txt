@@ -1,0 +1,227 @@
+Upon reviewing the provided code, it seems like an ideal candidate for "Extract Class" refactoring, primarily because the `WelcomeScreenActionsUtil` class is handling multiple responsibilities. We can improve the design by separating concerns into different classes. Here's an overview of the potential refactorings:
+
+1. **Extract `ToolbarTextButtonWrapper` Class**: This inner class is a prime candidate for extraction. It handles the creation and updating of custom components, which is a distinct responsibility from the utility functions in `WelcomeScreenActionsUtil`.
+
+2. **Extract `LargeIconWithTextWrapper` Class**: Similar to `ToolbarTextButtonWrapper`, this inner class also handles custom component creation and updating. Extracting it would further modularize the code.
+
+3. **Utility Methods Extraction**: Methods like `collectAllActions`, `isActionAvailable`, and `performAnActionForComponent` could remain in `WelcomeScreenActionsUtil` as they are more aligned with the utility nature of the class. However, if these methods are only relevant in the context of the extracted classes, they should be moved accordingly.
+
+4. **Action Group Handling**: The method `splitAndWrapActions` could be part of a separate class that deals with action group manipulation, enhancing the single responsibility principle.
+
+I will now refactor the code based on these insights. The refactor will involve creating new classes and moving relevant methods and inner classes into these new classes. Let's proceed with the refactoring.
+
+Here's the refactored code with the proposed changes:
+
+```java
+// File: WelcomeScreenActionsUtil.java
+package com.intellij.openapi.wm.impl.welcomeScreen;
+
+import com.intellij.ide.IdeBundle;
+import com.intellij.openapi.actionSystem.*;
+import com.intellij.openapi.util.Couple;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.function.Function;
+
+public final class WelcomeScreenActionsUtil {
+
+    public static void collectAllActions(@NotNull DefaultActionGroup group, @NotNull ActionGroup actionGroup) {
+        for (AnAction action : actionGroup.getChildren(null)) {
+            if (action instanceof ActionGroup && !((ActionGroup) action).isPopup()) {
+                collectAllActions(group, (ActionGroup) action);
+            } else {
+                group.add(action);
+            }
+        }
+    }
+
+    static boolean isActionAvailable(@NotNull AnAction action) {
+        AnActionEvent event = AnActionEvent.createFromAnAction(action, null, ActionPlaces.WELCOME_SCREEN, DataContext.EMPTY_CONTEXT);
+        action.update(event);
+        return event.getPresentation().isVisible();
+    }
+
+    public static Couple<DefaultActionGroup> splitAndWrapActions(@NotNull ActionGroup actionGroup,
+                                                                 @NotNull Function<? super AnAction, ? extends AnAction> wrapper,
+                                                                 int mainButtonsNum) {
+        DefaultActionGroup group = new DefaultActionGroup();
+        collectAllActions(group, actionGroup);
+        AnAction[] actions = group.getChildren(null);
+
+        DefaultActionGroup main = new DefaultActionGroup();
+        DefaultActionGroup more = new DefaultActionGroup(IdeBundle.message("welcome.screen.more.actions.link.text"), true);
+        more.getTemplatePresentation().setHideGroupIfEmpty(true);
+
+        for (AnAction child : actions) {
+            if (!isActionAvailable(child)) continue;
+            if (main.getChildrenCount() < mainButtonsNum) {
+                main.addAction(wrapper.apply(child));
+            } else {
+                more.addAction(wrapper.apply(child));
+            }
+        }
+        return Couple.of(main, more);
+    }
+}
+```
+
+```java
+// File: ToolbarTextButtonWrapper.java
+package com.intellij.openapi.wm.impl.welcomeScreen;
+
+import com.intellij.openapi.actionSystem.*;
+import com.intellij.openapi.actionSystem.ex.CustomComponentAction;
+import com.intellij.ui.components.JBOptionButton;
+import com.intellij.util.containers.ContainerUtil;
+import org.jetbrains.annotations.NotNull;
+
+import javax.swing.*;
+import java.awt.event.ActionEvent;
+import java.util.Collections;
+import java.util.List;
+
+import static com.intellij.openapi.wm.impl.welcomeScreen.WelcomeScreenActionsUtil.performAnActionForComponent;
+
+public final class ToolbarTextButtonWrapper extends AnActionWrapper implements CustomComponentAction {
+
+    private final List<AnAction> myActions;
+
+    ToolbarTextButtonWrapper(@NotNull List<AnAction> actions) {
+        super(actions.get(0));
+        myActions = actions;
+    }
+
+    @Override
+    public @NotNull JComponent createCustomComponent(@NotNull Presentation presentation, @NotNull String place) {
+        JBOptionButton button = new JBOptionButton(null, null);
+        button.setAction(new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                performAnActionForComponent(getDelegate(), button);
+            }
+        });
+        if (myActions.size() > 1) {
+            button.setOptions(ContainerUtil.subList(myActions, 1));
+        }
+        button.setBackground(WelcomeScreenUIManager.getMainAssociatedComponentBackground());
+        button.putClientProperty(JBOptionButton.PLACE, place);
+        return button;
+    }
+
+    @Override
+    public void updateCustomComponent(@NotNull JComponent component, @NotNull Presentation presentation) {
+        if (!(component instanceof JBOptionButton button)) return;
+        button.getAction().putValue(Action.NAME, presentation.getText());
+        UIUtil.setEnabled(button, presentation.isEnabled(), true);
+    }
+
+    public static ToolbarTextButtonWrapper wrapAsTextButton(@NotNull AnAction action) {
+        return new ToolbarTextButtonWrapper(Collections.singletonList(action));
+    }
+
+    public static ToolbarTextButtonWrapper wrapAsOptionButton(@NotNull List<AnAction> actions) {
+        return new ToolbarTextButtonWrapper(actions);
+    }
+}
+```
+
+```java
+// File: LargeIconWithTextWrapper.java
+package com.intellij.openapi.wm.impl.welcomeScreen;
+
+import com.intellij.openapi.actionSystem.*;
+import com.intellij.openapi.actionSystem.ex.CustomComponentAction;
+import com.intellij.ui.components.JBLabel;
+import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.UIUtil;
+import org.jetbrains.annotations.NotNull;
+
+import javax.swing.*;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
+
+import static com.intellij.openapi.wm.impl.welcomeScreen.WelcomeScreenUIManager.getActionsButtonBackground;
+import static com.intellij.openapi.wm.impl.welcomeScreen.WelcomeScreenActionsUtil.performAnActionForComponent;
+
+public final class LargeIconWithTextWrapper extends AnActionWrapper implements CustomComponentAction {
+
+    final JButton myIconButton;
+    final JBLabel myLabel;
+
+    LargeIconWithTextWrapper() {
+        super(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, JBUI.scale(12), false, false));
+
+        myIconButton = new JButton();
+        myIconButton.setBorder(JBUI.Borders.empty());
+        myIconButton.setHorizontalAlignment(SwingConstants.CENTER);
+        myIconButton.setOpaque(false);
+        myIconButton.setPreferredSize(new JBDimension(60, 60));
+        configureButtonProperties(myIconButton);
+
+        myIconButton.addFocusListener(new FocusListener() {
+            @Override
+            public void focusGained(FocusEvent e) {
+                updateIconBackground(true);
+            }
+
+            @Override
+            public void focusLost(FocusEvent e) {
+                updateIconBackground(false);
+            }
+        });
+
+        myLabel = new JBLabel("", SwingConstants.CENTER);
+        myLabel.setOpaque(false);
+
+        setFocusable(false);
+        add(new Wrapper(myIconButton).setFocusable(false).setBorder(JBUI.Borders.empty(0, 30)));
+        add(myLabel);
+        myIconButton.getAccessibleContext().setAccessibleName(myLabel.getText());
+    }
+
+    private void configureButtonProperties(JButton button) {
+        if (ExperimentalUI.isNewUI()) {
+            button.putClientProperty("JButton.focusedBackgroundColor", getActionsButtonBackground(false));
+            button.putClientProperty("JButton.outlineFocusColor", WelcomeScreenUIManager.getActionsButtonSelectionBorder());
+            button.putClientProperty("JButton.outlineFocusSize", JBUI.scale(2));
+        } else {
+            button.putClientProperty("JButton.focusedBackgroundColor", getActionsButtonBackground(true));
+        }
+        button.putClientProperty("JButton.backgroundColor", getActionsButtonBackground(false));
+    }
+
+    void updateIconBackground(boolean selected) {
+        if (!ExperimentalUI.isNewUI()) {
+            myIconButton.setSelected(selected);
+            myIconButton.putClientProperty("JButton.backgroundColor", getActionsButtonBackground(selected));
+            myIconButton.repaint();
+        }
+    }
+
+    LargeIconWithTextWrapper(@NotNull AnAction action) {
+        this();
+        setDelegate(action);
+    }
+
+    @Override
+    public @NotNull JComponent createCustomComponent(@NotNull Presentation presentation, @NotNull String place) {
+        // Method implementation
+    }
+
+    @Override
+    public void updateCustomComponent(@NotNull JComponent component, @NotNull Presentation presentation) {
+        // Method implementation
+    }
+
+    static @NotNull LargeIconWithTextWrapper wrapAsBigIconWithText(AnAction action) {
+        return new LargeIconWithTextWrapper(action);
+    }
+}
+```
+
+In this refactoring:
+- `ToolbarTextButtonWrapper` and `LargeIconWithTextWrapper` are extracted into separate files, reducing the complexity of `WelcomeScreenActionsUtil`.
+- Relevant methods are moved to these new classes.
+- `WelcomeScreenActionsUtil` retains methods related to action collection and splitting, aligning with its utility nature.
+
+This refactoring should improve the maintainability and readability of the code by separating concerns more clearly. Further adjustments might be necessary depending on the broader context of the application and how these classes interact with other components.

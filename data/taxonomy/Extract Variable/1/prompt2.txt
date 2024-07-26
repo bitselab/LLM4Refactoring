@@ -1,0 +1,77 @@
+Extract variable refactorings are frequently employed to remove repeated expressions to improve readability and reusability.
+##################################################
+An extract variable refactoring pattern is to extract repeated expressions as a new variable within the same method. Here is an example of the extract variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private Map<String, User> getIssueUsersByLogin(Issue issue) {
+    Map<String, User> usersByLogin = Maps.newHashMap();
+    if (issue.assignee() != null) {
+        usersByLogin.put(issue.assignee(), userIndex.getByLogin(issue.assignee()));
+    }
+    String reporter = issue.reporter();
+    if (reporter != null) {
+        usersByLogin.put(reporter, userIndex.getByLogin(reporter));
+    }
+    return usersByLogin;
+}
+```
+The source code after refactoring is:
+```
+private Map<String, User> getIssueUsersByLogin(Issue issue) {
+    Map<String, User> usersByLogin = Maps.newHashMap();
+    String assignee = issue.assignee();
+    if (assignee != null) {
+        usersByLogin.put(assignee, userIndex.getByLogin(assignee));
+    }
+    String reporter = issue.reporter();
+    if (reporter != null) {
+        usersByLogin.put(reporter, userIndex.getByLogin(reporter));
+    }
+    return usersByLogin;
+}
+```
+In this example, the developer extracted the expression "issue.assignee()" as new variable "assignee".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+private void processFiles(List<File> files) throws CheckstyleException {
+    for (final File file : files) {
+        String fileName = null;
+        try {
+            fileName = file.getAbsolutePath();
+            final long timestamp = file.lastModified();
+            if (cacheFile != null && cacheFile.isInCache(fileName, timestamp)
+                    || !acceptFileStarted(fileName)) {
+                continue;
+            }
+            if (cacheFile != null) {
+                cacheFile.put(fileName, timestamp);
+            }
+            fireFileStarted(fileName);
+            final SortedSet<Violation> fileMessages = processFile(file);
+            fireErrors(fileName, fileMessages);
+            fireFileFinished(fileName);
+        }
+        // -@cs[IllegalCatch] There is no other way to deliver filename that was under
+        // processing. See https://github.com/checkstyle/checkstyle/issues/2285
+        catch (Exception ex) {
+            if (fileName != null && cacheFile != null) {
+                cacheFile.remove(fileName);
+            }
+
+            // We need to catch all exceptions to put a reason failure (file name) in exception
+            throw new CheckstyleException("Exception was thrown while processing "
+                    + file.getPath(), ex);
+        }
+        catch (Error error) {
+            if (fileName != null && cacheFile != null) {
+                cacheFile.remove(fileName);
+            }
+
+            // We need to catch all errors to put a reason failure (file name) in error
+            throw new Error("Error was thrown while processing " + file.getPath(), error);
+        }
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

@@ -1,0 +1,117 @@
+Refactoring the provided code can improve its readability, maintainability, and efficiency. Here are some refactoring opportunities I've identified:
+
+1. **Remove Redundant Comments**: Some comments are simply restating what the code does, which is evident from the code itself. For instance, the comment "Stop instances being created" for the private constructor is unnecessary.
+
+2. **Use Standard Libraries**: The methods for handling arrays such as `EMPTY_STRING_ARRAY`, `EMPTY_INTEGER_OBJECT_ARRAY`, etc., can be replaced by using standard libraries like Apache Commons Lang or Guava. For instance, `new String[0]` can be replaced with `StringUtils.EMPTY_ARRAY`.
+
+3. **Consolidate Utility Methods**: Some utility methods like `isPatternValid` and `createPattern` seem related and could potentially be consolidated or restructured for better organization.
+
+4. **Remove Magic Numbers**: The number `0` used in methods like `createPattern` as the default flag value can be replaced with a named constant for clarity.
+
+5. **Optimize Imports**: If there are unused imports, they should be removed to clean up the code.
+
+6. **Simplify String Operations**: In methods like `getFileNameWithoutExtension` and `getFileExtension`, the operations can be simplified using existing methods from libraries like Apache Commons IO.
+
+7. **Improve Exception Handling**: Instead of converting every exception to `IllegalStateException`, it might be more appropriate to handle or propagate different types of exceptions differently.
+
+8. **Refactor Large Methods**: Some methods, like `matchesFileExtension`, are quite long and could be broken down into smaller, more manageable methods.
+
+9. **Use Java 8 Features**: If the codebase allows, using Java 8 features like Streams could simplify some operations, especially in string and collection manipulation.
+
+10. **Standardize Method Naming**: Ensure that method names follow a consistent naming convention that reflects their behavior.
+
+11. **Optimize Looping Constructs**: In methods like `hasWhitespaceBefore`, loops can be optimized for better performance.
+
+I will now refactor the code based on these suggestions.
+
+Here's the refactored code based on the identified opportunities:
+
+```java
+package com.puppycrawl.tools.checkstyle.utils;
+
+import java.io.Closeable;
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.BitSet;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+
+import com.puppycrawl.tools.checkstyle.api.CheckstyleException;
+import org.apache.commons.lang3.ArrayUtils;
+
+/**
+ * Contains utility methods.
+ */
+public final class CommonUtil {
+
+    public static final int DEFAULT_TAB_WIDTH = 8;
+    public static final BitSet EMPTY_BIT_SET = new BitSet();
+    public static final String[] EMPTY_STRING_ARRAY = ArrayUtils.EMPTY_STRING_ARRAY;
+    public static final Integer[] EMPTY_INTEGER_OBJECT_ARRAY = ArrayUtils.EMPTY_INTEGER_OBJECT_ARRAY;
+    public static final Object[] EMPTY_OBJECT_ARRAY = ArrayUtils.EMPTY_OBJECT_ARRAY;
+    public static final int[] EMPTY_INT_ARRAY = ArrayUtils.EMPTY_INT_ARRAY;
+    public static final byte[] EMPTY_BYTE_ARRAY = ArrayUtils.EMPTY_BYTE_ARRAY;
+    public static final double[] EMPTY_DOUBLE_ARRAY = ArrayUtils.EMPTY_DOUBLE_ARRAY;
+    public static final String CLASSPATH_URL_PROTOCOL = "classpath:";
+    private static final String UNABLE_TO_FIND_EXCEPTION_PREFIX = "Unable to find: ";
+    private static final String EXTENSION_SEPARATOR = ".";
+    private static final int NO_FLAGS = 0;
+
+    private CommonUtil() {
+    }
+
+    public static Pattern createPattern(String pattern) {
+        return createPattern(pattern, NO_FLAGS);
+    }
+
+    public static Pattern createPattern(String pattern, int flags) {
+        try {
+            return Pattern.compile(pattern, flags);
+        } catch (final PatternSyntaxException ex) {
+            throw new IllegalArgumentException("Failed to initialise regular expression " + pattern, ex);
+        }
+    }
+
+    public static boolean matchesFileExtension(File file, String... fileExtensions) {
+        if (ArrayUtils.isEmpty(fileExtensions)) {
+            return true;
+        }
+
+        final String fileName = file.getName();
+        return Arrays.stream(fileExtensions)
+                     .map(ext -> ext.startsWith(EXTENSION_SEPARATOR) ? ext : EXTENSION_SEPARATOR + ext)
+                     .anyMatch(fileName::endsWith);
+    }
+
+    public static boolean hasWhitespaceBefore(int index, String line) {
+        return line.substring(0, index).chars().allMatch(Character::isWhitespace);
+    }
+
+    public static int lengthMinusTrailingWhitespace(String line) {
+        return line.replaceAll("\\s+$", "").length();
+    }
+
+    // Other methods remain unchanged...
+
+}
+```
+
+**Changes Made:**
+1. Removed redundant comments.
+2. Used standard libraries like Apache Commons Lang for array-related constants.
+3. Simplified the `matchesFileExtension` method using Java 8 features.
+4. Used a constant `NO_FLAGS` instead of the magic number `0`.
+5. Optimized the `hasWhitespaceBefore` method using streams.
+6. Simplified `lengthMinusTrailingWhitespace` using regex to remove trailing whitespace.
+
+Note that some suggestions, like exception handling or further refactoring of large methods, may require a deeper understanding of the entire codebase and its dependencies, which is beyond the scope of this review. Additionally, ensure that these changes are compatible with the rest of your codebase and are thoroughly tested.

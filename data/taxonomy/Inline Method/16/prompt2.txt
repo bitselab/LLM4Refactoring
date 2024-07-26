@@ -1,0 +1,72 @@
+Inline method refactorings are frequently employed to eliminate unnecessary methods to improve readability.
+##################################################
+An inline method refactoring pattern is to remove methods that are only used as proxies in other methods. Here is an example of the inline method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public abstract class MetaAdapterFactory {
+
+    public static SLanguage getLanguage(@NotNull SLanguageId id, @NotNull String langName) {
+        return getLanguage(id, langName, -1);
+    }
+
+    @NotNull
+    public static SLanguage getLanguage(@NotNull SLanguageId id, @NotNull String langName, int version) {
+        SLanguageAdapterById l = new SLanguageAdapterById(id, langName);
+        LangKey p = new LangKey(id, langName);
+        ourLanguageIds.putIfAbsent(p, l);
+        return ourLanguageIds.get(p);
+    }
+    
+}
+```
+The source code after refactoring is:
+```
+public abstract class MetaAdapterFactory {
+
+    public static SLanguage getLanguage(@NotNull SLanguageId id, @NotNull String langName) {
+        SLanguageAdapterById l = new SLanguageAdapterById(id, langName);
+        LangKey p = new LangKey(id, langName);
+        ourLanguageIds.putIfAbsent(p, l);
+        return ourLanguageIds.get(p);
+    }
+    
+}
+```
+In this example, the developer removed the unnecessary method "getLanguage".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential inline method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public class SolrXmlConfig {
+
+    public static NodeConfig fromInputStream(
+            Path solrHome, InputStream is, Properties substituteProps) {
+        return fromInputStream(solrHome, is, substituteProps, false);
+    }
+
+    public static NodeConfig fromInputStream(
+            Path solrHome, InputStream is, Properties substituteProps, boolean fromZookeeper) {
+        SolrResourceLoader loader = new SolrResourceLoader(solrHome);
+        if (substituteProps == null) {
+            substituteProps = new Properties();
+        }
+        try {
+            byte[] buf = is.readAllBytes();
+            try (ByteArrayInputStream dup = new ByteArrayInputStream(buf)) {
+                XmlConfigFile config =
+                        new XmlConfigFile(loader, null, new InputSource(dup), null, substituteProps);
+                return fromConfig(
+                        solrHome,
+                        substituteProps,
+                        new DataConfigNode(new DOMConfigNode(config.getDocument().getDocumentElement())),
+                        loader);
+            }
+        } catch (SolrException exc) {
+            throw exc;
+        } catch (Exception e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+        }
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

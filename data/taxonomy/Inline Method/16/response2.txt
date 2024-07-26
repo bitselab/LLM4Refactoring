@@ -1,0 +1,35 @@
+Examining the provided code snippet from `SolrXmlConfig`, we can identify a potential opportunity for inline method refactoring similar to the earlier example you provided. The method `fromInputStream(Path solrHome, InputStream is, Properties substituteProps)` serves as a proxy by directly calling the overloaded method `fromInputStream(Path solrHome, InputStream is, Properties substituteProps, boolean fromZookeeper)` with a default value for `fromZookeeper`.
+
+Here's the refactored version of the code:
+
+```java
+public class SolrXmlConfig {
+
+    public static NodeConfig fromInputStream(
+            Path solrHome, InputStream is, Properties substituteProps) {
+        SolrResourceLoader loader = new SolrResourceLoader(solrHome);
+        if (substituteProps == null) {
+            substituteProps = new Properties();
+        }
+        try {
+            byte[] buf = is.readAllBytes();
+            try (ByteArrayInputStream dup = new ByteArrayInputStream(buf)) {
+                XmlConfigFile config =
+                        new XmlConfigFile(loader, null, new InputSource(dup), null, substituteProps);
+                return fromConfig(
+                        solrHome,
+                        substituteProps,
+                        new DataConfigNode(new DOMConfigNode(config.getDocument().getDocumentElement())),
+                        loader);
+            }
+        } catch (SolrException exc) {
+            throw exc;
+        } catch (Exception e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+        }
+    }
+    
+}
+```
+
+In this refactored version, I removed the method `fromInputStream(Path solrHome, InputStream is, Properties substituteProps, boolean fromZookeeper)` by placing its logic directly into the `fromInputStream(Path solrHome, InputStream is, Properties substituteProps)` method. This not only reduces the number of method calls but also simplifies the class structure, enhancing readability without the necessity of tracking method overloads with default parameters.

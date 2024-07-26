@@ -1,0 +1,79 @@
+The provided code snippet from `PackReverseIndexWriterV1` class can benefit from an "Extract Class" refactoring. The inner class `IndexPositionsByOffsetComparator` is a good candidate for this. Extracting this class improves modularity and readability, making it easier to manage and test.
+
+Let's perform the refactoring:
+
+1. **Extract `IndexPositionsByOffsetComparator` Class**: This class can be extracted as a top-level class. It would require passing the `objectsByIndexPos` list as a constructor parameter, which is a common practice for classes that encapsulate specific behavior or logic.
+
+2. **Pass Dependencies via Constructor**: The extracted class should receive its dependencies (the list of `PackedObjectInfo` objects) via its constructor. This follows the Dependency Injection principle, which simplifies testing and maintenance.
+
+Here's the refactored code:
+
+**Extracted `IndexPositionsByOffsetComparator` Class**:
+```java
+package org.eclipse.jgit.internal.storage.file;
+
+import org.eclipse.jgit.transport.PackedObjectInfo;
+import org.eclipse.jgit.util.IntList.IntComparator;
+import java.util.List;
+
+public class IndexPositionsByOffsetComparator implements IntComparator {
+    private final List<? extends PackedObjectInfo> objectsByIndexPos;
+
+    public IndexPositionsByOffsetComparator(List<? extends PackedObjectInfo> objectsByIndexPos) {
+        this.objectsByIndexPos = objectsByIndexPos;
+    }
+
+    @Override
+    public int compare(int firstIndexPosition, int secondIndexPosition) {
+        return Long.compare(getOffset(firstIndexPosition), getOffset(secondIndexPosition));
+    }
+
+    private long getOffset(int indexPosition) {
+        return objectsByIndexPos.get(indexPosition).getOffset();
+    }
+}
+```
+
+**Modified `PackReverseIndexWriterV1` Class**:
+```java
+package org.eclipse.jgit.internal.storage.file;
+
+import static org.eclipse.jgit.internal.storage.file.PackReverseIndex.MAGIC;
+import static org.eclipse.jgit.internal.storage.file.PackReverseIndex.VERSION_1;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.List;
+
+import org.eclipse.jgit.transport.PackedObjectInfo;
+import org.eclipse.jgit.util.IntList;
+
+final class PackReverseIndexWriterV1 extends PackReverseIndexWriter {
+    private static final int OID_VERSION_SHA1 = 1;
+    private static final int DEFAULT_OID_VERSION = OID_VERSION_SHA1;
+
+    PackReverseIndexWriterV1(final OutputStream dst) {
+        super(dst);
+    }
+
+    @Override
+    protected void writeHeader() throws IOException {
+        out.write(MAGIC);
+        dataOutput.writeInt(VERSION_1);
+        dataOutput.writeInt(DEFAULT_OID_VERSION);
+    }
+
+    @Override
+    protected void writeBody(List<? extends PackedObjectInfo> objectsByIndexPos) throws IOException {
+        IntList positionsByOffset = IntList.filledWithRange(0, objectsByIndexPos.size());
+        positionsByOffset.sort(new IndexPositionsByOffsetComparator(objectsByIndexPos));
+
+        for (int i = 0; i < positionsByOffset.size(); i++) {
+            int indexPosition = positionsByOffset.get(i);
+            dataOutput.writeInt(indexPosition);
+        }
+    }
+}
+```
+
+This refactoring makes the `IndexPositionsByOffsetComparator` more reusable and testable, and it decouples it from the `PackReverseIndexWriterV1` class, adhering to the Single Responsibility Principle.

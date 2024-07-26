@@ -1,0 +1,73 @@
+ **Here are some refactoring opportunities identified in the code:**
+
+1. **Inheritance Hierarchy:**
+   - The comment `// TODO For 3.0, extend CountingInputStream. Or, add a max feature to CountingInputStream` suggests exploring a different inheritance structure.
+   - Consider directly extending `CountingInputStream` or providing a `CountingInputStream` wrapper with the "max" feature rather than using composition. This could simplify the code.
+
+2. **Builder Pattern:**
+   - The class already utilizes a builder pattern, but it could be further simplified:
+     - Remove the `maxLength` field in the builder and use `maxCount` directly.
+     - Consider making `Builder` a static inner class of `BoundedInputStream` for better encapsulation.
+
+3. **Deprecated Constructors:**
+   - The deprecated constructors (`BoundedInputStream(final InputStream in)` and `BoundedInputStream(final InputStream inputStream, final long maxCount)`) could be removed if they're not actively used. This would make the code cleaner and less confusing for new developers.
+
+4. **Redundant Code:**
+   - The methods `getCount()` and `getByteCount()` essentially do the same thing. Consolidating them would reduce redundancy.
+   - The `isMaxCount()` method could be simplified by directly accessing the `getCount()` method from `CountingInputStream`.
+
+5. **Unused Method:**
+   - The `onMaxLength()` method is marked as unused and seems to be intended for subclasses. If it's not actively used, it could be removed.
+
+**Here's the refactored code incorporating these suggestions:**
+
+```java
+package org.apache.commons.io.input;
+
+import static org.apache.commons.io.IOUtils.EOF;
+
+import java.io.IOException;
+import java.io.InputStream;
+
+import org.apache.commons.io.build.AbstractStreamBuilder;
+import org.apache.commons.io.input.CountingInputStream;
+
+public class BoundedInputStream extends CountingInputStream {
+
+    private final long maxCount;
+    private final boolean propagateClose;
+
+    private BoundedInputStream(final InputStream inputStream, final long maxCount, final boolean propagateClose) {
+        super(inputStream);
+        this.maxCount = maxCount;
+        this.propagateClose = propagateClose;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder extends AbstractStreamBuilder<BoundedInputStream, Builder> {
+
+        private long maxCount = EOF;
+        private boolean propagateClose = true;
+
+        @Override
+        public BoundedInputStream get() throws IOException {
+            return new BoundedInputStream(getInputStream(), maxCount, propagateClose);
+        }
+
+        public Builder setMaxCount(final long maxCount) {
+            this.maxCount = maxCount;
+            return this;
+        }
+
+        public Builder setPropagateClose(final boolean propagateClose) {
+            this.propagateClose = propagateClose;
+            return this;
+        }
+    }
+
+    // ... (rest of the methods with suggested simplifications)
+}
+```

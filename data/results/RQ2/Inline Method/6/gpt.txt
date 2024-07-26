@@ -1,0 +1,72 @@
+In the provided code, the `testGetSetXAttrHelper` method is a candidate for inline refactoring. This method is called from only one place (`testSetGetXAttr`), and inlining it will improve the readability by reducing the indirection and making the test flow more straightforward. Here's how we can refactor the code:
+
+### Refactored Code:
+
+```java
+package org.apache.hadoop.fs.azurebfs;
+
+import java.io.IOException;
+import java.util.EnumSet;
+
+import org.junit.Assume;
+import org.junit.Test;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.XAttrSetFlag;
+import org.apache.hadoop.fs.azurebfs.constants.FSOperationType;
+import org.apache.hadoop.fs.azurebfs.utils.TracingHeaderValidator;
+
+import static org.apache.hadoop.test.LambdaTestUtils.intercept;
+
+/**
+ * Test attribute operations.
+ */
+public class ITestAzureBlobFileSystemAttributes extends AbstractAbfsIntegrationTest {
+    private static final EnumSet<XAttrSetFlag> CREATE_FLAG = EnumSet.of(XAttrSetFlag.CREATE);
+    private static final EnumSet<XAttrSetFlag> REPLACE_FLAG = EnumSet.of(XAttrSetFlag.REPLACE);
+
+    public ITestAzureBlobFileSystemAttributes() throws Exception {
+        super();
+    }
+
+    @Test
+    public void testSetGetXAttr() throws Exception {
+        AzureBlobFileSystem fs = getFileSystem();
+        Assume.assumeTrue(getIsNamespaceEnabled(fs));
+
+        byte[] attributeValue1 = fs.getAbfsStore().encodeAttribute("hi");
+        byte[] attributeValue2 = fs.getAbfsStore().encodeAttribute("你好");
+        String attributeName1 = "user.asciiAttribute";
+        String attributeName2 = "user.unicodeAttribute";
+        Path testFile = path("setGetXAttr");
+
+        // after creating a file, the xAttr should not be present
+        touch(testFile);
+        assertNull(fs.getXAttr(testFile, attributeName1));
+
+        // after setting the xAttr on the file, the value should be retrievable
+        fs.registerListener(
+                new TracingHeaderValidator(getFileSystem().getAbfsStore().getAbfsConfiguration().getClientCorrelationId(),
+                        fs.getFileSystemId(), FSOperationType.SET_ATTR, true, 0));
+        fs.setXAttr(testFile, attributeName1, attributeValue1);
+        fs.setListenerOperation(FSOperationType.GET_ATTR);
+        assertArrayEquals(attributeValue1, fs.getXAttr(testFile, attributeName1));
+        fs.registerListener(null);
+
+        // after setting a second xAttr on the file, the first xAttr values should not be overwritten
+        fs.setXAttr(testFile, attributeName2, attributeValue2);
+        assertArrayEquals(attributeValue1, fs.getXAttr(testFile, attributeName1));
+        assertArrayEquals(attributeValue2, fs.getXAttr(testFile, attributeName2));
+    }
+
+    // Other test methods remain unchanged...
+}
+```
+
+### Changes Made:
+
+1. **Inlined `testGetSetXAttrHelper`**: The logic from `testGetSetXAttrHelper` is moved directly into the `testSetGetXAttr` test method.
+2. **Removed Unnecessary Method and Parameter**: The `testGetSetXAttrHelper` method and its parameters (`fs` and `conf`) are removed since they are no longer needed.
+3. **Direct Access to Configuration**: Used direct access to the configuration in the `TracingHeaderValidator` constructor call.
+
+This refactoring simplifies the test class by removing an unnecessary level of abstraction, making it easier to read and understand the test's flow and intent.

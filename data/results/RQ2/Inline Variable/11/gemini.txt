@@ -1,0 +1,76 @@
+Absolutely! Here's the refactored code using inline variable refactoring to eliminate the unnecessary variable "requestURI":
+
+```java
+public void onComplete(Result result) {
+  HttpRequest request = (HttpRequest) result.getRequest();
+  ContentResponse response = new HttpContentResponse(result.getResponse(), getContent(), getMediaType(), getEncoding());
+  if (result.getResponseFailure() != null) {
+    if (LOG.isDebugEnabled()) LOG.debug("Authentication challenge failed", result.getFailure());
+    forwardFailureComplete(request, result.getRequestFailure(), response, result.getResponseFailure());
+    return;
+  }
+
+  String authenticationAttribute = getAuthenticationAttribute();
+  HttpConversation conversation = request.getConversation();
+  if (conversation.getAttribute(authenticationAttribute) != null) {
+    // We have already tried to authenticate, but we failed again.
+    if (LOG.isDebugEnabled()) LOG.debug("Bad credentials for {}", request);
+    forwardSuccessComplete(request, response);
+    return;
+  }
+
+  HttpHeader header = getAuthenticateHeader();
+  List<Authentication.HeaderInfo> headerInfos = parseAuthenticateHeader(response, header);
+  if (headerInfos.isEmpty()) {
+    if (LOG.isDebugEnabled()) LOG.debug("Authentication challenge without {} header", header);
+    forwardFailureComplete(request, result.getRequestFailure(), response, new HttpResponseException("HTTP protocol violation: Authentication challenge without " + header + " header", response));
+    return;
+  }
+
+  Authentication authentication = null;
+  Authentication.HeaderInfo headerInfo = null;
+  URI authURI = resolveURI(request, getAuthenticationURI(request));
+  if (authURI != null) {
+    for (Authentication.HeaderInfo element : headerInfos) {
+      authentication = client.getAuthenticationStore().findAuthentication(element.getType(), authURI, element.getRealm());
+      if (authentication != null) {
+        headerInfo = element;
+        break;
+      }
+    }
+  }
+  if (authentication == null) {
+    if (LOG.isDebugEnabled()) LOG.debug("No authentication available for {}", request);
+    forwardSuccessComplete(request, response);
+    return;
+  }
+
+  Request.Content requestContent = request.getBody();
+  if (!requestContent.isReproducible()) {
+    if (LOG.isDebugEnabled()) LOG.debug("Request content not reproducible for {}", request);
+    forwardSuccessComplete(request, response);
+    return;
+  }
+
+  try {
+    Authentication.Result authnResult = authentication.authenticate(request, response, headerInfo, conversation);
+    if (LOG.isDebugEnabled()) LOG.debug("Authentication result {}", authnResult);
+    if (authnResult == null) {
+      forwardSuccessComplete(request, response);
+      return;
+    }
+
+    conversation.setAttribute(authenticationAttribute, true);
+    // Inline variable refactoring for requestURI
+    Request newRequest = client.copyRequest(request, request.getURI());
+    if (HttpMethod.CONNECT.is(newRequest.getMethod())) newRequest.path(request.getPath());
+
+    // Adjust the timeout of the new request... (rest remains unchanged)
+  } catch (Throwable x) {
+    if (LOG.isDebugEnabled()) LOG.debug("Authentication failed", x);
+    forwardFailureComplete(request, null, response, x);
+  }
+}
+```
+
+As you can see, the line `URI requestURI = request.getURI();` has been removed, and the value of `request.getURI()` is directly used in `client.copyRequest(request, request.getURI())`. This eliminates the unnecessary variable `requestURI` and improves code readability.

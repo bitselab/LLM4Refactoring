@@ -1,0 +1,88 @@
+The provided code snippet demonstrates a well-structured approach to customizing various builders and properties in a Spring Boot application with Pulsar integration. However, there are a few opportunities for refactoring to enhance maintainability, readability, and efficiency. Here's a refactored version of the code:
+
+### Refactoring Changes
+
+1. **DRY Principle - Don't Repeat Yourself**: The usage of `PropertyMapper` is repetitive in multiple methods. We can create a single, reusable method to initialize and return a `PropertyMapper` instance.
+
+2. **Method Extraction for Repeated Code**: The pattern of mapping properties to builder methods is repeated. A generic method can be introduced to handle this pattern.
+
+3. **Consolidate Exception Handling**: The exception handling in `customizeAuthentication` can be streamlined for better readability.
+
+4. **Enhanced Method Names**: Some method names can be more descriptive to better convey their purpose.
+
+5. **Private Method Accessibility**: Certain private methods are only used within the class and thus should remain private to encapsulate their functionality.
+
+Here's the refactored code:
+
+```java
+package org.springframework.boot.autoconfigure.pulsar;
+
+// ... [import statements remain the same]
+
+final class PulsarPropertiesMapper {
+
+    private final PulsarProperties properties;
+
+    PulsarPropertiesMapper(PulsarProperties properties) {
+        this.properties = properties;
+    }
+
+    void customizeClientBuilder(ClientBuilder clientBuilder, PulsarConnectionDetails connectionDetails) {
+        mapPropertiesToClientBuilder(this.properties.getClient(), clientBuilder, connectionDetails);
+    }
+
+    void customizeAdminBuilder(PulsarAdminBuilder adminBuilder, PulsarConnectionDetails connectionDetails) {
+        mapPropertiesToAdminBuilder(this.properties.getAdmin(), adminBuilder, connectionDetails);
+    }
+
+    // ... [Other customize methods remain similar with appropriate calls to mapPropertiesToBuilder]
+
+    private void mapPropertiesToClientBuilder(PulsarProperties.Client properties, ClientBuilder builder, PulsarConnectionDetails connectionDetails) {
+        PropertyMapper map = createPropertyMapper();
+        // ... [Map from properties to builder as before]
+    }
+
+    private void mapPropertiesToAdminBuilder(PulsarProperties.Admin properties, PulsarAdminBuilder builder, PulsarConnectionDetails connectionDetails) {
+        PropertyMapper map = createPropertyMapper();
+        // ... [Map from properties to builder as before]
+    }
+
+    private PropertyMapper createPropertyMapper() {
+        return PropertyMapper.get().alwaysApplyingWhenNonNull();
+    }
+
+    private void customizeAuthentication(AuthenticationConsumer authentication, PulsarProperties.Authentication properties) {
+        if (!StringUtils.hasText(properties.getPluginClassName())) {
+            return;
+        }
+        try {
+            Map<String, String> params = new TreeMap<>(properties.getParam());
+            String authParamString = convertAuthParamsToString(params);
+            authentication.accept(properties.getPluginClassName(), authParamString);
+        } catch (UnsupportedAuthenticationException ex) {
+            throw new IllegalStateException("Unable to configure Pulsar authentication", ex);
+        }
+    }
+
+    private String convertAuthParamsToString(Map<String, String> params) {
+        try {
+            return ObjectMapperFactory.create().writeValueAsString(params);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Could not convert auth parameters to encoded string", ex);
+        }
+    }
+
+    // ... [Rest of the class remains largely unchanged]
+
+    private interface AuthenticationConsumer {
+        void accept(String authPluginClassName, String authParams) throws UnsupportedAuthenticationException;
+    }
+}
+```
+
+### Summary of Refactoring
+- Extracted repetitive code into reusable methods (`createPropertyMapper`, `mapPropertiesToClientBuilder`, `mapPropertiesToAdminBuilder`, and `convertAuthParamsToString`).
+- Enhanced method naming for clarity.
+- Streamlined exception handling in `customizeAuthentication`.
+
+This refactoring maintains the original functionality while improving the code's structure and readability.

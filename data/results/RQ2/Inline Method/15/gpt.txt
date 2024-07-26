@@ -1,0 +1,73 @@
+In the provided `BytesStore` class, the `getReverseReader` method is an ideal candidate for inline refactoring. This method is used only once, in the `getReverseBytesReader` method. Inlining this will simplify the class structure and improve readability by reducing one level of abstraction.
+
+Refactoring involves moving the logic of `getReverseReader` directly into `getReverseBytesReader`. Here's the refactored code:
+
+Refactored Code:
+```java
+package org.apache.lucene.util.fst;
+
+// ... [Other imports]
+
+class BytesStore extends DataOutput implements FSTReader {
+
+    // ... [Fields and other methods]
+
+    @Override
+    public FST.BytesReader getReverseBytesReader() {
+        if (blocks.size() == 1) {
+            return new ReverseBytesReader(blocks.get(0));
+        }
+        return new FST.BytesReader() {
+            private byte[] current = blocks.size() == 0 ? null : blocks.get(0);
+            private int nextBuffer = -1;
+            private int nextRead = 0;
+
+            @Override
+            public byte readByte() {
+                if (nextRead == -1) {
+                    current = blocks.get(nextBuffer--);
+                    nextRead = blockSize - 1;
+                }
+                return current[nextRead--];
+            }
+
+            @Override
+            public void skipBytes(long count) {
+                setPosition(getPosition() - count);
+            }
+
+            @Override
+            public void readBytes(byte[] b, int offset, int len) {
+                for (int i = 0; i < len; i++) {
+                    b[offset + i] = readByte();
+                }
+            }
+
+            @Override
+            public long getPosition() {
+                return ((long) nextBuffer + 1) * blockSize + nextRead;
+            }
+
+            @Override
+            public void setPosition(long pos) {
+                int bufferIndex = (int) (pos >> blockBits);
+                if (nextBuffer != bufferIndex - 1) {
+                    nextBuffer = bufferIndex - 1;
+                    current = blocks.get(bufferIndex);
+                }
+                nextRead = (int) (pos & blockMask);
+                assert getPosition() == pos;
+            }
+
+            @Override
+            public boolean reversed() {
+                return true;
+            }
+        };
+    }
+
+    // ... [Rest of the class]
+}
+```
+
+In this refactored version, `getReverseReader` has been removed, and its logic is directly integrated into `getReverseBytesReader`. This makes the class more concise and reduces unnecessary indirection. However, it's important to note that inlining methods should be done carefully, considering the overall readability and maintainability of the code. In this case, the inlining seems justified as the `getReverseReader` method is only used in one place and its logic is not overly complex.

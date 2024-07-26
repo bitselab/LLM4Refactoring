@@ -1,0 +1,28 @@
+In the provided code snippet from the class `AggregatorImplementer`, there are opportunities for inline method refactoring, especially with the `initParameters()` method, which is called from within the `callInit()` method. Given the pattern you've outlined, we can simplify the `callInit()` method by integrating the logic of `initParameters()` directly into it, thereby eliminating the extra method call for cleaner, more straightforward code.
+
+Here's the refactored code:
+
+```java
+public class AggregatorImplementer {
+
+    private CodeBlock callInit() {
+        CodeBlock.Builder builder = CodeBlock.builder();
+        String parameters = init.getParameters()
+                .stream()
+                .map(p -> TypeName.get(p.asType()).equals(BIG_ARRAYS) ? "driverContext.bigArrays()" : p.getSimpleName().toString())
+                .collect(joining(", "));
+
+        if (init.getReturnType().toString().equals(stateType.toString())) {
+            builder.add("$T.$L($L)", declarationType, init.getSimpleName(), parameters);
+        } else {
+            builder.add("new $T($T.$L($L))", stateType, declarationType, init.getSimpleName(), parameters);
+        }
+        return builder.build();
+    }
+
+}
+```
+
+In this refactoring:
+- The method `initParameters()` is removed.
+- The logic for constructing the `parameters` string is directly integrated into the `callInit()` method, making the process more direct and reducing the overall number of method calls in the class. This aligns with the refactoring pattern to eliminate methods that contain only a few statements and are used in only one place.

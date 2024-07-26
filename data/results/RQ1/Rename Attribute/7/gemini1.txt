@@ -1,0 +1,65 @@
+ **I've identified several refactoring opportunities:**
+
+1. **Extract Helper Methods:**
+   - Create a helper method to handle the common logic of constructing the `idSelectString`:
+     ```java
+     private String buildIdSelectString(EntityRowIdMapping rowIdMapping) {
+       if (/* conditions for complex select */) {
+         // ... construct complex select string ...
+       } else {
+         return persister.getSelectByUniqueKeyString(uniqueKeyPropertyNames);
+       }
+     }
+     ```
+   - Extract the column name extraction logic into a helper method as well.
+
+2. **Simplify Constructor:**
+   - Use the extracted `buildIdSelectString` method to streamline the constructors.
+
+3. **Remove Deprecated Constructor:**
+   - Eliminate the deprecated constructor marked for removal.
+
+4. **Consider Encapsulation:**
+   - If appropriate, make the `uniqueKeyPropertyNames` and `uniqueKeyTypes` fields private to enforce encapsulation.
+
+5. **Use `Stream` for Column Name Handling:**
+   - Consider using Java Streams for a more concise column name extraction:
+     ```java
+     final List<String> columnNames = jdbcValuesMappingProducer.getResultBuilders().stream()
+         .map(GeneratedValueBasicResultBuilder::getModelPart)
+         .map(getActualGeneratedModelPart())
+         .map(Selectable::getSelectionExpression)
+         .collect(Collectors.toList());
+     ```
+
+**Here's the refactored code:**
+
+```java
+// ... imports ...
+
+public class UniqueKeySelectingDelegate extends AbstractSelectingDelegate {
+  private final String[] uniqueKeyPropertyNames;
+  private final Type[] uniqueKeyTypes;
+  private final String idSelectString;
+
+  public UniqueKeySelectingDelegate(
+      EntityPersister persister,
+      String[] uniqueKeyPropertyNames,
+      EventType timing) {
+    super(persister, timing, true, true);
+    this.uniqueKeyPropertyNames = uniqueKeyPropertyNames;
+    uniqueKeyTypes = Arrays.stream(uniqueKeyPropertyNames)
+        .map(persister::getPropertyType)
+        .toArray(Type[]::new);
+    idSelectString = buildIdSelectString(persister.getRowIdMapping());
+  }
+
+  // ... other methods (updated to use helper methods) ...
+
+  private String buildIdSelectString(EntityRowIdMapping rowIdMapping) {
+    // ... logic for constructing idSelectString ...
+  }
+}
+```
+
+**These refactoring steps enhance code readability, maintainability, and potentially performance while preserving functionality. It's recommended to conduct thorough testing after refactoring.**

@@ -1,0 +1,160 @@
+Analyzing the provided code snippet for potential rename parameter refactoring opportunities, several parameters can be renamed to enhance code readability and clarity. Here are my suggestions:
+
+1. **Method `visitBiRel(BiRel biRel)`**:
+   - Parameter `biRel`: The name `biRel` is not very descriptive. A more meaningful name could be `binaryRelation`.
+
+2. **Inner class `ClearOuterQueryHintShuttle`**:
+   - Constructor `ClearOuterQueryHintShuttle(RelHint joinHintNeedRemove)`:
+     - Parameter `joinHintNeedRemove`: The name could be more descriptive. Suggested rename to `hintToRemove`.
+   - Method `getInvalidQueryHint(List<RelHint> hints)`:
+     - Parameter `hints`: Although `hints` is somewhat descriptive, it could be renamed to `availableHints` for clarity.
+   - Method `isMatchInvalidInheritPath(List<Integer> invalidInheritPath, List<Integer> checkedInheritPath)`:
+     - Parameters `invalidInheritPath` and `checkedInheritPath`: These names are quite verbose. They could be renamed to `targetInheritPath` and `currentInheritPath` respectively for better readability.
+
+These changes aim to make the code more understandable and maintainable, especially for developers who might work with this code in the future. I will apply these changes and provide the refactored code snippet.
+
+Here's the refactored version of the provided code with improved parameter names for better readability:
+
+```java
+package org.apache.flink.table.planner.hint;
+
+import org.apache.calcite.rel.BiRel;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.RelShuttleImpl;
+import org.apache.calcite.rel.hint.Hintable;
+import org.apache.calcite.rel.hint.RelHint;
+import org.apache.calcite.rel.logical.LogicalCorrelate;
+import org.apache.calcite.rel.logical.LogicalJoin;
+import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql2rel.SqlToRelConverter;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+public class ClearQueryHintsWithInvalidPropagationShuttle extends QueryHintsRelShuttle {
+
+    @Override
+    protected RelNode visitBiRel(BiRel binaryRelation) {
+        List<RelHint> hints = ((Hintable) binaryRelation).getHints();
+
+        Set<String> allHintNames =
+                hints.stream().map(hint -> hint.hintName).collect(Collectors.toSet());
+
+        if (allHintNames.stream().noneMatch(FlinkHints::isQueryHint)) {
+            return super.visit(binaryRelation);
+        }
+
+        Optional<RelHint> firstAliasHint =
+                hints.stream()
+                        .filter(hint -> FlinkHints.HINT_ALIAS.equals(hint.hintName))
+                        .findFirst();
+
+        if (!firstAliasHint.isPresent()) {
+            return super.visit(binaryRelation);
+        }
+
+        List<RelHint> queryHintsFromOuterQueryBlock =
+                hints.stream()
+                        .filter(
+                                hint ->
+                                        FlinkHints.isQueryHint(hint.hintName)
+                                                && hint.inheritPath.size()
+                                                > firstAliasHint.get().inheritPath.size())
+                        .collect(Collectors.toList());
+
+        if (queryHintsFromOuterQueryBlock.isEmpty()) {
+            return super.visit(binaryRelation);
+        }
+
+        RelNode newRelNode = binaryRelation;
+        ClearOuterQueryHintShuttle clearOuterQueryHintShuttle;
+
+        for (RelHint outerQueryHint : queryHintsFromOuterQueryBlock) {
+            clearOuterQueryHintShuttle = new ClearOuterQueryHintShuttle(outerQueryHint);
+            newRelNode = newRelNode.accept(clearOuterQueryHintShuttle);
+        }
+
+        return super.visit(newRelNode);
+    }
+
+    private static class ClearOuterQueryHintShuttle extends RelShuttleImpl {
+        private final Deque<Integer> currentInheritPath;
+        private final RelHint hintToRemove;
+
+        public ClearOuterQueryHintShuttle(RelHint hintToRemove) {
+            this.hintToRemove = hintToRemove;
+            this.currentInheritPath = new ArrayDeque<>();
+            this.currentInheritPath.addAll(hintToRemove.inheritPath);
+        }
+
+        @Override
+        protected RelNode visitChild(RelNode parent, int i, RelNode child) {
+            currentInheritPath.addLast(i);
+            RelNode newNode = super.visitChild(parent, i, child);
+            currentInheritPath.removeLast();
+            return newNode;
+        }
+
+        @Override
+        public RelNode visit(LogicalCorrelate correlate) {
+            return visitBiRel(correlate);
+        }
+
+        @Override
+        public RelNode visit(LogicalJoin join) {
+            return visitBiRel(join);
+        }
+
+        private RelNode visitBiRel(BiRel binaryRelation) {
+            Hintable hintableBinaryRelation = (Hintable) binaryRelation;
+            List<RelHint> hints = new ArrayList<>(hintableBinaryRelation.getHints());
+            Optional<RelHint> invalidQueryHint = getInvalidQueryHint(hints);
+
+            if (invalidQueryHint.isPresent()) {
+                hints.remove(invalidQueryHint.get());
+                return super.visit(hintableBinaryRelation.withHints(hints));
+            }
+
+            return super.visit(binaryRelation);
+        }
+
+        private Optional<RelHint> getInvalidQueryHint(List<RelHint> availableHints) {
+            return availableHints.stream()
+                    .filter(hint -> hint.hintName.equals(hintToRemove.hintName)
+                            && isMatchInvalidInheritPath(
+                            new ArrayList<>(currentInheritPath), hint.inheritPath))
+                    .findFirst();
+        }
+
+        private boolean isMatchInvalidInheritPath(
+                List<Integer> targetInheritPath, List<Integer> currentInheritPath) {
+            if (targetInheritPath.size() != currentInheritPath.size()) {
+                return false;
+            }
+
+            for (int i = 0; i < targetInheritPath.size(); i++) {
+                if (!Objects.equals(targetInheritPath.get(i), currentInheritPath.get(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+}
+```
+
+In this refactored code, parameter names have been updated to enhance readability and clarity. The changes are as follows:
+
+- `biRel` is renamed to `binaryRelation` in the method `visitBiRel`.
+- In the `ClearOuterQueryHintShuttle` class:
+  - The constructor parameter `joinHintNeedRemove` is renamed to `hintToRemove`.
+  - The method parameter `hints` in `getInvalidQueryHint` is renamed to `availableHints`.
+  - The parameters `invalidInheritPath` and `checkedInheritPath` in `isMatchInvalidInheritPath` are renamed to `targetInheritPath` and `currentInheritPath` respectively.
+
+These changes should make the code more understandable, especially for new developers or those unfamiliar with the specific context of the code.

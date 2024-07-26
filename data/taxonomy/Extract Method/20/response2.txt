@@ -1,0 +1,60 @@
+Upon reviewing the provided code snippet from `BridgeMethodResolver`, there are opportunities for extract method refactoring that could improve modularity, readability, and maintainability of the code. Here are the details of potential refactorings:
+
+### Identified Code for Refactoring
+1. **Duplicate Code Block**: The code for finding the bridged method based on criteria and caching the result is repeated in both `findBridgedMethod` and `getMostSpecificMethod`.
+2. **Filter and Candidate Collection**: The process of filtering methods and collecting candidates is another block that is repeated.
+
+### Proposed Refactorings
+1. **Extract Method for Bridged Method Retrieval**: Since the logic for finding and caching the bridged method is identical in both methods, except for the specific method and class parameters used, this block can be extracted into a new method.
+2. **Extract Method for Candidate Collection**: The process of collecting candidate methods using a filter can be extracted into its own method, as it only varies by the inputs provided.
+
+### Refactored Code
+```java
+public final class BridgeMethodResolver {
+
+    public static Method findBridgedMethod(Method bridgeMethod) {
+        Class<?> targetClass = bridgeMethod.getDeclaringClass();
+        return getBridgedMethod(bridgeMethod, targetClass);
+    }
+
+    public static Method getMostSpecificMethod(Method bridgeMethod, @Nullable Class<?> targetClass) {
+        Class<?> actualTargetClass = (targetClass != null ? targetClass : bridgeMethod.getDeclaringClass());
+        return getBridgedMethod(bridgeMethod, actualTargetClass);
+    }
+
+    private static Method getBridgedMethod(Method method, Class<?> targetClass) {
+        boolean localBridge = (targetClass == method.getDeclaringClass());
+        if (!method.isBridge() && localBridge) {
+            return method;
+        }
+
+        Object cacheKey = (localBridge ? method : new MethodClassKey(method, targetClass));
+        Method bridgedMethod = cache.get(cacheKey);
+        if (bridgedMethod == null) {
+            List<Method> candidateMethods = collectCandidateMethods(method, targetClass);
+            if (!candidateMethods.isEmpty()) {
+                bridgedMethod = (candidateMethods.size() == 1 ? candidateMethods.get(0) :
+                        searchCandidates(candidateMethods, method, targetClass));
+            }
+            if (bridgedMethod == null) {
+                bridgedMethod = method;
+            }
+            cache.put(cacheKey, bridgedMethod);
+        }
+        return bridgedMethod;
+    }
+
+    private static List<Method> collectCandidateMethods(Method method, Class<?> targetClass) {
+        List<Method> candidateMethods = new ArrayList<>();
+        MethodFilter filter = (candidateMethod -> isBridgedCandidateFor(candidateMethod, method));
+        ReflectionUtils.doWithMethods(targetClass, candidateMethods::add, filter);
+        return candidateMethods;
+    }
+}
+```
+
+### Explanation of Changes
+- **`getBridgedMethod`**: This method centralizes the logic to retrieve a bridged method based on a given method and its declaring class. It uses caching and employs the same logic previously duplicated.
+- **`collectCandidateMethods`**: This method abstracts away the logic for iterating over methods of a class and collecting those that match a particular filter.
+
+These refactorings follow the principle of DRY (Don't Repeat Yourself) and should help in reducing code duplication and improving the maintainability of the codebase.

@@ -1,0 +1,65 @@
+ **Here are some refactoring opportunities for the provided code:**
+
+1. **Extract helper methods:** 
+   - Encapsulate the XML parsing and serializing logic in separate, reusable methods for better clarity and maintainability.
+   - Example:
+   ```java
+   private Document parseXml(String xml) throws SAXException, IOException {
+       // ... (existing parsing logic)
+   }
+
+   private String serializeXml(Document document) throws TransformerException {
+       // ... (existing serialization logic)
+   }
+   ```
+
+2. **Use a dedicated XML testing library:** 
+   - Consider using a library like XMLUnit for more convenient and readable XML assertions. 
+   - This can simplify the `assertXMLEquals` method.
+
+3. **Improve exception handling:**
+   - Instead of throwing RuntimeExceptions in `setupDocumentBuilder` and `setupTransformerFactory`, catch the specific exceptions and handle them appropriately.
+   - This allows for more granular error handling and debugging.
+
+4. **Consider dependency injection:** 
+   - If appropriate for your testing framework, inject the XML parsing and serialization dependencies instead of setting them up in `@BeforeAll` methods.
+   - This can improve test isolation and make the tests more flexible.
+
+5. **Remove unnecessary comments:** 
+   - Remove the comment "Closing a StringWriter is not needed" as it's not actively adding value and can be considered noise.
+
+**Here's a refactored version of the code with these suggestions:**
+
+```java
+// ... imports ...
+
+class XmlPrinterTest {
+
+    private DocumentBuilder documentBuilder;
+    private Transformer transformer;
+
+    @BeforeAll
+    public void setup() throws ParserConfigurationException, TransformerConfigurationException {
+        documentBuilder = DocumentBuilderFactory.newInstance()
+                // ... configure document builder ...
+                .newDocumentBuilder();
+
+        transformer = TransformerFactory.newInstance().newTransformer();
+        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+    }
+
+    private Document parseXml(String xml) throws SAXException, IOException {
+        // ... existing parsing logic ...
+    }
+
+    private String serializeXml(Document document) throws TransformerException {
+        // ... existing serialization logic ...
+    }
+
+    private void assertXmlEquals(String expectedXml, String actualXml) throws SAXException, IOException, TransformerException {
+        // ... use XMLUnit for assertions ...
+    }
+
+    // ... test methods ...
+}
+```

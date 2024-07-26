@@ -1,0 +1,248 @@
+Extract class refactorings are frequently employed to decompose complex classes to improve readability.
+##################################################
+An extract class refactoring pattern is to extract a few attributes and/or methods as a new class to decompose this class. Here is an example of the extract class refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public class ScanTargetPattern {
+    private File _directory;
+    private List<String> _includes = Collections.emptyList();
+    private List<String> _excludes = Collections.emptyList();
+
+    /**
+     * @return the _directory
+     */
+    public File getDirectory() {
+        return _directory;
+    }
+
+    /**
+     * @param directory the directory to set
+     */
+    public void setDirectory(File directory) {
+        this._directory = directory;
+    }
+
+    public void setIncludes(List<String> includes) {
+        _includes= includes;
+    }
+
+    public void setExcludes(List<String> excludes) {
+        _excludes = excludes;
+    }
+
+    public List<String> getIncludes() {
+        return _includes;
+    }
+
+    public List<String> getExcludes() {
+        return _excludes;
+    }
+
+}
+```
+The source code after refactoring is:
+```
+public class ScanPattern {
+    private List<String> _includes = Collections.emptyList();
+    private List<String> _excludes = Collections.emptyList();
+
+    public void setIncludes(List<String> includes) {
+        _includes = includes;
+    }
+
+    public void setExcludes(List<String> excludes) {
+        _excludes = excludes;
+    }
+
+    public List<String> getIncludes() {
+        return _includes;
+    }
+
+    public List<String> getExcludes() {
+        return _excludes;
+    }
+}
+
+public class ScanTargetPattern {
+    private File _directory;
+    private ScanPattern _pattern;
+
+    /**
+     * @return the _directory
+     */
+    public File getDirectory() {
+        return _directory;
+    }
+
+    /**
+     * @param directory the directory to set
+     */
+    public void setDirectory(File directory) {
+        this._directory = directory;
+    }
+
+    public void setIncludes(List<String> includes) {
+        if (_pattern == null)
+            _pattern = new ScanPattern();
+        _pattern.setIncludes(includes);
+    }
+
+    public void setExcludes(List<String> excludes) {
+        if (_pattern == null)
+            _pattern = new ScanPattern();
+        _pattern.setExcludes(excludes);
+    }
+
+    public List<String> getIncludes() {
+        return (_pattern == null ? Collections.emptyList() : _pattern.getIncludes());
+    }
+
+    public List<String> getExcludes() {
+        return (_pattern == null ? Collections.emptyList() : _pattern.getExcludes());
+    }
+
+}
+```
+In this example, the developer extracted the following attributes and methods:
+```
+private List<String> _includes = Collections.emptyList();
+private List<String> _excludes = Collections.emptyList();
+
+public void setIncludes(List<String> includes) {
+    _includes = includes;
+}
+
+public void setExcludes(List<String> excludes) {
+    _excludes = excludes;
+}
+
+public List<String> getIncludes() {
+    return _includes;
+}
+
+public List<String> getExcludes() {
+    return _excludes;
+}
+```
+as new class "ScanPattern".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract class refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.FileSystemNotFoundException;
+import java.util.stream.Stream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+/**
+ * Tests {@link BrokenInputStream}.
+ */
+public class BrokenInputStreamTest {
+
+    static final class CustomeException extends Exception {
+
+        private static final long serialVersionUID = 1L;
+
+    }
+
+    static Stream<Class<? extends Throwable>> parameters() {
+        // @formatter:off
+        return Stream.of(
+                IOException.class,
+                FileNotFoundException.class,
+                FileSystemNotFoundException.class,
+                RuntimeException.class,
+                IllegalArgumentException.class,
+                IllegalStateException.class,
+                Error.class,
+                ExceptionInInitializerError.class,
+                CustomeException.class
+        );
+        // @formatter:on
+    }
+
+    private static BrokenInputStream createBrokenInputStream(final Throwable exception) {
+        if (exception instanceof IOException) {
+            return new BrokenInputStream((IOException) exception);
+        }
+        return new BrokenInputStream(exception);
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+    public void testAvailable(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource")
+        final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.available()));
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+    public void testClose(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource")
+        final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.close()));
+    }
+
+    @Test
+    public void testInstance() {
+        assertNotNull(BrokenInputStream.INSTANCE);
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+    public void testRead(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource")
+        final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.read()));
+        assertEquals(exception, assertThrows(clazz, () -> stream.read(new byte[1])));
+        assertEquals(exception, assertThrows(clazz, () -> stream.read(new byte[1], 0, 1)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+    public void testReset(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource")
+        final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.reset()));
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+    public void testSkip(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource")
+        final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.skip(1)));
+    }
+
+    @Test
+    public void testTryWithResources() {
+        final IOException thrown = assertThrows(IOException.class, () -> {
+            try (InputStream newStream = new BrokenInputStream()) {
+                newStream.read();
+            }
+        });
+        assertEquals("Broken input stream", thrown.getMessage());
+
+        final Throwable[] suppressed = thrown.getSuppressed();
+        assertEquals(1, suppressed.length);
+        assertEquals(IOException.class, suppressed[0].getClass());
+        assertEquals("Broken input stream", suppressed[0].getMessage());
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

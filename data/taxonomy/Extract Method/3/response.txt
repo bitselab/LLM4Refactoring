@@ -1,0 +1,101 @@
+In the given `ReflectionDiffBuilder` class, there are several refactoring opportunities that can be taken advantage of to improve the code quality, particularly focusing on the principle of DRY (Don't Repeat Yourself) and enhancing code readability. Here are the potential refactorings:
+
+1. **Extract Method for Field Acceptance Check:** The `accept` method includes multiple conditions to determine if a field should be included in the diff. This logic is fairly complex and specific, making it a good candidate to be further broken down into smaller, more focused methods. For instance, the checks for non-transient and non-static can be extracted into separate methods.
+
+2. **Extract Method for Field Initialization:** The `appendFields` method initializes and compares fields of objects. The actual fetching and comparison logic can be extracted into a method to make `appendFields` cleaner and more focused on iterating through fields rather than also processing them.
+
+Here is the refactored version of the `ReflectionDiffBuilder` class incorporating these suggested changes:
+
+```java
+package org.apache.commons.lang3.builder;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+
+import org.apache.commons.lang3.ArraySorter;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.ClassUtils;
+import org.apache.commons.lang3.reflect.FieldUtils;
+
+public class ReflectionDiffBuilder<T> implements Builder<DiffResult<T>> {
+
+    private final DiffBuilder<T> diffBuilder;
+    private String[] excludeFieldNames;
+
+    public static <T> Builder<T> builder() {
+        return new Builder<>();
+    }
+
+    private ReflectionDiffBuilder(final DiffBuilder<T> diffBuilder, final String[] excludeFieldNames) {
+        this.diffBuilder = diffBuilder;
+        this.excludeFieldNames = excludeFieldNames;
+    }
+
+    @Override
+    public DiffResult<T> build() {
+        if (getLeft().equals(getRight())) {
+            return diffBuilder.build();
+        }
+        appendFields(getLeft().getClass());
+        return diffBuilder.build();
+    }
+
+    public String[] getExcludeFieldNames() {
+        return this.excludeFieldNames.clone();
+    }
+
+    private T getLeft() {
+        return diffBuilder.getLeft();
+    }
+
+    private T getRight() {
+        return diffBuilder.getRight();
+    }
+
+    private boolean accept(final Field field) {
+        return isNotInnerClass(field) && isNotTransient(field) && isNotStatic(field) && isNotExcluded(field);
+    }
+
+    private boolean isNotInnerClass(Field field) {
+        return field.getName().indexOf(ClassUtils.INNER_CLASS_SEPARATOR_CHAR) == -1;
+    }
+
+    private boolean isNotTransient(Field field) {
+        return !Modifier.isTransient(field.getModifiers());
+    }
+
+    private boolean isNotStatic(Field field) {
+        return !Modifier.isStatic(field.getModifiers());
+    }
+
+    private boolean isNotExcluded(Field field) {
+        if (this.excludeFieldNames != null && Arrays.binarySearch(this.excludeFieldNames, field.getName()) >= 0) {
+            return false;
+        }
+        return !field.isAnnotationPresent(DiffExclude.class);
+    }
+
+    private void appendFields(final Class<?> clazz) {
+        for (final Field field : FieldUtils.getAllFields(clazz)) {
+            if (accept(field)) {
+                processField(field);
+            }
+        }
+    }
+
+    private void processField(final Field field) {
+        try {
+            diffBuilder.append(field.getName(), FieldUtils.readField(field, getLeft(), true), FieldUtils.readField(field, getRight(), true));
+        } catch (final IllegalAccessException e) {
+            throw new IllegalArgumentException("Unexpected IllegalAccessException: " + e.getMessage(), e);
+        }
+    }
+}
+```
+
+### Explanation of Refactorings:
+- **accept Method**: Simplified the acceptance logic by extracting the checks into `isNotInnerClass`, `isNotTransient`, `isNotStatic`, and `isNotExcluded`. This makes the main `accept` method easier to read and understand.
+- **appendFields and processField**: Separated the logic for processing each field from the looping and condition checks in `appendFields`. This clarifies the responsibilities of each method and improves readability.
+
+These refactorings should enhance the maintainability and readability of the `ReflectionDiffBuilder` class.

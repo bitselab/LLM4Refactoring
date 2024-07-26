@@ -1,0 +1,102 @@
+The `DomainSplitFunction` class in the provided code snippet is a good candidate for the "Extract Class" refactoring technique. This technique is used when a class is doing too much work or has too many responsibilities. By extracting some of these responsibilities into separate classes, we can improve readability, maintainability, and make the codebase more modular.
+
+In this specific code, we can identify a few distinct responsibilities that can be extracted:
+
+1. **Domain Parsing and Handling**: Functions like `replaceDots`, `splitDomain`, `findPublicSuffix`, `ancestor`, and `topPrivateDomain` are primarily concerned with parsing and handling domain strings. These can be extracted into a separate class, such as `DomainParser`.
+
+2. **Domain Suffix Management**: The static maps `exact`, `under`, and `excluded`, along with their initialization in the static block, are concerned with managing domain suffixes. This logic can be encapsulated in a class like `DomainSuffixManager`.
+
+3. **Logging and Deprecation Handling**: The `DeprecationLogger` and associated logic in `domainSplit(String host, Map<String, Object> params)` could be part of a separate utility class for logging and deprecation warnings, though this is a smaller concern.
+
+Here is an example of how the code could be refactored:
+
+### DomainParser.java
+```java
+package org.elasticsearch.xpack.ml.utils;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.StringJoiner;
+
+public class DomainParser {
+
+    private final DomainSuffixManager suffixManager;
+
+    public DomainParser(DomainSuffixManager suffixManager) {
+        this.suffixManager = suffixManager;
+    }
+
+    public String replaceDots(String input) {
+        // Implementation...
+    }
+
+    public List<String> splitDomain(String domain) {
+        // Implementation...
+    }
+
+    public int findPublicSuffix(List<String> parts) {
+        // Implementation...
+    }
+
+    public String ancestor(List<String> parts, int levels) {
+        // Implementation...
+    }
+
+    public String topPrivateDomain(String name, List<String> parts, int publicSuffixIndex) {
+        // Implementation...
+    }
+
+    // Other domain parsing methods...
+}
+```
+
+### DomainSuffixManager.java
+```java
+package org.elasticsearch.xpack.ml.utils;
+
+import java.util.Map;
+
+public class DomainSuffixManager {
+
+    private final Map<String, String> exact;
+    private final Map<String, String> under;
+    private final Map<String, String> excluded;
+
+    public DomainSuffixManager() {
+        // Initialize maps...
+    }
+
+    // Getters and other methods...
+}
+```
+
+### Updated DomainSplitFunction.java
+```java
+package org.elasticsearch.xpack.ml.utils;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+
+public final class DomainSplitFunction {
+
+    private static final DomainSuffixManager suffixManager = new DomainSuffixManager();
+    private static final DomainParser parser = new DomainParser(suffixManager);
+    private static final DeprecationLogger deprecationLogger = DeprecationLogger.getLogger(DomainSplitFunction.class);
+
+    private DomainSplitFunction() {}
+
+    public static List<String> domainSplit(String host, Map<String, Object> params) {
+        // Implementation using DomainParser and DomainSuffixManager...
+    }
+
+    public static List<String> domainSplit(String host) {
+        // Implementation...
+    }
+
+    // Other methods...
+}
+```
+
+This refactoring improves the organization of the code by separating concerns into different classes, which makes the code easier to understand and maintain. Each class now has a more focused responsibility, aligning with principles of object-oriented design.

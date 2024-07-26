@@ -1,0 +1,60 @@
+The method `getCreateArrayTypeCommand` in the provided code is a candidate for inline method refactoring. This method is relatively simple and only constructs a string array based on its parameters. By inlining this method, we can simplify the code and reduce the need for additional method calls, which might enhance readability and maintainability.
+
+Here's how the refactored code would look with the `getCreateArrayTypeCommand` method inlined:
+
+```java
+package org.hibernate.dialect;
+
+// ... [imports]
+
+public class OracleNestedTableJdbcType implements JdbcType {
+
+    // ... [other fields and methods]
+
+    @Override
+    public void addAuxiliaryDatabaseObjects(
+            JavaType<?> javaType,
+            Size columnSize,
+            Database database,
+            TypeConfiguration typeConfiguration) {
+        final Dialect dialect = database.getDialect();
+        final BasicPluralJavaType<?> pluralJavaType = (BasicPluralJavaType<?>) javaType;
+        final JavaType<?> elementJavaType = pluralJavaType.getElementJavaType();
+        final String arrayTypeName = typeName == null ? getTypeName(elementJavaType, dialect) : typeName;
+        final String elementType =
+                typeConfiguration.getDdlTypeRegistry().getTypeName(
+                        getElementJdbcType().getDdlTypeCode(),
+                        dialect.getSizeStrategy().resolveSize(
+                                getElementJdbcType(),
+                                elementJavaType,
+                                columnSize.getPrecision(),
+                                columnSize.getScale(),
+                                columnSize.getLength()
+                        ),
+                        new BasicTypeImpl<>(elementJavaType, getElementJdbcType())
+                );
+
+        // Inlining getCreateArrayTypeCommand method
+        String[] createCommands = {
+            "create or replace type " + arrayTypeName + " as table of " + elementType
+        };
+
+        database.addAuxiliaryDatabaseObject(
+                new NamedAuxiliaryDatabaseObject(
+                        arrayTypeName,
+                        database.getDefaultNamespace(),
+                        createCommands,
+                        new String[]{"drop type " + arrayTypeName + " force"},
+                        emptySet(),
+                        true
+                )
+        );
+    }
+
+    // ... [rest of the class]
+}
+```
+
+In this refactoring, the `getCreateArrayTypeCommand` method has been removed, and its logic is directly incorporated into the `addAuxiliaryDatabaseObjects` method. This approach makes the code more straightforward, as the string array creation is simple enough not to require a separate method. 
+
+Remember, the goal of inline method refactoring is to simplify the code when a method's body is just as clear as its name. It's especially useful for short, single-use methods that don't add significant clarity or abstraction.

@@ -1,0 +1,80 @@
+The provided code for `NullInputStream` is generally well-structured and follows good object-oriented practices. However, there are a few refactoring opportunities that could make the code cleaner and more efficient:
+
+1. **Use of Singleton Pattern**: The `INSTANCE` variable is a public static final field, which is a common way to implement a singleton. However, it's often better to use a static factory method to provide controlled access to the singleton instance. This approach offers more flexibility, such as lazy initialization or the ability to return a subtype.
+
+2. **Redundant Constructor Overloading**: There are multiple constructors with different parameters, but they all funnel into the primary constructor. This is good practice, but the no-argument constructor (`public NullInputStream()`) seems unnecessary since it only forwards default values to the primary constructor. If the default behavior is important, consider creating a static factory method with a descriptive name to indicate its purpose.
+
+3. **Exception Handling in `mark` and `reset` Methods**: The methods `mark` and `reset` throw `UnsupportedOperationExceptions` from a class `UnsupportedOperationExceptions`, which is not standard. It's typical to throw a new `UnsupportedOperationException` directly. Also, custom exception messages could be more informative.
+
+4. **Magic Numbers**: The `EOF` constant is used but not defined in the class. It should be explicitly declared as a constant, typically `-1` for streams, to improve readability.
+
+5. **Method `available` Complexity**: The `available` method could be simplified for readability without changing its logic.
+
+6. **Documentation**: The comments are comprehensive, but ensure they are up-to-date and accurately describe the current functionality.
+
+Here's the refactored code incorporating these suggestions:
+
+```java
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+
+public class NullInputStream extends InputStream {
+
+    public static final NullInputStream INSTANCE = createInstance();
+    private static final int EOF = -1;
+
+    private final long size;
+    private long position;
+    private long mark = -1;
+    private long readLimit;
+    private boolean eof;
+    private final boolean throwEofException;
+    private final boolean markSupported;
+
+    private NullInputStream(final long size, final boolean markSupported, final boolean throwEofException) {
+        this.size = size;
+        this.markSupported = markSupported;
+        this.throwEofException = throwEofException;
+    }
+
+    public static NullInputStream createInstance() {
+        return new NullInputStream(0, true, false);
+    }
+
+    // ... [Rest of the methods remain unchanged]
+
+    @Override
+    public int available() {
+        return position >= size ? 0 : Math.min((int) (size - position), Integer.MAX_VALUE);
+    }
+
+    @Override
+    public synchronized void mark(final int readLimit) {
+        if (!markSupported) {
+            throw new UnsupportedOperationException("Mark not supported");
+        }
+        this.mark = position;
+        this.readLimit = readLimit;
+    }
+
+    @Override
+    public synchronized void reset() throws IOException {
+        if (!markSupported) {
+            throw new UnsupportedOperationException("Reset not supported");
+        }
+        if (mark < 0) {
+            throw new IOException("No position has been marked");
+        }
+        if (position > mark + readLimit) {
+            throw new IOException("Marked position is no longer valid - passed the read limit");
+        }
+        position = mark;
+        eof = false;
+    }
+
+    // ... [Rest of the methods remain unchanged]
+}
+```
+
+This refactoring maintains the original functionality of the class while improving readability and maintainability.

@@ -1,0 +1,94 @@
+ **Here's the refactored code with a more descriptive variable name:**
+
+```java
+package org.hibernate.orm.test.mapping.type.java;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.sql.Types;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import org.hibernate.dialect.Dialect;
+import org.hibernate.dialect.NationalizationSupport;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.metamodel.mapping.PluralAttributeMapping;
+import org.hibernate.metamodel.mapping.internal.BasicAttributeMapping;
+import org.hibernate.metamodel.mapping.internal.BasicValuedCollectionPart;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.type.descriptor.jdbc.spi.JdbcTypeRegistry;
+
+import org.hibernate.testing.orm.junit.DomainModel;
+import org.hibernate.testing.orm.junit.JiraKey;
+import org.hibernate.testing.orm.junit.SessionFactory;
+import org.hibernate.testing.orm.junit.SessionFactoryScope;
+import org.junit.jupiter.api.Test;
+
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.MapKeyColumn;
+import jakarta.persistence.Table;
+
+@DomainModel(annotatedClasses = LocaleMappingTests.LocaleMappingTestEntity.class)
+@SessionFactory
+@JiraKey("HHH-17466")
+public class LocaleMappingTests {
+
+    @Test
+    public void basicAssertions(SessionFactoryScope scope) {
+        final SessionFactoryImplementor sessionFactory = scope.getSessionFactory();
+        final JdbcTypeRegistry jdbcTypeRegistry = sessionFactory.getTypeConfiguration().getJdbcTypeRegistry();
+        final EntityPersister entityDescriptor = sessionFactory.getMappingMetamodel().getEntityDescriptor(
+                LocaleMappingTestEntity.class);
+
+        {
+            final BasicAttributeMapping localeAttribute = (BasicAttributeMapping) entityDescriptor.findAttributeMapping(
+                    "locale");
+            assertThat(localeAttribute.getJdbcMapping().getJdbcType())
+                    .isEqualTo(jdbcTypeRegistry.getDescriptor(Types.VARCHAR));
+            assertThat(localeAttribute.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass()).isEqualTo(
+                    Locale.class);
+        }
+
+        {
+            final PluralAttributeMapping supportedLocalesAttribute = (PluralAttributeMapping) entityDescriptor.findAttributeMapping(
+                    "locales");
+            final BasicValuedCollectionPart elementDescriptor = (BasicValuedCollectionPart) supportedLocalesAttribute.getElementDescriptor();
+            assertThat(elementDescriptor.getJdbcMapping().getJdbcType())
+                    .isEqualTo(jdbcTypeRegistry.getDescriptor(Types.VARCHAR));
+            assertThat(elementDescriptor.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass()).isEqualTo(
+                    Locale.class);
+        }
+
+        {
+            final PluralAttributeMapping countByLocaleAttribute = (PluralAttributeMapping) entityDescriptor.findAttributeMapping(
+                    "countByLocale");
+            final BasicValuedCollectionPart keyDescriptor = (BasicValuedCollectionPart) countByLocaleAttribute.getIndexDescriptor();
+            assertThat(keyDescriptor.getJdbcMapping().getJdbcType())
+                    .isEqualTo(jdbcTypeRegistry.getDescriptor(Types.VARCHAR));
+            assertThat(keyDescriptor.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass()).isEqualTo(
+                    Locale.class);
+        }
+    }
+
+    // ... (rest of the code remains the same)
+}
+```
+
+**Key changes:**
+
+- The variable name `yearsAttribute` has been renamed to `supportedLocalesAttribute`. This more accurately reflects the purpose of the variable, as it represents a collection of supported locales.
+- The other variable names and code logic remain unchanged.
+
+**Benefits of this refactoring:**
+
+- **Improved readability:** The code is now easier to understand because the variable name clearly conveys its meaning.
+- **Maintainability:** Clearer variable names make the code less prone to errors and easier to modify.
+- **Consistency:** The new variable name aligns better with the existing variable names in the code, promoting consistency.

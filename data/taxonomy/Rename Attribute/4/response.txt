@@ -1,0 +1,165 @@
+Reviewing the provided code snippet from the `MetadataDataStreamsService` class, I noticed opportunities for renaming attributes to enhance consistency and alignment with naming conventions used throughout the class. Here's a summary of potential refactoring:
+
+1. **Task Queue Naming**: The attributes `taskQueue` and `setRolloverOnWriteTaskQueue` could be renamed to follow a consistent format. They manage similar functions but have slightly different naming styles. To make it clearer and more consistent, these could be renamed to follow the same pattern.
+
+2. **Method Naming Consistency**: Some method names use the term "modify," while others use "set" or "remove." It could be beneficial to align these for clarity and consistency, especially if they are achieving similar types of updates on data streams.
+
+Here's the refactored code considering these changes:
+
+```java
+package org.elasticsearch.cluster.metadata;
+
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.datastreams.ModifyDataStreamsAction;
+import org.elasticsearch.action.support.master.AcknowledgedResponse;
+import org.elasticsearch.cluster.AckedBatchedClusterStateUpdateTask;
+import org.elasticsearch.cluster.AckedClusterStateUpdateTask;
+import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.cluster.ClusterStateAckListener;
+import org.elasticsearch.cluster.ClusterStateTaskExecutor;
+import org.elasticsearch.cluster.ClusterStateUpdateTask;
+import org.elasticsearch.cluster.SimpleBatchedAckListenerTaskExecutor;
+import org.elasticsearch.cluster.service.ClusterService;
+import org.elasticsearch.cluster.service.MasterServiceTaskQueue;
+import org.elasticsearch.common.Priority;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.core.Nullable;
+import org.elasticsearch.core.SuppressForbidden;
+import org.elasticsearch.core.TimeValue;
+import org.elasticsearch.core.Tuple;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.mapper.MapperService;
+import org.elasticsearch.indices.IndicesService;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.function.Function;
+
+/**
+ * Handles data stream modification requests.
+ */
+public class MetadataDataStreamsService {
+
+    private final ClusterService clusterService;
+    private final IndicesService indicesService;
+    private final MasterServiceTaskQueue<UpdateLifecycleTask> lifecycleTaskQueue;
+    private final MasterServiceTaskQueue<SetRolloverOnWriteTask> rolloverTaskQueue;
+
+    public MetadataDataStreamsService(ClusterService clusterService, IndicesService indicesService) {
+        this.clusterService = clusterService;
+        this.indicesService = indicesService;
+        ClusterStateTaskExecutor<UpdateLifecycleTask> lifecycleExecutor = new SimpleBatchedAckListenerTaskExecutor<>() {
+
+            @Override
+            public Tuple<ClusterState, ClusterStateAckListener> executeTask(
+                    UpdateLifecycleTask task,
+                    ClusterState clusterState
+            ) {
+                return new Tuple<>(
+                        updateDataLifecycle(clusterState, task.getDataStreamNames(), task.getDataLifecycle()),
+                        task
+                );
+            }
+        };
+        // We chose priority high because changing the lifecycle is changing the retention of a backing index, so processing it quickly
+        // can either free space when the retention is shortened, or prevent an index to be deleted when the retention is extended.
+        this.lifecycleTaskQueue = clusterService.createTaskQueue("lifecycle-modification", Priority.HIGH, lifecycleExecutor);
+        ClusterStateTaskExecutor<SetRolloverOnWriteTask> rolloverExecutor = new SimpleBatchedAckListenerTaskExecutor<>() {
+
+            @Override
+            public Tuple<ClusterState, ClusterStateAckListener> executeTask(
+                    SetRolloverOnWriteTask task,
+                    ClusterState clusterState
+            ) {
+                return new Tuple<>(
+                        setRolloverOnWrite(clusterState, task.getDataStreamName(), task.rolloverOnWrite()),
+                        task
+                );
+            }
+        };
+        this.rolloverTaskQueue = clusterService.createTaskQueue(
+                "rollover-modification",
+                Priority.NORMAL,
+                rolloverExecutor
+        );
+    }
+
+    public void modifyDataStream(final ModifyDataStreamsAction.Request request, final ActionListener<AcknowledgedResponse> listener) {
+        if (request.getActions().size() == 0) {
+            listener.onResponse(AcknowledgedResponse.TRUE);
+        } else {
+            submitUnbatchedTask("update-backing-indices", new AckedClusterStateUpdateTask(Priority.URGENT, request, listener) {
+                @Override
+                public ClusterState execute(ClusterState currentState) {
+                    return modifyDataStream(currentState, request.getActions(), indexMetadata -> {
+                        try {
+                            return indicesService.createIndexMapperServiceForValidation(indexMetadata);
+                        } catch (IOException e) {
+                            throw new IllegalStateException(e);
+                        }
+                    });
+                }
+            });
+        }
+    }
+
+    /**
+     * Submits the task to set the lifecycle to the requested data streams.
+     */
+    public void setLifecycle(
+            final List<String> dataStreamNames,
+            DataStreamLifecycle lifecycle,
+            TimeValue ackTimeout,
+            TimeValue masterTimeout,
+            final ActionListener<AcknowledgedResponse> listener
+    ) {
+        lifecycleTaskQueue.submitTask(
+                "set-lifecycle",
+                new UpdateLifecycleTask(dataStreamNames, lifecycle, ackTimeout, listener),
+                masterTimeout
+        );
+    }
+
+    /**
+     * Submits the task to remove the lifecycle from the requested data streams.
+     */
+    public void removeLifecycle(
+            List<String> dataStreamNames,
+            TimeValue ackTimeout,
+            TimeValue masterTimeout,
+            ActionListener<AcknowledgedResponse> listener
+    ) {
+        lifecycleTaskQueue.submitTask(
+                "delete-lifecycle",
+                new UpdateLifecycleTask(dataStreamNames, null, ackTimeout, listener),
+                masterTimeout
+        );
+    }
+
+    @SuppressForbidden(reason = "legacy usage of unbatched task") // TODO add support for batching here
+    private void submitUnbatchedTask(String source, ClusterStateUpdateTask task) {
+        clusterService.submitUnbatchedStateUpdateTask(source, task);
+    }
+
+    /**
+     * Submits the task to signal that the next time this data stream receives a document, it will be rolled over.
+     */
+    public void setRolloverOnWrite(
+            String dataStreamName,
+            boolean rolloverOnWrite,
+            TimeValue ackTimeout,
+            TimeValue masterTimeout,
+            ActionListener<AcknowledgedResponse> listener
+    ) {
+        rolloverTaskQueue.submitTask(
+                "set-rollover-on-write",
+                new SetRolloverOnWriteTask(dataStreamName, rolloverOnWrite, ackTimeout, listener),
+                masterTimeout
+        );
+    }
+
+    // Other methods remain unchanged for brevity...
+}
+```
+
+I renamed `taskQueue` to `lifecycleTaskQueue` and `setRolloverOnWriteTaskQueue` to `rolloverTaskQueue` to make their purposes clearer and maintain naming consistency. This should improve the readability and maintainability of your code.

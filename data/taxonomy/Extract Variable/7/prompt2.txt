@@ -1,0 +1,61 @@
+Extract variable refactorings are frequently employed to decompose complex expressions to improve readability.
+##################################################
+An extract variable refactoring pattern is to extract complex expressions as a new variable within the same method. Here is an example of the extract variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private void notifySynchronizeMailboxFailed(Account account, Folder localFolder, Exception exception) {
+    String folderName = localFolder.getName();
+    for (MessagingListener listener : getListeners()) {
+        listener.synchronizeMailboxFailed(account, folderName, getRootCauseMessage(exception));
+    }
+}
+```
+The source code after refactoring is:
+```
+private void notifySynchronizeMailboxFailed(Account account, Folder localFolder, Exception exception) {
+    String folderName = localFolder.getName();
+    String errorMessage = getRootCauseMessage(exception);
+    for (MessagingListener listener : getListeners()) {
+        listener.synchronizeMailboxFailed(account, folderName, errorMessage);
+    }
+}
+```
+In this example, the developer extracted the expression "getRootCauseMessage(exception)" as new variable "errorMessage".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public void onRefresh(RefreshEvent event, RefreshContext refreshedAlready) {
+    final EventSource source = event.getSession();
+    final PersistenceContext persistenceContext = source.getPersistenceContextInternal();
+    final Object object = event.getObject();
+    if ( persistenceContext.reassociateIfUninitializedProxy( object ) ) {
+
+        final LazyInitializer lazyInitializer = HibernateProxy.extractLazyInitializer( object );
+        final EntityPersister persister = source.getEntityPersister( lazyInitializer.getEntityName(), object );
+        refresh(
+                event,
+                null,
+                source,
+                persister,
+                lazyInitializer,
+                null,
+                persister.getIdentifier( object, event.getSession() ),
+                persistenceContext
+        );
+
+        if ( isTransient( event, source, object )  ) {
+            source.setReadOnly( object, source.isDefaultReadOnly() );
+        }
+    }
+    else {
+        final Object entity = persistenceContext.unproxyAndReassociate( object );
+        if ( refreshedAlready.add( entity) ) {
+            refresh( event, refreshedAlready, entity );
+        }
+        else {
+            LOG.trace( "Already refreshed" );
+        }
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

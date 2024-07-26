@@ -1,0 +1,118 @@
+Here are some potential rename parameter refactoring opportunities in the provided code snippet (`DateCache`):
+
+1. **Rename `inDate` to `date`:**
+
+   - Both `format(Date inDate)` and `format(long inDate)` use `inDate` to represent the date being formatted. 
+   - Renaming it to `date` improves clarity throughout the `DateCache` class.
+
+2. **Rename `now` to `currentTimeMillis`:**
+
+   - The `formatNow(long now)` and `tick()` methods use `now` to represent the current time in milliseconds.
+   - While `now` is understandable, `currentTimeMillis` is more explicit about the unit (milliseconds) and aligns with the naming convention used in `System.currentTimeMillis()`.
+
+Refactored code snippet with the suggested changes:
+
+```java
+package org.eclipse.jetty.util;
+
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
+
+/**
+ * Computes String representations of Dates then caches the results so
+ * that subsequent requests within the same second will be fast.
+ * <p>
+ * If consecutive calls are frequently very different, then this
+ * may be a little slower than a normal DateFormat.
+ * <p>
+ * @see DateTimeFormatter for date formatting patterns.
+ */
+public class DateCache
+{
+  public static final String DEFAULT_FORMAT = "EEE MMM dd HH:mm:ss zzz yyyy";
+
+  private final String _formatString;
+  private final DateTimeFormatter _tzFormat1;
+  private final DateTimeFormatter _tzFormat2;
+  private final ZoneId _zoneId;
+
+  private volatile TickHolder _tickHolder;
+
+  private static class TickHolder {
+    public TickHolder(Tick tick1, Tick tick2) {
+      this.tick1 = tick1;
+      this.tick2 = tick2;
+    }
+
+    final Tick tick1;
+    final Tick tick2;
+  }
+
+  public static class Tick {
+    private final long _seconds;
+    private final String _prefix;
+    private final String _suffix;
+
+    public Tick(long seconds, String prefix, String suffix) {
+      _seconds = seconds;
+      _prefix = prefix;
+      _suffix = suffix;
+    }
+
+    public long getSeconds() {
+      return _seconds;
+    }
+
+    public String format(long date) {
+      if (_suffix == null)
+        return _prefix;
+
+      long ms = date % 1000;
+      StringBuilder sb = new StringBuilder();
+      sb.append(_prefix);
+      if (ms < 10)
+        sb.append("00").append(ms);
+      else if (ms < 100)
+        sb.append('0').append(ms);
+      else
+        sb.append(ms);
+      sb.append(_suffix);
+      return sb.toString();
+    }
+  }
+
+  /**
+   * Make a DateCache that will use a default format.
+   * The default format generates the same results as Date.toString().
+   */
+  public DateCache() {
+    this(DEFAULT_FORMAT);
+  }
+
+  /**
+   * Make a DateCache that will use the given format.
+   *
+   * @param format the format to use
+   */
+  public DateCache(String format) {
+    this(format, null, TimeZone.getDefault());
+  }
+
+  public DateCache(String format, Locale l) {
+    this(format, l, TimeZone.getDefault());
+  }
+
+  public DateCache(String format, Locale l, String tz) {
+    this(format, l, TimeZone.getTimeZone(tz));
+  }
+
+  public DateCache(String format, Locale l, TimeZone tz) {
+    this(format, l, tz, true);
+  }
+
+  // ... the rest of code ...
+}

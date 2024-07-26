@@ -1,0 +1,68 @@
+ **Here's the refactored code with a more descriptive attribute name:**
+
+```java
+package org.springframework.validation;
+
+import java.beans.ConstructorProperties;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import jakarta.validation.constraints.NotNull;
+import org.junit.jupiter.api.Test;
+
+import org.springframework.core.ResolvableType;
+import org.springframework.format.support.DefaultFormattingConversionService;
+import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Unit tests for {@link DataBinder} with constructor binding.
+ *
+ * @author Rossen Stoyanchev
+ */
+public class DataBinderConstructTests {
+
+    // ... other code remains unchanged
+
+    private static class MapValueResolver implements DataBinder.ValueResolver {
+
+        private final Map<String, Object> resolvedValues;  // Renamed attribute for clarity
+
+        private MapValueResolver(Map<String, Object> map) {
+            this.resolvedValues = map;  // Updated constructor to use the new name
+        }
+
+        // ... other code remains unchanged
+
+        @Override
+        public Object resolveValue(String name, Class<?> type) {
+            return resolvedValues.get(name);  // Use the new attribute name
+        }
+
+        @Override
+        public Set<String> getNames() {
+            return this.resolvedValues.keySet();  // Use the new attribute name
+        }
+    }
+}
+```
+
+**Explanation of the changes:**
+
+1. **Renamed attribute:** The attribute `values` has been renamed to `resolvedValues` to better convey its purpose as a map containing resolved values for data binding.
+2. **Constructor update:** The constructor of `MapValueResolver` has been updated to use the new attribute name `resolvedValues`.
+3. **Usage updates:** The references to the attribute within the `resolveValue` and `getNames` methods have also been updated to use the new name `resolvedValues`.
+
+**Benefits of the refactoring:**
+
+- **Improved readability:** The new attribute name provides a clearer understanding of its role within the class, making the code easier to read and maintain.
+- **Consistency:** Using a more descriptive name aligns with best practices for naming attributes, promoting consistency and clarity across the codebase.
+
+**Additional considerations for refactoring:**
+
+- **Variable usage:** Carefully examine how the attribute is used throughout the codebase to ensure that all references are updated accurately.
+- **Naming conventions:** Adhere to established naming conventions in your project or team to maintain consistency and readability.
+- **Code comments:** If necessary, update any code comments that refer to the renamed attribute to maintain accuracy and clarity.

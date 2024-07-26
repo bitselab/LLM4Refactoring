@@ -1,0 +1,117 @@
+Upon reviewing the provided code snippet, the method `cleanupData` in the class `OrmSetupHelperCleaner` stands out as a potential candidate for renaming to better reflect its operations and intentions, which aligns with the rename method refactoring pattern.
+
+The name `cleanupData` suggests a general data cleaning operation, but the method specifically handles clearing database and index data based on certain conditions. A more descriptive name would be `clearDatabaseAndIndexData`, which directly communicates the method's functionality and the type of data it is concerned with.
+
+Here is the code snippet with the refactored method name:
+
+```java
+package org.hibernate.search.util.impl.integrationtest.mapper.orm;
+
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.metamodel.Attribute;
+import jakarta.persistence.metamodel.EmbeddableType;
+import jakarta.persistence.metamodel.EntityType;
+import jakarta.persistence.metamodel.ManagedType;
+import jakarta.persistence.metamodel.Metamodel;
+import jakarta.persistence.metamodel.PluralAttribute;
+
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.query.Query;
+import org.hibernate.search.mapper.orm.Search;
+import org.hibernate.search.mapper.orm.mapping.impl.HibernateOrmMapping;
+import org.hibernate.search.util.common.SearchException;
+import org.hibernate.search.util.common.impl.Closer;
+import org.hibernate.search.util.common.impl.SuppressingCloser;
+import org.hibernate.search.util.impl.test.extension.ExtensionScope;
+import org.hibernate.search.util.impl.test.function.ThrowingConsumer;
+
+import org.jboss.logging.Logger;
+
+/**
+ * This cleaner will look for a method annotated with a @DataClearConfigConfigurer
+ * If such method is found it assumes that data must be cleaned up according to the config after each test method execution.
+ */
+class OrmSetupHelperCleaner {
+    private static final Logger log = Logger.getLogger(OrmSetupHelperCleaner.class.getName());
+
+    private final DataClearConfigImpl config;
+    private final SessionFactoryImplementor sessionFactory;
+
+    static OrmSetupHelperCleaner create(SessionFactoryImplementor sessionFactory, ExtensionScope scope, boolean mockBackend) {
+        if (!ExtensionScope.TEST.equals(scope)) {
+            return new OrmSetupHelperCleaner(sessionFactory).appendConfiguration(
+                    config -> config.clearDatabaseData(true).clearIndexData(!mockBackend));
+        }
+        return new OrmSetupHelperCleaner(sessionFactory);
+    }
+
+    private OrmSetupHelperCleaner(SessionFactoryImplementor sessionFactory) {
+        this.sessionFactory = sessionFactory;
+        this.config = new DataClearConfigImpl();
+    }
+
+    void clearDatabaseAndIndexData() {
+        if (!(config.clearDatabaseData || config.clearIndexData)) {
+            return;
+        }
+        log.info("Clearing data and reusing the same session factory.");
+        try {
+            clearAllData(sessionFactory);
+        } catch (RuntimeException e) {
+            new SuppressingCloser(e)
+                    .push(() -> this.tearDownSessionFactory(sessionFactory));
+            throw new Error("Failed to clear data before test execution: " + e.getMessage(), e);
+        }
+    }
+
+    private void tearDownSessionFactory(SessionFactoryImplementor sessionFactory) {
+        try (Closer<RuntimeException> closer = new Closer<>()) {
+            closer.push(SessionFactory::close, sessionFactory);
+        }
+    }
+
+    private void clearAllData(SessionFactoryImplementor sessionFactory) {
+        HibernateOrmMapping mapping;
+        try {
+            mapping = ((HibernateOrmMapping) Search.mapping(sessionFactory));
+        } catch (SearchException e) {
+            if (e.getMessage().contains("not initialized")) {
+                mapping = null;
+            } else {
+                throw e;
+            }
+        }
+
+        if (this.config.clearDatabaseData) {
+            sessionFactory.getCache().evictAllRegions();
+
+            clearDatabase(sessionFactory, mapping);
+
+            sessionFactory.getCache().evictAllRegions();
+        }
+
+        if (mapping != null && this.config.clearIndexData) {
+            Search.mapping(sessionFactory).scope(Object.class).schemaManager().dropAndCreate();
+        }
+    }
+
+    // Remaining methods and internal class definitions are unchanged...
+
+}
+```
+
+This refactoring focuses solely on renaming the `cleanupData` method to `clearDatabaseAndIndexData` to enhance the clarity of the method's purpose within the codebase. Other method names within this class seem appropriate based on their operations, so no further renaming is necessary at this point.

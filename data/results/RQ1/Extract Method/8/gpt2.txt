@@ -1,0 +1,70 @@
+The provided code snippet demonstrates a common scenario where the Extract Method refactoring can be beneficial. This refactoring involves creating a new method by extracting a portion of the code from an existing method. The main goal is to improve readability, reduce duplication, and enhance code maintainability.
+
+In this case, the pattern `fieldModelContributor.add( c -> c.vectorTypeOptionsStep().someMethod() ); return this;` is repeated across several methods. We can refactor this by extracting this repetitive logic into a private method, thereby making the code more concise and easier to understand.
+
+Here's the refactored code:
+
+```java
+package org.hibernate.search.mapper.pojo.mapping.definition.programmatic.impl;
+
+import org.hibernate.search.engine.backend.types.Projectable;
+import org.hibernate.search.engine.backend.types.Searchable;
+import org.hibernate.search.engine.backend.types.VectorSimilarity;
+import org.hibernate.search.mapper.pojo.bridge.binding.spi.FieldModelContributorContext;
+import org.hibernate.search.mapper.pojo.extractor.mapping.programmatic.ContainerExtractorPath;
+import org.hibernate.search.mapper.pojo.mapping.building.spi.PojoPropertyMetadataContributor;
+import org.hibernate.search.mapper.pojo.mapping.definition.programmatic.PropertyMappingStep;
+import org.hibernate.search.mapper.pojo.mapping.definition.programmatic.PropertyMappingVectorFieldStep;
+
+import java.util.function.Consumer;
+
+class PropertyMappingVectorFieldStepImpl extends AbstractPropertyMappingFieldOptionsStep<PropertyMappingVectorFieldStepImpl>
+        implements PropertyMappingVectorFieldStep, PojoPropertyMetadataContributor {
+
+    PropertyMappingVectorFieldStepImpl(PropertyMappingStep parent, int dimension, String relativeFieldName) {
+        super(parent, relativeFieldName, FieldModelContributorContext::vectorTypeOptionsStep);
+        extractors(ContainerExtractorPath.noExtractors());
+    }
+
+    private PropertyMappingVectorFieldStepImpl addToFieldModelContributor(Consumer<FieldModelContributorContext> consumer) {
+        fieldModelContributor.add(consumer);
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep projectable(Projectable projectable) {
+        return addToFieldModelContributor(c -> c.vectorTypeOptionsStep().projectable(projectable));
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep searchable(Searchable searchable) {
+        // Assuming this method should also follow the same pattern
+        return addToFieldModelContributor(c -> c.vectorTypeOptionsStep().searchable(searchable));
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep vectorSimilarity(VectorSimilarity vectorSimilarity) {
+        return addToFieldModelContributor(c -> c.vectorTypeOptionsStep().vectorSimilarity(vectorSimilarity));
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep beamWidth(int beamWidth) {
+        return addToFieldModelContributor(c -> c.vectorTypeOptionsStep().beamWidth(beamWidth));
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep maxConnections(int maxConnections) {
+        return addToFieldModelContributor(c -> c.vectorTypeOptionsStep().maxConnections(maxConnections));
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep indexNullAs(String indexNullAs) {
+        return addToFieldModelContributor(c -> c.indexNullAs(indexNullAs));
+    }
+
+}
+```
+
+In this refactoring, I introduced the `addToFieldModelContributor` method, which takes a `Consumer<FieldModelContributorContext>` as its parameter. This method encapsulates the repetitive logic of adding a lambda to the `fieldModelContributor` and then returning `this`. Each overridden method now calls this new method, passing the specific lambda required for its operation.
+
+Additionally, I assumed that the `searchable(Searchable searchable)` method should also follow this pattern. If it's intentionally left empty (e.g., not applicable or intentionally no-op), then this change should be reverted.

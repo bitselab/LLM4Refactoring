@@ -1,0 +1,80 @@
+Analyzing the provided code, the main potential for extract variable refactorings would be to target repeated method calls, especially if they are costly in terms of computation or readability.
+
+In the given code snippet, there are several test methods that generate error messages using a common pattern. Specifically, the method `getCanonicalName()` of a `Class<?>` object is called multiple times within the same method to construct a message string. This pattern occurs repeatedly in methods like `blankCloseMethodName()`, `primitiveTypeCannotBeClosed()`, `arrayCannotBeClosed()`, `nullCannotBeClosed()`, and others.
+
+Here's how you might refactor one of these methods to use an extracted variable, improving clarity and avoiding repeated calls:
+
+Original code for `primitiveTypeCannotBeClosed()`:
+```java
+@Test
+void primitiveTypeCannotBeClosed() {
+    Class<?> testClass = PrimitiveFieldTestCase.class;
+    String msg = String.format("@AutoClose is not supported on primitive field %s.x.",
+            testClass.getCanonicalName());
+    Events tests = executeTestsForClass(testClass).testEvents();
+    assertFailingWithMessage(tests, msg);
+}
+```
+
+Refactored code with `testClassName` extracted:
+```java
+@Test
+void primitiveTypeCannotBeClosed() {
+    Class<?> testClass = PrimitiveFieldTestCase.class;
+    String testClassName = testClass.getCanonicalName(); // Extracted variable
+    String msg = String.format("@AutoClose is not supported on primitive field %s.x.", testClassName);
+    Events tests = executeTestsForClass(testClass).testEvents();
+    assertFailingWithMessage(tests, msg);
+}
+```
+
+This refactoring pattern can be applied similarly to the other test methods that repeatedly call `getCanonicalName()`. Here’s the updated code with extracted variables for each relevant method:
+
+```java
+@Test
+void blankCloseMethodName() {
+    Class<?> testClass = BlankCloseMethodNameTestCase.class;
+    String testClassName = testClass.getCanonicalName(); // Extracted variable
+    String msg = String.format("@AutoClose on field %s.field must specify a method name.", testClassName);
+    Events tests = executeTestsForClass(testClass).testEvents();
+    assertFailingWithMessage(tests, msg);
+}
+
+@Test
+void primitiveTypeCannotBeClosed() {
+    Class<?> testClass = PrimitiveFieldTestCase.class;
+    String testClassName = testClass.getCanonicalName(); // Extracted variable
+    String msg = String.format("@AutoClose is not supported on primitive field %s.x.", testClassName);
+    Events tests = executeTestsForClass(testClass).testEvents();
+    assertFailingWithMessage(tests, msg);
+}
+
+@Test
+void arrayCannotBeClosed() {
+    Class<?> testClass = ArrayFieldTestCase.class;
+    String testClassName = testClass.getCanonicalName(); // Extracted variable
+    String msg = String.format("@AutoClose is not supported on array field %s.x.", testClassName);
+    Events tests = executeTestsForClass(testClass).testEvents();
+    assertFailingWithMessage(tests, msg);
+}
+
+@Test
+void nullCannotBeClosed(@TrackLogRecords LogRecordListener listener) {
+    Class<?> testClass = NullCloseableFieldTestCase.class;
+    String testClassName = testClass.getCanonicalName(); // Extracted variable
+    String msg = String.format("Cannot @AutoClose field %s.field because it is null.", testClassName);
+    Events tests = executeTestsForClass(testClass).testEvents();
+    tests.assertStatistics(stats -> stats.succeeded(1).failed(0));
+    assertThat(listener.stream(Level.WARNING)).map(LogRecord::getMessage).anyMatch(msg::equals);
+}
+
+private void assertMissingCloseMethod(Class<?> testClass, String methodName) {
+    String testClassName = testClass.getCanonicalName(); // Extracted variable
+    String msg = String.format("Cannot @AutoClose field %s.field because %s does not define method %s().",
+            testClassName, String.class.getName(), methodName);
+    Events tests = executeTestsForClass(testClass).testEvents();
+    assertFailingWithMessage(tests, msg);
+}
+```
+
+These refactorings focus on enhancing readability and maintaining consistency across similar operations. If more such patterns are identified, similar refactorings can be applied accordingly.

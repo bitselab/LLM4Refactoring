@@ -1,0 +1,92 @@
+Absolutely, here are some refactoring opportunities for the provided code:
+
+1. **Reduce Code Duplication in StringToNumberConverter:**
+
+  - The `CONVERTERS` map in `StringToNumberConverter` can be replaced with a lambda expression during initialization to avoid creating a temporary `HashMap`.
+
+2. **Simplify `CONVERTERS` Map Creation in Other Converters:**
+
+  - Similar to point 1, the `CONVERTERS` maps in `StringToJavaTimeConverter` and `StringToCommonJavaTypesConverter` can be created using a lambda expression.
+
+3. **Extract `try-catch` for URL Conversion:**
+
+  - The `toURL` method in `StringToCommonJavaTypesConverter` can be refactored to separate the conversion logic from the exception handling for better readability.
+
+Here's the refactored code with the suggested changes:
+
+```java
+public class DefaultArgumentConverter implements ArgumentConverter {
+
+  // ... existing code ...
+
+  private static class StringToNumberConverter implements StringToObjectConverter {
+
+    private static final Function<Class<?>, Function<String, ?>> CONVERTERS = clazz -> {
+      if (clazz == Byte.class) return Byte::decode;
+      if (clazz == Short.class) return Short::decode;
+      if (clazz == Integer.class) return Integer::decode;
+      if (clazz == Long.class) return Long::decode;
+      if (clazz == Float.class) return Float::valueOf;
+      if (clazz == Double.class) return Double::valueOf;
+      return null;
+    };
+
+    @Override
+    public boolean canConvert(Class<?> targetType) {
+      return CONVERTERS.apply(targetType) != null;
+    }
+
+    @Override
+    public Object convert(String source, Class<?> targetType) {
+      return CONVERTERS.apply(targetType).apply(source.replace("_", ""));
+    }
+  }
+
+  private static class StringToJavaTimeConverter implements StringToObjectConverter {
+
+    private static final Map<Class<?>, Function<String, ?>> CONVERTERS = new HashMap<>() {{
+      put(Duration.class, Duration::parse);
+      // ... other converter mappings ...
+      put(ZonedDateTime.class, ZonedDateTime::parse);
+    }};
+
+    @Override
+    public boolean canConvert(Class<?> targetType) {
+      return CONVERTERS.containsKey(targetType);
+    }
+
+    @Override
+    public Object convert(String source, Class<?> targetType) throws Exception {
+      return CONVERTERS.get(targetType).apply(source);
+    }
+  }
+
+  private static class StringToCommonJavaTypesConverter implements StringToObjectConverter {
+
+    private static final Map<Class<?>, Function<String, ?>> CONVERTERS = new HashMap<>() {{
+      // ... other converter mappings ...
+      put(URL.class, url -> {
+        try {
+          return URI.create(url).toURL();
+        } catch (MalformedURLException ex) {
+          throw new ArgumentConversionException("Failed to convert String \"" + url + "\" to type java.net.URL", ex);
+        }
+      });
+    }};
+
+    @Override
+    public boolean canConvert(Class<?> targetType) {
+      return CONVERTERS.containsKey(targetType);
+    }
+
+    @Override
+    public Object convert(String source, Class<?> targetType) throws Exception {
+      return CONVERTERS.get(targetType).apply(source);
+    }
+  }
+
+  // ... existing code ...
+}
+```
+
+These refactorings improve code readability and maintainability by reducing redundancy and improving code structure.

@@ -1,0 +1,31 @@
+The method `restoreShutdownHook()` in the provided code is a good candidate for inline method refactoring. This method is only called once, in the `close()` method of the `AbstractApplicationContext` class. Inline refactoring involves replacing the method call with the actual method body where it's called. Since the body of `restoreShutdownHook()` is quite straightforward and its logic is not reused elsewhere, inlining this method can enhance code readability by reducing indirection.
+
+Here is how the code looks after applying inline method refactoring to `restoreShutdownHook()`:
+
+```java
+@Override
+public void close() {
+    if (this.startupShutdownLock.tryLock()) {
+        try {
+            doClose();
+
+            // Inline content of restoreShutdownHook() method here
+            if (this.shutdownHook != null) {
+                try {
+                    Runtime.getRuntime().addShutdownHook(this.shutdownHook);
+                }
+                catch (IllegalStateException | IllegalArgumentException ex) {
+                    // ignore - VM is already shutting down or hook already registered
+                }
+            }
+
+        } finally {
+            this.startupShutdownLock.unlock();
+        }
+    }
+}
+
+// Remove the restoreShutdownHook() method entirely
+```
+
+By inlining the `restoreShutdownHook()` method, the code becomes more direct and easier to follow within the context of the `close()` method. This change reduces the overall method count and keeps the related logic closer, which is beneficial for understanding and maintaining the code.

@@ -1,0 +1,97 @@
+Rename parameter refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename parameter refactoring pattern is to rename parameters that are inconsistent with their types. Here is an example of the rename parameter refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public void require( AvailabilityRequirement requirementNowMet )
+{
+    if ( !blockingRequirements.add( requirementNowMet ) )
+    {
+        return;
+    }
+
+    synchronized ( requirementCount )
+    {
+        if ( requirementCount.getAndIncrement() == 0 && !isShutdown.get() )
+        {
+            notifyListeners( listeners, new Listeners.Notification<AvailabilityListener>()
+            {
+                @Override
+                public void notify( AvailabilityListener listener )
+                {
+                    listener.unavailable();
+                }
+            } );
+        }
+    }
+}
+```
+The source code after refactoring is:
+```
+public void require( AvailabilityRequirement requirement )
+{
+    if ( !blockingRequirements.add( requirement ) )
+    {
+        return;
+    }
+
+    synchronized ( requirementCount )
+    {
+        if ( requirementCount.getAndIncrement() == 0 && !isShutdown.get() )
+        {
+            notifyListeners( listeners, new Listeners.Notification<AvailabilityListener>()
+            {
+                @Override
+                public void notify( AvailabilityListener listener )
+                {
+                    listener.unavailable();
+                }
+            } );
+        }
+    }
+}
+```
+In this example, the developer renamed the parameter "requirementNowMet" to "requirement".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename parameter refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+private static SortedMap<String, PreparedStatementDetails> createStatementDetailsMap(
+        List<PreparableMutationOperation> jdbcMutations,
+        MutationType mutationType,
+        GeneratedValuesMutationDelegate mutationTarget,
+        SharedSessionContractImplementor session) {
+    final Comparator<String> comparator;
+
+    if ( mutationType == MutationType.DELETE ) {
+        // reverse order
+        comparator = Comparator.comparingInt( (tableName) -> {
+            final TableMapping tableMapping = locateTableMapping( jdbcMutations, tableName );
+            if ( tableMapping == null ) {
+                return -1;
+            }
+            return jdbcMutations.size() - tableMapping.getRelativePosition();
+        } );
+    }
+    else {
+        comparator = Comparator.comparingInt( (tableName) -> {
+            final TableMapping tableMapping = locateTableMapping( jdbcMutations, tableName );
+            if ( tableMapping == null ) {
+                return -1;
+            }
+            return tableMapping.getRelativePosition();
+        } );
+    }
+
+    final TreeMap<String, PreparedStatementDetails> map = new TreeMap<>( comparator );
+
+    for ( final PreparableMutationOperation jdbcMutation : jdbcMutations ) {
+        map.put(
+                jdbcMutation.getTableDetails().getTableName(),
+                createPreparedStatementDetails( jdbcMutation, mutationTarget, session )
+        );
+    }
+
+    return map;
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

@@ -1,0 +1,137 @@
+Reviewing the code snippet you provided, inline variable refactoring can be applied in a couple of places to enhance readability and eliminate the use of variables that are only accessed once. Here are the refactorings I would suggest:
+
+1. **Test for empty FieldInfos**:
+   - The comparison between `actual` and `expected` in the `testMergedFieldInfos_empty` method can be streamlined by directly comparing the return of the method call.
+
+2. **Test for FieldInfos in a single leaf**:
+   - Similar to the first, in the `testMergedFieldInfos_singleLeaf` method, we can directly use the return value from method calls in assertions without storing them in intermediate variables.
+
+Here is the refactored code based on these suggestions:
+
+```java
+package org.apache.lucene.index;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.tests.analysis.MockAnalyzer;
+import org.apache.lucene.tests.util.LuceneTestCase;
+
+public class TestFieldInfos extends LuceneTestCase {
+
+    public void testFieldInfos() throws Exception {
+        Directory dir = newDirectory();
+        IndexWriter writer =
+                new IndexWriter(
+                        dir,
+                        newIndexWriterConfig(new MockAnalyzer(random()))
+                                .setMergePolicy(NoMergePolicy.INSTANCE));
+
+        Document d1 = new Document();
+        for (int i = 0; i < 15; i++) {
+            d1.add(new StringField("f" + i, "v" + i, Field.Store.YES));
+        }
+        writer.addDocument(d1);
+        writer.commit();
+
+        Document d2 = new Document();
+        d2.add(new StringField("f0", "v0", Field.Store.YES));
+        d2.add(new StringField("f15", "v15", Field.Store.YES));
+        d2.add(new StringField("f16", "v16", Field.Store.YES));
+        writer.addDocument(d2);
+        writer.commit();
+
+        Document d3 = new Document();
+        writer.addDocument(d3);
+        writer.close();
+
+        SegmentInfos sis = SegmentInfos.readLatestCommit(dir);
+        assertEquals(3, sis.size());
+
+        FieldInfos fis1 = IndexWriter.readFieldInfos(sis.info(0));
+        FieldInfos fis2 = IndexWriter.readFieldInfos(sis.info(1));
+        FieldInfos fis3 = IndexWriter.readFieldInfos(sis.info(2));
+
+        // testing dense FieldInfos
+        Iterator<FieldInfo> it = fis1.iterator();
+        int i = 0;
+        while (it.hasNext()) {
+            FieldInfo fi = it.next();
+            assertEquals(i, fi.number);
+            assertEquals("f" + i, fi.name);
+            assertEquals("f" + i, fis1.fieldInfo(i).name); // lookup by number
+            assertEquals("f" + i, fis1.fieldInfo("f" + i).name); // lookup by name
+            i++;
+        }
+
+        // testing sparse FieldInfos
+        assertEquals("f0", fis2.fieldInfo(0).name); // lookup by number
+        assertEquals("f0", fis2.fieldInfo("f0").name); // lookup by name
+        assertNull(fis2.fieldInfo(1));
+        assertNull(fis2.fieldInfo("f1"));
+        assertEquals("f15", fis2.fieldInfo(15).name);
+        assertEquals("f15", fis2.fieldInfo("f15").name);
+        assertEquals("f16", fis2.fieldInfo(16).name);
+        assertEquals("f16", fis2.fieldInfo("f16").name);
+
+        // testing empty FieldInfos
+        assertNull(fis3.fieldInfo(0)); // lookup by number
+        assertNull(fis3.fieldInfo("f0")); // lookup by name
+        assertEquals(0, fis3.size());
+        Iterator<FieldInfo> it3 = fis3.iterator();
+        assertFalse(it3.hasNext());
+        dir.close();
+    }
+
+    public void testFieldAttributes() throws Exception {
+        // Remaining methods are unchanged...
+    }
+
+    public void testMergedFieldInfos_empty() throws IOException {
+        Directory dir = newDirectory();
+        IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
+
+        IndexReader reader = DirectoryReader.open(writer);
+        
+        assertSame(FieldInfos.EMPTY, FieldInfos.getMergedFieldInfos(reader));
+
+        reader.close();
+        writer.close();
+        dir.close();
+    }
+
+    public void testMergedFieldInfos_singleLeaf() throws IOException {
+        Directory dir = newDirectory();
+        IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
+
+        Document d1 = new Document();
+        d1.add(new StringField("f1", "v1", Field.Store.YES));
+        writer.addDocument(d1);
+        writer.commit();
+
+        Document d2 = new Document();
+        d2.add(new StringField("f2", "v2", Field.Store.YES));
+        writer.addDocument(d2);
+        writer.commit();
+
+        writer.forceMerge(1);
+
+        IndexReader reader = DirectoryReader.open(writer);
+        assertEquals(1, reader.leaves().size());
+        assertSame(reader.leaves().get(0).reader().getFieldInfos(), FieldInfos.getMergedFieldInfos(reader));
+
+        reader.close();
+        writer.close();
+        dir.close();
+    }
+
+    // Additional methods remain unchanged...
+}
+```
+
+In the refactored `testMergedFieldInfos_empty` and `testMergedFieldInfos_singleLeaf` methods, direct method call comparisons simplify the code and avoid temporary variables.

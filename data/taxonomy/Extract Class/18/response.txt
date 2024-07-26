@@ -1,0 +1,90 @@
+Examining the given `TestUtils` class from the Solr package, the primary focus should be on identifying groups of methods or data that handle distinct functionalities and can be logically separated into a new class. Here are some key observations:
+
+1. **String Manipulation Methods**: The methods `testJoin`, `testEscapeTextWithSeparator`, and `testSplitEscaping` deal primarily with string manipulation, parsing, and escaping. These methods could potentially be extracted into a separate class focused on string utilities.
+
+2. **JSON and Map Utility Methods**: Methods like `testSetObjectByPath`, `testUtilsJSPath`, `testMapWriterIdx`, `testMergeJson`, and related JSON and map handling functions might be better organized in a class that specifically handles JSON and map operations.
+
+3. **Test Methods for Number and Command Operations**: The methods `testNumberUtils` and `testBinaryCommands` are somewhat distinct in their focus compared to other methods and could also be considered for extraction if they represent a separate concern.
+
+Given these insights, let's consider refactoring by extracting the string manipulation methods into a new class called `StringUtilsTests`. Here's how that refactoring might look:
+
+### Original Class: TestUtils
+
+This class would retain all methods not directly related to string manipulation.
+
+```java
+package org.apache.solr.util;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Arrays.asList;
+import static org.apache.solr.common.cloud.ZkStateReader.COLLECTION_DEF;
+import static org.apache.solr.common.cloud.ZkStateReader.NRT_REPLICAS;
+import static org.apache.solr.common.cloud.ZkStateReader.NUM_SHARDS_PROP;
+import static org.apache.solr.common.util.Utils.fromJSONString;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.MapWriter;
+import org.apache.solr.common.util.CommandOperation;
+import org.apache.solr.common.util.ContentStream;
+import org.apache.solr.common.util.ContentStreamBase;
+import org.apache.solr.common.util.JavaBinCodec;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.common.util.SimpleOrderedMap;
+import org.apache.solr.common.util.Utils;
+import org.junit.Assert;
+
+public class TestUtils extends SolrTestCaseJ4 {
+    // Remaining methods related to JSON, maps, binary commands, number utilities
+}
+```
+
+### New Class: StringUtilsTests
+
+This new class would contain methods that handle string operations.
+
+```java
+package org.apache.solr.util;
+
+import java.util.List;
+import static java.util.Arrays.asList;
+
+public class StringUtilsTests extends SolrTestCaseJ4 {
+
+    public void testJoin() {
+        assertEquals("a|b|c", StrUtils.join(asList("a", "b", "c"), '|'));
+        assertEquals("a,b,c", StrUtils.join(asList("a", "b", "c"), ','));
+        assertEquals("a\\,b,c", StrUtils.join(asList("a,b", "c"), ','));
+        assertEquals("a,b|c", StrUtils.join(asList("a,b", "c"), '|'));
+        assertEquals("a\\\\b|c", StrUtils.join(asList("a\\b", "c"), '|'));
+    }
+
+    public void testEscapeTextWithSeparator() {
+        assertEquals("a", StrUtils.escapeTextWithSeparator("a", '|'));
+        assertEquals("a", StrUtils.escapeTextWithSeparator("a", ','));
+        assertEquals("a\\|b", StrUtils.escapeTextWithSeparator("a|b", '|'));
+        assertEquals("a|b", StrUtils.escapeTextWithSeparator("a|b", ','));
+        assertEquals("a,b", StrUtils.escapeTextWithSeparator("a,b", '|'));
+        assertEquals("a\\,b", StrUtils.escapeTextWithSeparator("a,b", ','));
+        assertEquals("a\\\\b", StrUtils.escapeTextWithSeparator("a\\b", ','));
+        assertEquals("a\\\\\\,b", StrUtils.escapeTextWithSeparator("a\\,b", ','));
+    }
+
+    public void testSplitEscaping() {
+        List<String> arr = StrUtils.splitSmart("\\r\\n:\\t\\f\\b", ":", true);
+        assertEquals(2, arr.size());
+        assertEquals("\r\n", arr.get(0));
+        assertEquals("\t\f\b", arr.get(1));
+        // Additional test cases for splitSmart and splitWS
+    }
+}
+```
+
+These refactoring steps separate concerns more clearly and make the `TestUtils` class less bloated, adhering to the Single Responsibility Principle.

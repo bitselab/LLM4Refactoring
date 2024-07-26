@@ -1,0 +1,39 @@
+The given code snippet from the `CommitGraphWriter` class shows a method `writeCommitData` where `out.getWriteMonitor()` is called multiple times. Extracting this repeated expression into a local variable can improve readability and potentially enhance performance by reducing the number of method calls. Here's the refactored version of the method:
+
+### Original Code Snippet for Reference
+```java
+private void writeCommitData(CancellableDigestOutputStream out) throws IOException {
+    int[] generations = computeGenerationNumbers(out.getWriteMonitor());
+    out.getWriteMonitor().beginTask(JGitText.get().writingOutCommitGraph, graphCommits.size());
+    // ... rest of the code ...
+    out.getWriteMonitor().update(1);
+    // ... rest of the code ...
+    out.getWriteMonitor().endTask();
+}
+```
+
+### Refactored Code
+```java
+private void writeCommitData(CancellableDigestOutputStream out) throws IOException {
+    ProgressMonitor writeMonitor = out.getWriteMonitor();
+    int[] generations = computeGenerationNumbers(writeMonitor);
+    writeMonitor.beginTask(JGitText.get().writingOutCommitGraph, graphCommits.size());
+
+    int num = 0;
+    byte[] tmp = new byte[hashsz + COMMIT_DATA_WIDTH];
+    int i = 0;
+    for (RevCommit commit : graphCommits) {
+        // ... rest of the code for computing edgeValue and packedDate ...
+        out.write(tmp);
+        writeMonitor.update(1);
+        i++;
+    }
+
+    writeMonitor.endTask();
+}
+```
+
+### Explanation
+In the refactored code, `ProgressMonitor writeMonitor = out.getWriteMonitor();` extracts the frequently used `out.getWriteMonitor()` call into a local variable `writeMonitor`. This change makes the code easier to read, as it clearly indicates that the same `ProgressMonitor` instance is being used throughout the method. Moreover, it slightly optimizes the code by reducing repeated method calls to `getWriteMonitor()`.
+
+This kind of refactoring is particularly useful in cases where a method call is repeated multiple times with the same arguments and the returned value doesn't change between calls. It not only improves code readability but also adheres to the DRY (Don't Repeat Yourself) principle, a key aspect of clean and maintainable code.

@@ -1,0 +1,37 @@
+To improve the readability of the code, we can rename the parameter `value` to `newTerm` in the method `put` of the class `PositionCheckingMap`. This name better represents the meaning of the parameter.
+
+Here is the refactored code:
+
+```java
+public class WeightedSpanTermExtractor {
+
+    // Existing fields and methods...
+
+    /**
+     * This class makes sure that if both position sensitive and insensitive versions of the same term
+     * are added, the position insensitive one wins.
+     */
+    protected static class PositionCheckingMap<K> extends HashMap<K, WeightedSpanTerm> {
+
+        @Override
+        public void putAll(Map<? extends K, ? extends WeightedSpanTerm> m) {
+            for (Map.Entry<? extends K, ? extends WeightedSpanTerm> entry : m.entrySet())
+                this.put(entry.getKey(), entry.getValue());
+        }
+
+        @Override
+        public WeightedSpanTerm put(K key, WeightedSpanTerm newTerm) {
+            WeightedSpanTerm prevTerm = super.put(key, newTerm);
+            if (prevTerm != null && prevTerm.positionSensitive == false) {
+                newTerm.positionSensitive = false;
+            }
+            return prevTerm;
+        }
+    }
+
+    // Existing fields and methods...
+
+}
+```
+
+The parameter `value` is renamed to `newTerm`, which makes the purpose of the parameter clearer, improving the readability of the code.

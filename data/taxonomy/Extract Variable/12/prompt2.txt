@@ -1,0 +1,85 @@
+Extract variable refactorings are frequently employed to remove repeated expressions to improve readability and reusability.
+##################################################
+An extract variable refactoring pattern is to extract repeated expressions as a new variable within the same method. Here is an example of the extract variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private Map<String, User> getIssueUsersByLogin(Issue issue) {
+    Map<String, User> usersByLogin = Maps.newHashMap();
+    if (issue.assignee() != null) {
+        usersByLogin.put(issue.assignee(), userIndex.getByLogin(issue.assignee()));
+    }
+    String reporter = issue.reporter();
+    if (reporter != null) {
+        usersByLogin.put(reporter, userIndex.getByLogin(reporter));
+    }
+    return usersByLogin;
+}
+```
+The source code after refactoring is:
+```
+private Map<String, User> getIssueUsersByLogin(Issue issue) {
+    Map<String, User> usersByLogin = Maps.newHashMap();
+    String assignee = issue.assignee();
+    if (assignee != null) {
+        usersByLogin.put(assignee, userIndex.getByLogin(assignee));
+    }
+    String reporter = issue.reporter();
+    if (reporter != null) {
+        usersByLogin.put(reporter, userIndex.getByLogin(reporter));
+    }
+    return usersByLogin;
+}
+```
+In this example, the developer extracted the expression "issue.assignee()" as new variable "assignee".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+private void writeCommitData(CancellableDigestOutputStream out)
+        throws IOException {
+    int[] generations = computeGenerationNumbers(out.getWriteMonitor());
+    out.getWriteMonitor().beginTask(JGitText.get().writingOutCommitGraph,
+            graphCommits.size());
+    int num = 0;
+    byte[] tmp = new byte[hashsz + COMMIT_DATA_WIDTH];
+    int i = 0;
+    for (RevCommit commit : graphCommits) {
+        int edgeValue;
+        int[] packedDate = new int[2];
+
+        ObjectId treeId = commit.getTree();
+        treeId.copyRawTo(tmp, 0);
+
+        RevCommit[] parents = commit.getParents();
+        if (parents.length == 0) {
+            edgeValue = GRAPH_NO_PARENT;
+        } else {
+            RevCommit parent = parents[0];
+            edgeValue = graphCommits.getOidPosition(parent);
+        }
+        NB.encodeInt32(tmp, hashsz, edgeValue);
+        if (parents.length == 1) {
+            edgeValue = GRAPH_NO_PARENT;
+        } else if (parents.length == 2) {
+            RevCommit parent = parents[1];
+            edgeValue = graphCommits.getOidPosition(parent);
+        } else if (parents.length > 2) {
+            edgeValue = GRAPH_EXTRA_EDGES_NEEDED | num;
+            num += parents.length - 1;
+        }
+
+        NB.encodeInt32(tmp, hashsz + 4, edgeValue);
+
+        packedDate[0] = 0; // commitTime is an int in JGit now
+        packedDate[0] |= generations[i] << 2;
+        packedDate[1] = commit.getCommitTime();
+        NB.encodeInt32(tmp, hashsz + 8, packedDate[0]);
+        NB.encodeInt32(tmp, hashsz + 12, packedDate[1]);
+
+        out.write(tmp);
+        out.getWriteMonitor().update(1);
+        i++;
+    }
+    out.getWriteMonitor().endTask();
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

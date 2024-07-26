@@ -1,0 +1,112 @@
+After reviewing the provided code snippet, the focus of the refactor would ideally be on parameter names that could be made more consistent or more descriptive, based on the usage context. The code uses pattern matching extensively, which involves type-narrowed variables declared in switch statements. These variables are already quite descriptive.
+
+Let's evaluate some potential improvements:
+
+1. **`coverage(Object o)` and `coverageStatement(Object o)`**:
+   - The parameter `o` could potentially be renamed to `item` or `object`, depending on the stylistic preferences of the team. However, `o` is not necessarily inconsistent with its type and is sufficiently generic for a method that is intended to handle various types.
+
+2. **`testSealedExhaustive(S s)`**:
+   - The parameter `s` is already concise and directly correlates with its type `S`. The name `s` is common in Java for variables of a generic or unknown type in short methods.
+
+3. **`switchStatementExhaustive(S s)`**:
+   - Similarly to `testSealedExhaustive`, `s` is appropriate for the scope and use of the method.
+
+4. **`testGenericSealedExhaustive(I<Integer> i)`**:
+   - The parameter `i` might be improved by renaming it to `instance` or `genericInstance` to provide more insight into its purpose. Given that `I` is a generic interface, a more descriptive name might help clarify its role in the context of generics and sealed classes.
+
+With these considerations, the most evident candidate for renaming would be `i` in `testGenericSealedExhaustive(I<Integer> i)`. Renaming `o` in `coverage` and `coverageStatement` could also be considered for clarity, although it's less necessary. Here's the refactored code with these changes applied:
+
+```java
+/**
+ * @see <a href="https://openjdk.org/jeps/441">JEP 441: Pattern Matching for switch</a>
+ */
+public class ExhaustiveSwitch {
+
+    // As of Java 21
+    // Type coverage
+    static int coverage(Object object) {
+        return switch (object) {
+            case String s  -> s.length();
+            case Integer i -> i;
+            default -> 0;
+        };
+    }
+
+    static void coverageStatement(Object object) {
+        switch (object) {
+            case String s:
+                System.out.println(s);
+                break;
+            case Integer i:
+                System.out.println("Integer");
+                break;
+            default:    // Now exhaustive!
+                break;
+        };
+    }
+
+    // As of Java 21
+    // Exhaustiveness and sealed classes
+    sealed interface S permits A, B, C {}
+    final static class A implements S {}
+    final static class B implements S {}
+    record C(int i) implements S {}    // Implicitly final
+
+    static int testSealedExhaustive(S s) {
+        return switch (s) {
+            case A a -> 1;
+            case B b -> 2;
+            case C c -> 3;
+        };
+    }
+
+    static void switchStatementExhaustive(S s) {
+        switch (s) {
+            case A a :
+                System.out.println("A");
+                break;
+            case C c :
+                System.out.println("C");
+                break;
+            default:
+                System.out.println("default case, should be B");
+                break;
+        };
+    }
+
+    // As of Java 21
+    // Exhaustiveness and sealed classes
+    sealed interface I<T> permits E, F {}
+    final static class E<X> implements I<String> {}
+    final static class F<Y> implements I<Y> {}
+
+    static int testGenericSealedExhaustive(I<Integer> genericInstance) {
+        return switch (genericInstance) {
+            // Exhaustive as no E case possible!
+            case F<Integer> bi -> 42;
+        };
+    }
+
+    public static void main(String[] args) {
+        System.out.println(coverage("a string"));
+        System.out.println(coverage(42));
+        System.out.println(coverage(new Object()));
+
+        coverageStatement("a string");
+        coverageStatement(21);
+        coverageStatement(new Object());
+
+        System.out.println("A:" + testSealedExhaustive(new A()));
+        System.out.println("B:" + testSealedExhaustive(new B()));
+        System.out.println("C:" + testSealedExhaustive(new C(1)));
+
+        switchStatementExhaustive(new A());
+        switchStatementExhaustive(new B());
+        switchStatementExhaustive(new C(2));
+
+        System.out.println("F:" + testGenericSealedExhaustive(new F<Integer>()));
+    }
+}
+```
+
+This refactoring makes the parameters more descriptive and might help in enhancing readability, especially for developers who are not familiar with the code.

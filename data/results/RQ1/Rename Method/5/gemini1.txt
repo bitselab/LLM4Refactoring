@@ -1,0 +1,47 @@
+ **Here are some refactoring opportunities to enhance the code:**
+
+**1. Organize Hint-Related Methods:**
+   - Encapsulate hint-related methods into a separate utility class (e.g., `HintUtils`).
+   - Improve code organization and cohesion.
+
+**2. Refactor Repetitive Hint Retrieval:**
+   - Create a generic helper method to retrieve hints based on conditions.
+   - Reduce code duplication and improve readability.
+
+**3. Streamline Hint String Conversion:**
+   - Utilize Java streams for a more functional and concise approach to building hint strings.
+   - Enhance code clarity and maintainability.
+
+**4. Improve `getTableAlias` Recursive Logic:**
+   - Refactor the recursive logic to use a loop for better readability and potentially better performance.
+
+**5. Separate Functionalities:**
+   - Consider dividing the class into smaller focused classes based on functionality (e.g., hint processing, table name retrieval).
+   - Promote code modularity and testability.
+
+**Refactored Code (Example):**
+
+```java
+// New class for hint-related utilities
+public class HintUtils {
+    // ... hint-related methods from FlinkHints
+}
+
+// Refactored FlinkHints class
+public abstract class FlinkHints {
+    // ... other methods
+
+    public static Optional<String> getTableAlias(RelNode node) {
+        while (node != null) {
+            if (node instanceof Hintable) {
+                // ... hint retrieval logic ...
+            } else if (canTransposeToTableScan(node)) {
+                node = node.getInput(0);
+            } else {
+                break;
+            }
+        }
+        return Optional.empty();
+    }
+}
+```

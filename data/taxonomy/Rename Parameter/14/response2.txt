@@ -1,0 +1,16 @@
+In the provided code snippet, there is an opportunity to apply a rename parameter refactoring to make the parameter name more consistent with its type. Specifically, renaming the parameter `value` to `newTerm` will make the code clearer and more readable.
+
+Here is the refactored code:
+
+```java
+@Override
+public WeightedSpanTerm put(K key, WeightedSpanTerm newTerm) {
+    WeightedSpanTerm prevTerm = super.put(key, newTerm);
+    if (prevTerm != null && prevTerm.positionSensitive == false) {
+        newTerm.positionSensitive = false;
+    }
+    return prevTerm;
+}
+```
+
+In this refactoring, the parameter `value` is renamed to `newTerm` to better reflect that it is a `WeightedSpanTerm` object being added to the map. This enhances the readability and maintainability of the code.

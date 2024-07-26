@@ -1,0 +1,56 @@
+Based on the provided code snippet from the Apache Solr project, it's clear that the `TestUtils` class is handling multiple responsibilities, particularly around string manipulation and testing. To enhance the readability and maintainability of this code, we can apply the Extract Class refactoring technique. This technique involves creating new classes to encapsulate specific functionalities that are currently overloaded in a single class.
+
+### Proposed Refactorings:
+
+1. **StringManipulationTests**: 
+   Create a new class named `StringManipulationTests` and move the methods `testJoin`, `testEscapeTextWithSeparator`, `testSplitEscaping`, and `testToLower` to this class. These methods are primarily focused on string manipulation tests.
+
+2. **Adjust Access and Dependencies**: 
+   Ensure that the moved methods have the correct access modifiers and dependencies (like `StrUtils`) are accessible in the new class.
+
+### Example of the New `StringManipulationTests` Class:
+
+```java
+package org.apache.solr.util;
+
+import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+
+import java.util.List;
+
+public class StringManipulationTests extends SolrTestCaseJ4 {
+
+    public void testJoin() {
+        assertEquals("a|b|c", StrUtils.join(asList("a", "b", "c"), '|'));
+        // ... rest of the method implementation
+    }
+
+    public void testEscapeTextWithSeparator() {
+        // ... method implementation
+    }
+
+    public void testSplitEscaping() {
+        // ... method implementation
+    }
+
+    public void testToLower() {
+        // ... method implementation
+    }
+
+    // Additional string manipulation test methods can be added here
+}
+```
+
+### Modifications in the Original `TestUtils` Class:
+
+After extracting the string manipulation methods, the `TestUtils` class will no longer contain those methods. Ensure that references to these methods are updated to invoke them from the `StringManipulationTests` class.
+
+### Refactoring Process:
+
+1. **Create New Class**: Define the `StringManipulationTests` class in a suitable package.
+2. **Move Methods**: Relocate the specified methods from `TestUtils` to `StringManipulationTests`.
+3. **Resolve Dependencies**: Make sure all dependencies (imports, utility methods) are correctly handled in the new class.
+4. **Update References**: Change any references to these methods in the codebase to use the new class.
+5. **Test**: Run the test suite to ensure that all tests still pass after refactoring.
+
+This refactoring will make the codebase more organized, separating string manipulation tests from other functionalities in `TestUtils`, thereby following the Single Responsibility Principle. The exact implementation details may vary based on the broader context of the project and its conventions.

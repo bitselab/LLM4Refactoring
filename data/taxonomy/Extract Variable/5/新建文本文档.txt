@@ -1,0 +1,26 @@
+The provided code snippet presents a possible opportunity for applying the extract variable refactoring pattern. The focus will be on the repeated creation of a new `ManualClock()` instance within the loop, which might be intended to be the same clock instance used to initialize the `restartStrategy`. If we assume the intention is to advance the time of the clock used in the strategy, then extracting the clock instantiation to a variable outside the loop would improve code clarity and possibly efficiency.
+
+Here's the refactored code snippet applying this pattern:
+
+```java
+@Test
+void testMaxAttempts() {
+    int maxAttempts = 13;
+    long maxBackoffMS = 3L;
+    ManualClock clock = new ManualClock();
+    final ExponentialDelayRestartBackoffTimeStrategy restartStrategy =
+            new ExponentialDelayRestartBackoffTimeStrategy(
+                    clock, 1L, maxBackoffMS, 1.2, 10L, 0.25, maxAttempts);
+
+    for (int i = 0; i <= maxAttempts; i++) {
+        assertThat(restartStrategy.canRestart()).isTrue();
+        restartStrategy.notifyFailure(failure);
+        clock.advanceTime(Duration.ofMillis(maxBackoffMS + 1));
+    }
+    assertThat(restartStrategy.canRestart()).isFalse();
+}
+```
+
+**Changes made:**
+- Extracted a new `ManualClock` instance named `clock` and used it to initialize the `restartStrategy`.
+- Used the `clock` variable to advance time inside the loop, instead of creating a new `ManualClock` instance each iteration. This ensures that the `clock` used in `restartStrategy` is the one being manipulated, making the code more efficient and easier to understand.

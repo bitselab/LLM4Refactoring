@@ -1,0 +1,72 @@
+Reviewing the code provided, we can see that there are repeated code snippets across different test methods which can be refactored to improve maintainability and readability. The repeated code mainly concerns setting up a file system, creating a file with random content, and then performing tests with these files. Here's how we can refactor this code:
+
+1. **Extract the repeated file setup into a separate method.**
+   - This includes the instantiation of `AzureBlobFileSystem`, generation of file name and content, and the creation of the file on the file system.
+
+2. **Parameterize the new method for flexibility.**
+   - Pass parameters such as `optimizeFooterRead`, `fileSize`, `footerReadBufferSize` to this new method to accommodate variations.
+
+Here's the refactored version of your code with a new method called `setupAndTestFile`:
+
+```java
+public class ITestAbfsInputStreamReadFooter extends ITestAbfsInputStream {
+
+    private void setupAndTestFile(boolean optimizeFooterRead, int fileSize, int footerReadBufferSize, Consumer<Path> testConsumer) throws Exception {
+        final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize, footerReadBufferSize);
+        String fileName = methodName.getMethodName() + fileIdx++;
+        byte[] fileContent = getRandomBytesArray(fileSize);
+        Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+        testConsumer.accept(testFilePath);
+    }
+
+    private void testSeekAndReadWithConf(boolean optimizeFooterRead, SeekTo seekTo) throws Exception {
+        int fileIdx = 0;
+        for (int i = 0; i <= 4; i++) {
+            for (int j = 0; j <= 2; j++) {
+                int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+                int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+                setupAndTestFile(optimizeFooterRead, fileSize, footerReadBufferSize, testFilePath ->
+                    seekReadAndTest(getFileSystem(optimizeFooterRead, fileSize), testFilePath, seekPos(seekTo, fileSize), HUNDRED, getRandomBytesArray(fileSize), footerReadBufferSize));
+            }
+        }
+    }
+
+    @Test
+    public void testPartialReadWithNoData() throws Exception {
+        int fileIdx = 0;
+        for (int i = 0; i <= 4; i++) {
+            for (int j = 0; j <= 2; j++) {
+                int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+                int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+                setupAndTestFile(true, fileSize, footerReadBufferSize, testFilePath ->
+                    testPartialReadWithNoData(getFileSystem(true, fileSize, footerReadBufferSize), testFilePath,
+                        fileSize - AbfsInputStream.FOOTER_SIZE, AbfsInputStream.FOOTER_SIZE,
+                        getRandomBytesArray(fileSize), footerReadBufferSize));
+            }
+        }
+    }
+
+    @Test
+    public void testFooterReadBufferSizeConfiguration() throws Exception {
+        Configuration config = new Configuration(this.getRawConfiguration());
+        config.unset(AZURE_FOOTER_READ_BUFFER_SIZE);
+        try (AzureBlobFileSystem fs = (AzureBlobFileSystem) FileSystem.newInstance(config)){
+            int fileIdx = 0;
+            int fileSize = ONE_KB;
+            String fileName = methodName.getMethodName() + fileIdx;
+            byte[] fileContent = getRandomBytesArray(fileSize);
+            Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+            final int footerReadBufferSizeConfig = 4 * ONE_KB;
+            final int footerReadBufferSizeBuilder = 5 * ONE_KB;
+            testFooterReadBufferSize(fs, testFilePath, footerReadBufferSizeConfig, footerReadBufferSizeBuilder);
+        }
+    }
+
+    private void testFooterReadBufferSize(AzureBlobFileSystem fs, Path testFilePath, int footerReadBufferSizeConfig, int footerReadBufferSizeBuilder) {
+        // Existing testFooterReadBufferSizeConfiguration body here, refactored to use parameters
+    }
+    
+}
+```
+
+This refactoring extracts the common setup code into `setupAndTestFile`, simplifying the test methods and reducing duplication. Each test method now focuses more on the unique aspects of the test rather than on setup details.

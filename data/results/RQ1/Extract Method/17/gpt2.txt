@@ -1,0 +1,126 @@
+The provided `IOUtil` class from the `net.sourceforge.pmd.internal.util` package has several opportunities for refactoring, particularly with regard to the Extract Method pattern. This pattern is useful for breaking down complex methods into smaller, more manageable, and reusable parts, improving readability and maintainability. Here's a refactored version of the code with Extract Method refactorings applied:
+
+1. **Refactor `createWriter(Charset charset, String reportFile)` Method:**
+   - Extract the logic for creating a writer for stdout and a writer for a file into separate methods.
+
+2. **Refactor `determineBom()` Method in `BomAwareInputStream` Class:**
+   - Extract the logic for determining different BOM types into separate methods.
+
+3. **Refactor `toByteArray(InputStream stream)` Method:**
+   - Extract the logic for expanding the result array into a separate method.
+
+Let's apply these refactorings to the code:
+
+```java
+// ... [Other imports and class definition]
+
+public final class IOUtil {
+
+    // ... [Other class members]
+
+    public static Writer createWriter(Charset charset, String reportFile) {
+        try {
+            if (StringUtils.isBlank(reportFile)) {
+                return createStdoutWriter(charset);
+            } else {
+                return createFileWriter(charset, reportFile);
+            }
+        } catch (IOException e) {
+            throw new IllegalArgumentException(e);
+        }
+    }
+
+    private static Writer createStdoutWriter(Charset charset) throws IOException {
+        return new OutputStreamWriter(new FilterOutputStream(System.out) {
+            @Override
+            public void close() {
+                try {
+                    out.flush();
+                } catch (IOException ignored) {
+                }
+            }
+
+            @Override
+            public void write(byte[] b, int off, int len) throws IOException {
+                out.write(b, off, len);
+            }
+        }, charset);
+    }
+
+    private static Writer createFileWriter(Charset charset, String reportFile) throws IOException {
+        Path path = new File(reportFile).toPath().toAbsolutePath();
+        Files.createDirectories(path.getParent());
+        return Files.newBufferedWriter(path, charset);
+    }
+
+    // ... [Other methods]
+
+    public static class BomAwareInputStream extends FilterInputStream {
+        // ... [Other class members]
+
+        private byte[] determineBom() {
+            byte[] bytes = new byte[3];
+            try {
+                int count = in.read(bytes);
+                if (count == 3 && isUtf8Bom(bytes)) {
+                    charset = StandardCharsets.UTF_8.name();
+                    return new byte[0];
+                } else if (count >= 2 && isUtf16BeBom(bytes)) {
+                    charset = StandardCharsets.UTF_16BE.name();
+                    return new byte[]{bytes[2]};
+                } else if (count >= 2 && isUtf16LeBom(bytes)) {
+                    charset = StandardCharsets.UTF_16LE.name();
+                    return new byte[]{bytes[2]};
+                } else if (count == 3) {
+                    return bytes;
+                }
+
+                return (count < 0) ? new byte[0] : Arrays.copyOf(bytes, count);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        private boolean isUtf8Bom(byte[] bytes) {
+            return bytes[0] == (byte) 0xef && bytes[1] == (byte) 0xbb && bytes[2] == (byte) 0xbf;
+        }
+
+        private boolean isUtf16BeBom(byte[] bytes) {
+            return bytes[0] == (byte) 0xfe && bytes[1] == (byte) 0xff;
+        }
+
+        private boolean isUtf16LeBom(byte[] bytes) {
+            return bytes[0] == (byte) 0xff && bytes[1] == (byte) 0xfe;
+        }
+    }
+
+    public static byte[] toByteArray(InputStream stream) throws IOException {
+        byte[] result = new byte[0];
+        byte[] buffer = new byte[BUFFER_SIZE];
+        int count = stream.read(buffer);
+        while (count > -1) {
+            result = expandResultArray(result, buffer, count);
+            count = stream.read(buffer);
+        }
+        return result;
+    }
+
+    private static byte[] expandResultArray(byte[] result, byte[] buffer, int count) {
+        byte[] newResult = new byte[result.length + count];
+        System.arraycopy(result, 0, newResult, 0, result.length);
+        System.arraycopy(buffer, 0, newResult, result.length, count);
+        return newResult;
+    }
+
+    // ... [Rest of the class]
+}
+```
+
+### Summary of Changes
+1. **`createWriter(Charset charset, String reportFile)`:** This method is refactored to use `createStdoutWriter` and `createFileWriter` for respective branches of the conditional statement.
+2. **`BomAwareInputStream`:** `determine
+
+Bom` is now cleaner and delegates the responsibility of checking for specific BOM types to `isUtf8Bom`, `isUtf16BeBom`, and `isUtf16LeBom`.
+3. **`toByteArray(InputStream stream)`:** The loop body's array expansion logic is moved to a new method `expandResultArray`.
+
+These changes should make the `IOUtil` class more readable and maintainable.

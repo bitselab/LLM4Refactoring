@@ -1,0 +1,71 @@
+Reviewing the provided code snippet, I noticed several opportunities for renaming parameters to improve readability and clarity. Specifically, some parameter names can be more descriptive to reflect their roles and contexts in the methods where they are used. Here are the refactorings I suggest:
+
+1. **In the `setUp` method:**
+   - The parameter `webServer` could be renamed to `mockWebServer` to clarify that it's a mock server used for testing.
+
+2. **In various test methods:**
+   - The parameter `webSocket` in methods like `textMessage`, `binaryMessage`, etc., could be renamed to `clientWebSocket` to distinguish it clearly from the server-side web socket.
+
+3. **In the `closeWebSockets` method:**
+   - Rename `webSocket` to `clientWebSocket` and `server` to `serverWebSocket` for clarity.
+
+4. **In the `newWebSocket` method overload that takes a `Request` parameter:**
+   - Rename `request` to `webSocketRequest` to specify the nature of the request.
+
+5. **In WebSocket listener implementations within tests:**
+   - Parameters named `webSocket` in listener methods like `onOpen`, `onFailure`, etc., can be renamed to `clientWebSocket` or `serverWebSocket` based on the context, to clearly indicate which side of the WebSocket connection they belong to.
+
+6. **In the `upgradeResponse` method:**
+   - The parameter `request` can be renamed to `recordedRequest` to reflect that it is a recorded request in a mock server setup.
+
+Let's apply these refactorings to a portion of the code as an example:
+
+```java
+@BeforeEach public void setUp(MockWebServer mockWebServer) {
+    this.webServer = mockWebServer;
+    platform.assumeNotOpenJSSE();
+}
+
+@Test public void textMessage() {
+    webServer.enqueue(new MockResponse.Builder()
+            .webSocketUpgrade(serverListener)
+            .build());
+    WebSocket clientWebSocket = newWebSocket();
+    clientListener.assertOpen();
+    WebSocket serverWebSocket = serverListener.assertOpen();
+
+    clientWebSocket.send("Hello, WebSockets!");
+    serverListener.assertTextMessage("Hello, WebSockets!");
+
+    closeWebSockets(clientWebSocket, serverWebSocket);
+}
+
+private void closeWebSockets(WebSocket clientWebSocket, WebSocket serverWebSocket) {
+    serverWebSocket.close(1001, "");
+    clientListener.assertClosing(1001, "");
+    clientWebSocket.close(1000, "");
+    serverListener.assertClosing(1000, "");
+    clientListener.assertClosed(1001, "");
+    serverListener.assertClosed(1000, "");
+    clientListener.assertExhausted();
+    serverListener.assertExhausted();
+}
+
+private RealWebSocket newWebSocket(Request webSocketRequest) {
+    RealWebSocket webSocket = new RealWebSocket(TaskRunner.INSTANCE, webSocketRequest, clientListener,
+            random, client.pingIntervalMillis(), null, 0L);
+    webSocket.connect(client);
+    return webSocket;
+}
+
+private MockResponse.Builder upgradeResponse(RecordedRequest recordedRequest) {
+    String key = recordedRequest.getHeaders().get("Sec-WebSocket-Key");
+    return new MockResponse.Builder()
+            .status("HTTP/1.1 101 Switching Protocols")
+            .setHeader("Connection", "Upgrade")
+            .setHeader("Upgrade", "websocket")
+            .setHeader("Sec-WebSocket-Accept", WebSocketProtocol.INSTANCE.acceptHeader(key));
+}
+```
+
+In these examples, the renamed parameters provide clearer context and improve readability, making it easier for developers to understand the code's purpose and functionality. This refactoring should be applied consistently across the entire codebase. Additionally, all changes should be thoroughly tested to ensure that functionality remains intact.

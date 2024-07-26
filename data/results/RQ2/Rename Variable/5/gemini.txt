@@ -1,0 +1,30 @@
+ **Here's the refactored code with the renamed variable:**
+
+```java
+public static List<StateMetadata> getMultiInputOperatorDefaultMeta(
+        Map<Integer, Long> stateTtlFromHint,
+        ReadableConfig tableConfig,
+        String... stateNameList) {
+    Duration defaultStateTtl = tableConfig.get(ExecutionConfigOptions.IDLE_STATE_RETENTION);
+    List<StateMetadata> stateMetadataList = new ArrayList<>(stateNameList.length);
+    for (int i = 0; i < stateNameList.length; i++) {
+        Duration stateTtl =
+                stateTtlFromHint.containsKey(i)
+                        ? Duration.ofMillis(stateTtlFromHint.get(i))
+                        : defaultStateTtl;
+        stateMetadataList.add(new StateMetadata(i, stateTtl, stateNameList[i]));
+    }
+    return stateMetadataList;
+}
+```
+
+**Explanation of the change:**
+
+- The variable `stateRetentionTime` has been renamed to `defaultStateTtl`.
+- This new name better reflects its purpose, which is to hold the default state time-to-live value that's used if a specific TTL is not provided via hints.
+
+**Benefits of this refactoring:**
+
+- **Improved readability:** The code is easier to understand because the variable name now clearly conveys its meaning.
+- **Enhanced consistency:** The naming aligns more closely with other parts of the code, where `stateTtl` is used to refer to state time-to-live values.
+- **Potential maintainability:** Clearer variable names can make the code easier to maintain and modify in the future.

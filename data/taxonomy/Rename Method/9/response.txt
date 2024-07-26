@@ -1,0 +1,64 @@
+Analyzing the provided Java code for the `DescriptorsGenerator` class, the main function of this class is to generate descriptors for modules based on the files and dependencies associated with each module. It processes module files, collects dependencies, prepares modules with these dependencies, and finally generates and writes the corresponding module descriptor files. Given the functionality described, the method names should reflect these specific tasks to improve readability and maintainability.
+
+Here are my observations and recommendations for renaming methods to better align their names with their actions:
+
+1. **Method `generate`**: This method initiates the descriptor generation process. The current name is quite generic. Renaming it to `generateModuleDescriptors` would provide a clearer understanding of what the method specifically generates.
+
+2. **Method `createFilesLater`**: This method schedules the file creation for later execution, either immediately or delayed based on the application's state. The name could be more descriptive. A possible rename could be `scheduleModuleInfoFileCreation` to reflect that it's specifically about scheduling the creation of module info files.
+
+3. **Method `collectDependencies`**: This name is apt as it precisely describes the method's purpose. No change needed here.
+
+4. **Method `prepareModulesWithDependencies`**: While the name is descriptive, it could be streamlined for better readability. A possible alternative is `prepareModules`, assuming the context of dependencies is evident within the class.
+
+5. **Method `findLibraryNodes`**: This method finds module nodes related to libraries. The current name is good, but for consistency with the context of modules, it could be `findModuleNodesForLibrary`.
+
+6. **Method `prepareModuleInfos`**: This method prepares the information for modules. The name could be more specific about what kind of information it prepares. A suggestion could be `assembleModuleDescriptors`.
+
+7. **Method `createFiles`**: This method directly creates files based on the provided module information. Renaming it to `createModuleInfoFiles` would better convey its specific task.
+
+Here's the refactored code snippet with the updated method names:
+
+```java
+class DescriptorsGenerator {
+    // Existing class fields and constructor...
+
+    void generateModuleDescriptors(@NotNull List<ModuleFiles> moduleFiles, @NotNull ProgressIndicator indicator) {
+        // Method implementation...
+    }
+
+    private void scheduleModuleInfoFileCreation(@NotNull List<ModuleInfo> moduleInfos) {
+        // Method implementation...
+    }
+
+    @NotNull
+    private Map<String, Set<ModuleNode>> collectDependencies(@NotNull List<ModuleFiles> modulesFiles) {
+        // Method implementation...
+    }
+
+    @NotNull
+    private Set<ModuleNode> prepareModules(@NotNull Map<String, Set<ModuleNode>> packagesDeclaredInModules) {
+        // Method implementation...
+    }
+
+    @Nullable
+    private static ModuleNode findModuleNodesForLibrary(@NotNull Map<String, Set<ModuleNode>> packagesDeclaredInModules,
+                                               @NotNull Map<PsiJavaModule, ModuleNode> nodesByDescriptor,
+                                               @NotNull Project project,
+                                               @NotNull Library library) {
+        // Method implementation...
+    }
+
+    @NotNull
+    private List<ModuleInfo> assembleModuleDescriptors(@NotNull Set<ModuleNode> modules) {
+        // Method implementation...
+    }
+
+    private void createModuleInfoFiles(@NotNull Project project, @NotNull List<ModuleInfo> moduleInfos, @NotNull ProgressIndicator indicator) {
+        // Method implementation...
+    }
+
+    // Other methods and inner classes...
+}
+```
+
+These renaming suggestions aim to enhance clarity and ensure that the method names are closely aligned with what they perform within the context of the `DescriptorsGenerator` class.

@@ -1,0 +1,55 @@
+ **I've carefully reviewed the code, and while it's generally well-structured and adheres to good coding practices, I've identified a few potential refactoring opportunities:**
+
+1. **Consider a dedicated assertion helper:**
+   - The `assertFailingWithMessage` and `assertMissingCloseMethod` methods are similar in structure and could be combined into a single helper method for better code organization and reusability.
+
+2. **Utilize a common setup for test instances:**
+   - The `InstancePerMethodTestCase` and `InstancePerClassTestCase` classes both have a `resetTracking` method called in both `@BeforeEach` and `@AfterEach`. Consider creating a common utility method to handle this setup for cleaner test readability.
+
+3. **Enhance method naming consistency:**
+   - The `InstancePerMethodEnclosingTestCase` and `InstancePerClassEnclosingTestCase` classes have a method named `setup` while the `SuperTestCase` class has a method named `superSetup`. Using consistent naming conventions for similar setup methods can improve code clarity.
+
+4. **Explore alternative prefix construction in `AutoCloseSpy`:**
+   - The `AutoCloseSpy` constructor utilizes `StackWalker` to determine the caller class. While functional, it adds a level of complexity to the code. Consider alternative approaches for generating the prefix, such as passing it as a parameter or using a different mechanism for determining the class name.
+
+5. **Evaluate potential for utility classes:**
+   - The `AutoCloseSpy` class is relatively specific to testing the `AutoClose` extension. If its functionality could be useful in other testing scenarios, consider making it a more general-purpose utility class for broader reusability.
+
+**Here's the refactored code incorporating these suggestions:**
+
+```java
+// ... (rest of the code) ...
+
+// Helper for common assertion logic
+private void assertFailingWithMessage(Events testEvent, String msg, String... expectedCauses) {
+    testEvent.assertStatistics(stats -> stats.failed(1))
+             .assertThatEvents().haveExactly(1, finishedWithFailure(message(msg), expectedCauses));
+}
+
+// Utility method for test instance setup
+private void resetTracking() {
+    InstancePerClassTestCase.closed = false;
+    recorder.clear();
+}
+
+// Renamed for consistency
+@BeforeAll
+static void superSetup() {
+    // ...
+}
+
+// Refactored AutoCloseSpy with potential for broader reusability
+static class AutoCloseSpy implements AutoCloseable, Runnable {
+
+    private final String prefix;
+    private boolean closed = false;
+
+    AutoCloseSpy(String prefix) {
+        this.prefix = prefix + ".";  // Simplified prefix generation for brevity
+    }
+
+    // ... (rest of the code) ...
+}
+```
+
+I encourage you to review these suggestions and incorporate them as deemed appropriate, considering the specific project context and coding style guidelines.

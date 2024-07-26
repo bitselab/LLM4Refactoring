@@ -1,0 +1,174 @@
+Reviewing the provided code snippet reveals several opportunities for refactoring to improve readability, maintainability, and potentially performance. Here are the key changes:
+
+1. **Extract Method for Duplicate Code**: The code within `visitBiRel(BiRel biRel)` and `ClearOuterQueryHintShuttle.visitBiRel(BiRel biRel)` contains similar logic for handling `RelHint`. This can be refactored into a separate method to avoid duplication and improve maintainability.
+
+2. **Simplify Stream Operations**: In `visitBiRel(BiRel biRel)`, the stream operations for filtering and collecting hints can be simplified to improve readability.
+
+3. **Consolidate Conditional Statements**: Multiple `if` statements checking for the presence of hints can be consolidated to reduce nesting and improve readability.
+
+4. **Refactor Optional Handling**: The use of `Optional` in `firstAliasHint` and `invalidQueryHint` can be improved for clarity and efficiency.
+
+5. **Enhance Commenting for Clarity**: Some parts of the code, especially complex logic, would benefit from more detailed comments to aid in understanding the purpose and functionality.
+
+6. **Use Enhanced for Loop**: In `getInvalidQueryHint(List<RelHint> hints)`, replacing the traditional for loop with an enhanced for loop can improve readability.
+
+7. **Possible Consolidation of Similar Classes**: If `ClearOuterQueryHintShuttle` has similar functionalities or structures with other shuttles, consider creating a more generic base class to avoid duplication.
+
+8. **Improve Variable Naming**: Some variable names, like `hBiRel`, can be made more descriptive to improve readability.
+
+I'll refactor the code based on these points. Let's start with these changes and see how the code looks afterward.
+
+Here's the refactored version of the provided code:
+
+```java
+package org.apache.flink.table.planner.hint;
+
+import org.apache.calcite.rel.BiRel;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.RelShuttleImpl;
+import org.apache.calcite.rel.hint.Hintable;
+import org.apache.calcite.rel.hint.RelHint;
+import org.apache.calcite.rel.logical.LogicalCorrelate;
+import org.apache.calcite.rel.logical.LogicalJoin;
+
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+public class ClearQueryHintsWithInvalidPropagationShuttle extends QueryHintsRelShuttle {
+
+    @Override
+    protected RelNode visitBiRel(BiRel biRel) {
+        List<RelHint> hints = getHintsFromBiRel(biRel);
+        Set<String> allHintNames = getAllHintNames(hints);
+
+        if (!containsQueryHints(allHintNames)) {
+            return super.visit(biRel);
+        }
+
+        Optional<RelHint> firstAliasHint = findFirstAliasHint(hints);
+        if (!firstAliasHint.isPresent()) {
+            return super.visit(biRel);
+        }
+
+        List<RelHint> queryHintsFromOuterQueryBlock = filterQueryHintsFromOuterQueryBlock(hints, firstAliasHint.get());
+
+        if (queryHintsFromOuterQueryBlock.isEmpty()) {
+            return super.visit(biRel);
+        }
+
+        RelNode newRelNode = applyClearOuterQueryHintShuttle(biRel, queryHintsFromOuterQueryBlock);
+        return super.visit(newRelNode);
+    }
+
+    private static class ClearOuterQueryHintShuttle extends RelShuttleImpl {
+        private final Deque<Integer> currentInheritPath;
+        private final RelHint queryHintNeedRemove;
+
+        public ClearOuterQueryHintShuttle(RelHint joinHintNeedRemove) {
+            this.queryHintNeedRemove = joinHintNeedRemove;
+            this.currentInheritPath = new ArrayDeque<>(joinHintNeedRemove.inheritPath);
+        }
+
+        @Override
+        protected RelNode visitChild(RelNode parent, int i, RelNode child) {
+            currentInheritPath.addLast(i);
+            RelNode newNode = super.visitChild(parent, i, child);
+            currentInheritPath.removeLast();
+            return newNode;
+        }
+
+        @Override
+        public RelNode visit(LogicalCorrelate correlate) {
+            return visitBiRel(correlate);
+        }
+
+        @Override
+        public RelNode visit(LogicalJoin join) {
+            return visitBiRel(join);
+        }
+
+        private RelNode visitBiRel(BiRel biRel) {
+            Hintable hintableBiRel = (Hintable) biRel;
+            List<RelHint> hints = new ArrayList<>(hintableBiRel.getHints());
+            Optional<RelHint> invalidQueryHint = getInvalidQueryHint(hints);
+
+            if (invalidQueryHint.isPresent()) {
+                hints.remove(invalidQueryHint.get());
+                return super.visit(hintableBiRel.withHints(hints));
+            }
+
+            return super.visit(biRel);
+        }
+
+        private Optional<RelHint> getInvalidQueryHint(List<RelHint> hints) {
+            return hints.stream()
+                    .filter(hint -> hint.hintName.equals(queryHintNeedRemove.hintName)
+                            && isMatchInvalidInheritPath(
+                            new ArrayList<>(currentInheritPath), hint.inheritPath))
+                    .findFirst();
+        }
+
+        private boolean isMatchInvalidInheritPath(
+                List<Integer> invalidInheritPath, List<Integer> checkedInheritPath) {
+            return invalidInheritPath.size() == checkedInheritPath.size() &&
+                   IntStream.range(0, invalidInheritPath.size())
+                            .allMatch(i -> Objects.equals(invalidInheritPath.get(i), checkedInheritPath.get(i)));
+        }
+    }
+
+    // Additional helper methods extracted from the original code for better readability and reusability
+    private List<RelHint> getHintsFromBiRel(BiRel biRel) {
+        return new ArrayList<>(((Hintable) biRel).getHints());
+    }
+
+    private Set<String> getAllHintNames(List<RelHint> hints) {
+        return hints.stream()
+                    .map(hint -> hint.hintName)
+                    .collect(Collectors.toSet());
+    }
+
+    private boolean containsQueryHints(Set<String> hintNames) {
+        return hintNames.stream().anyMatch(FlinkHints::isQueryHint);
+    }
+
+    private Optional<RelHint> findFirstAliasHint(List<RelHint> hints) {
+        return hints.stream().filter(hint -> FlinkHints.HINT_ALIAS.equals(hint.hintName))
+                    .findFirst();
+    }
+
+    private List<RelHint> filterQueryHintsFromOuterQueryBlock(List<RelHint> hints, RelHint firstAliasHint) {
+        return hints.stream()
+                    .filter(hint -> FlinkHints.isQueryHint(hint.hintName)
+                            && hint.inheritPath.size() > firstAliasHint.inheritPath.size())
+                    .collect(Collectors.toList());
+    }
+
+    private RelNode applyClearOuterQueryHintShuttle(BiRel biRel, List<RelHint> queryHintsFromOuterQueryBlock) {
+        RelNode newRelNode = biRel;
+        ClearOuterQueryHintShuttle clearOuterQueryHintShuttle;
+
+        for (RelHint outerQueryHint : queryHintsFromOuterQueryBlock) {
+            clearOuterQueryHintShuttle = new ClearOuterQueryHintShuttle(outerQueryHint);
+            newRelNode = newRelNode.accept(clearOuterQueryHintShuttle);
+        }
+
+        return newRelNode;
+    }
+}
+```
+
+In this refactored code:
+
+- Duplicate code has been extracted into helper methods for better reusability and readability.
+- Stream operations have been simplified.
+- Conditional statements have been consolidated.
+- Optional handling has been refactored for clarity.
+- Enhanced for loop has been used where appropriate.
+- Variable naming has been improved for better readability.
+
+These changes should make the code more maintainable and easier to understand while preserving its original functionality.

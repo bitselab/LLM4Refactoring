@@ -1,0 +1,127 @@
+The provided code is well-structured and adheres to many good coding practices, but there are still a few opportunities for refactoring to enhance readability, maintainability, and efficiency. Here are the refactoring changes I suggest:
+
+1. **Extract Constant for Regular Expression Patterns**: The regex pattern `"^$"` is used to initialize the `format` field. It would be clearer to define this as a static constant with a descriptive name.
+
+2. **Avoid Redundant Default Initializations**: Fields like `matchCount` and `errorCount` are implicitly initialized to `0`, so explicit initialization is redundant.
+
+3. **Consolidate Duplicate Code**: The method `logMessage` contains duplicate code for constructing the `msg` variable. This can be extracted into a separate method.
+
+4. **Refactor Long Method**: The `findMatch` method is quite long and does multiple things. It can be refactored into smaller methods for better readability.
+
+5. **Use Optional for Optional Values**: The `message` field is used with a check for `null` or empty. This is an ideal candidate for using `Optional<String>`.
+
+6. **Improve Method Names**: Some method names like `isIgnore` can be more descriptive, e.g., `shouldBeIgnored`.
+
+7. **Improve Comments**: Some comments are vague or redundant. Improving these comments can enhance readability.
+
+I'll now refactor the code with these suggestions.
+
+Here's the refactored version of the `RegexpCheck` class:
+
+```java
+package com.puppycrawl.tools.checkstyle.checks.regexp;
+
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.puppycrawl.tools.checkstyle.FileStatefulCheck;
+import com.puppycrawl.tools.checkstyle.api.AbstractCheck;
+import com.puppycrawl.tools.checkstyle.api.DetailAST;
+import com.puppycrawl.tools.checkstyle.api.FileContents;
+import com.puppycrawl.tools.checkstyle.api.FileText;
+import com.puppycrawl.tools.checkstyle.api.LineColumn;
+import com.puppycrawl.tools.checkstyle.utils.CommonUtil;
+
+// ... [Rest of the documentation and imports]
+
+@FileStatefulCheck
+public class RegexpCheck extends AbstractCheck {
+    // ... [Constants and fields]
+
+    private static final String DEFAULT_REGEX_PATTERN = "^$";
+    private static final int DEFAULT_ERROR_LIMIT = 100;
+
+    // Other fields remain unchanged
+
+    private Optional<String> message = Optional.empty();
+    private boolean ignoreComments;
+    private boolean illegalPattern;
+    private int errorLimit = DEFAULT_ERROR_LIMIT;
+    private int duplicateLimit;
+    private boolean checkForDuplicates;
+    private Pattern format = Pattern.compile(DEFAULT_REGEX_PATTERN, Pattern.MULTILINE);
+
+    // ... [Setters and other methods]
+
+    @Override
+    public void beginTree(DetailAST rootAST) {
+        matcher = format.matcher(getFileContents().getText().getFullText());
+        findMatch();
+    }
+
+    private void findMatch() {
+        while (matcher.find() && canContinueValidation()) {
+            processMatch();
+        }
+        checkForRequiredPattern();
+    }
+
+    private void processMatch() {
+        final FileText text = getFileContents().getText();
+        final LineColumn start = text.lineColumn(matcher.start());
+        final int startLine = start.getLine();
+
+        if (!shouldBeIgnored(startLine, text, start)) {
+            matchCount++;
+            if (shouldLogViolation()) {
+                logViolation(startLine);
+            }
+        }
+    }
+
+    private boolean canContinueValidation() {
+        return errorCount < errorLimit;
+    }
+
+    private boolean shouldBeIgnored(int startLine, FileText text, LineColumn start) {
+        // Implementation of ignore logic remains the same
+    }
+
+    private boolean shouldLogViolation() {
+        return illegalPattern || (checkForDuplicates && matchCount - 1 > duplicateLimit);
+    }
+
+    private void logViolation(int lineNumber) {
+        String msg = constructMessage();
+        if (illegalPattern) {
+            log(lineNumber, MSG_ILLEGAL_REGEXP, msg);
+        } else {
+            log(lineNumber, MSG_DUPLICATE_REGEXP, msg);
+        }
+    }
+
+    private void checkForRequiredPattern() {
+        if (!illegalPattern && matchCount == 0) {
+            String msg = constructMessage();
+            log(1, MSG_REQUIRED_REGEXP, msg);
+        }
+    }
+
+    private String constructMessage() {
+        return message.orElse(format.pattern());
+    }
+
+    // ... [Rest of the methods]
+}
+```
+
+### Changes Made:
+1. **Extracted Regex Pattern to a Constant**: Created `DEFAULT_REGEX_PATTERN`.
+2. **Used Optional for Message Field**: Changed `message` field to use `Optional<String>`.
+3. **Removed Redundant Initializations**: Dropped explicit initialization of `matchCount` and `errorCount`.
+4. **Refactored `findMatch` Method**: Split the method into smaller methods for readability (`processMatch`, `canContinueValidation`, `shouldBeIgnored`, `shouldLogViolation`, `logViolation`, `checkForRequiredPattern`).
+5. **Improved Method Naming**: Renamed `isIgnore` to `shouldBeIgnored`.
+6. **Improved Message Construction**: Extracted message construction into a separate method `constructMessage`.
+
+This refactoring enhances the readability and maintainability of the code, making it easier to understand and modify in the future.

@@ -1,0 +1,265 @@
+In reviewing the provided code, one potential rename variable refactoring opportunity stands out. The variable `parameters` in the `convertTypeNodeAST` method was renamed to `requiredParams` in the refactored example. Similarly, the variable `footerReadBufferSize` can be renamed to `bufferSize` to improve readability and maintain consistency with the convention.
+
+Here is the refactored code snippet:
+
+```java
+package org.apache.hadoop.fs.azurebfs.services;
+
+import java.io.IOException;
+import java.util.Map;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FutureDataInputStreamBuilder;
+import org.apache.hadoop.fs.azurebfs.AzureBlobFileSystemStore;
+
+import org.assertj.core.api.Assertions;
+import org.junit.Test;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azurebfs.AbfsConfiguration;
+import org.apache.hadoop.fs.azurebfs.AzureBlobFileSystem;
+import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
+
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+
+import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_FOOTER_READ_BUFFER_SIZE;
+import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.DEFAULT_FOOTER_READ_BUFFER_SIZE;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
+
+import static org.apache.hadoop.fs.azurebfs.AbfsStatistic.CONNECTIONS_MADE;
+import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.ONE_KB;
+
+public class ITestAbfsInputStreamReadFooter extends ITestAbfsInputStream {
+
+    private static final int TEN = 10;
+    private static final int TWENTY = 20;
+
+    public ITestAbfsInputStreamReadFooter() throws Exception {
+    }
+
+    @Test
+    public void testOnlyOneServerCallIsMadeWhenTheConfIsTrue() throws Exception {
+        testNumBackendCalls(true);
+    }
+
+    @Test
+    public void testMultipleServerCallsAreMadeWhenTheConfIsFalse()
+            throws Exception {
+        testNumBackendCalls(false);
+    }
+
+    private void testNumBackendCalls(boolean optimizeFooterRead)
+            throws Exception {
+        int fileIdx = 0;
+        for (int i = 0; i <= 4; i++) {
+            for (int j = 0; j <= 2; j++) {
+                int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+                int bufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+                final AzureBlobFileSystem fs = getFileSystem(
+                        optimizeFooterRead, fileSize);
+                Path testFilePath = createPathAndFileWithContent(
+                        fs, fileIdx++, fileSize);
+                int length = AbfsInputStream.FOOTER_SIZE;
+                FutureDataInputStreamBuilder builder = getParameterizedBuilder(
+                        testFilePath, fs, bufferSize);
+                try (FSDataInputStream iStream = builder.build().get()) {
+                    verifyConfigValueInStream(iStream, bufferSize);
+                    byte[] buffer = new byte[length];
+
+                    Map<String, Long> metricMap = getInstrumentationMap(fs);
+                    long requestsMadeBeforeTest = metricMap
+                            .get(CONNECTIONS_MADE.getStatName());
+
+                    iStream.seek(fileSize - 8);
+                    iStream.read(buffer, 0, length);
+
+                    iStream.seek(fileSize - (TEN * ONE_KB));
+                    iStream.read(buffer, 0, length);
+
+                    iStream.seek(fileSize - (TWENTY * ONE_KB));
+                    iStream.read(buffer, 0, length);
+
+                    metricMap = getInstrumentationMap(fs);
+                    long requestsMadeAfterTest = metricMap
+                            .get(CONNECTIONS_MADE.getStatName());
+
+                    if (optimizeFooterRead) {
+                        assertEquals(1,
+                                requestsMadeAfterTest - requestsMadeBeforeTest);
+                    } else {
+                        assertEquals(3,
+                                requestsMadeAfterTest - requestsMadeBeforeTest);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testSeekToBeginAndReadWithConfTrue() throws Exception {
+        testSeekAndReadWithConf(true, SeekTo.BEGIN);
+    }
+
+    @Test
+    public void testSeekToBeginAndReadWithConfFalse() throws Exception {
+        testSeekAndReadWithConf(false, SeekTo.BEGIN);
+    }
+
+    @Test
+    public void testSeekToBeforeFooterAndReadWithConfTrue() throws Exception {
+        testSeekAndReadWithConf(true, SeekTo.BEFORE_FOOTER_START);
+    }
+
+    @Test
+    public void testSeekToBeforeFooterAndReadWithConfFalse() throws Exception {
+        testSeekAndReadWithConf(false, SeekTo.BEFORE_FOOTER_START);
+    }
+
+    @Test
+    public void testSeekToFooterAndReadWithConfTrue() throws Exception {
+        testSeekAndReadWithConf(true, SeekTo.AT_FOOTER_START);
+    }
+
+    @Test
+    public void testSeekToFooterAndReadWithConfFalse() throws Exception {
+        testSeekAndReadWithConf(false, SeekTo.AT_FOOTER_START);
+    }
+
+    @Test
+    public void testSeekToAfterFooterAndReadWithConfTrue() throws Exception {
+        testSeekAndReadWithConf(true, SeekTo.AFTER_FOOTER_START);
+    }
+
+    @Test
+    public void testSeekToToAfterFooterAndReadWithConfFalse() throws Exception {
+        testSeekAndReadWithConf(false, SeekTo.AFTER_FOOTER_START);
+    }
+
+    @Test
+    public void testSeekToEndAndReadWithConfTrue() throws Exception {
+        testSeekAndReadWithConf(true, SeekTo.END);
+    }
+
+    @Test
+    public void testSeekToEndAndReadWithConfFalse() throws Exception {
+        testSeekAndReadWithConf(false, SeekTo.END);
+    }
+
+    private void testSeekAndReadWithConf(boolean optimizeFooterRead,
+                                         SeekTo seekTo) throws Exception {
+        // Running the test for file sizes ranging from 256 KB to 4 MB with
+        // Footer Read Buffer size ranging from 256 KB to 1 MB
+        // This will cover files less than footer read buffer size,
+        // Files between footer read buffer and read buffer size
+        // Files bigger than read buffer size
+        int fileIdx = 0;
+        for (int i = 0; i <= 4; i++) {
+            for (int j = 0; j <= 2; j++) {
+                int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+                int bufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+                final AzureBlobFileSystem fs = getFileSystem(
+                        optimizeFooterRead, fileSize);
+                String fileName = methodName.getMethodName() + fileIdx++;
+                byte[] fileContent = getRandomBytesArray(fileSize);
+                Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+                seekReadAndTest(fs, testFilePath, seekPos(seekTo, fileSize), HUNDRED,
+                        fileContent, bufferSize);
+            }
+        }
+    }
+
+    private int seekPos(SeekTo seekTo, int fileSize) {
+        if (seekTo == SeekTo.BEGIN) {
+            return 0;
+        }
+        if (seekTo == SeekTo.BEFORE_FOOTER_START) {
+            return fileSize - AbfsInputStream.FOOTER_SIZE - 1;
+        }
+        if (seekTo == SeekTo.AT_FOOTER_START) {
+            return fileSize - AbfsInputStream.FOOTER_SIZE;
+        }
+        if (seekTo == SeekTo.END) {
+            return fileSize - 1;
+        }
+        //seekTo == SeekTo.AFTER_FOOTER_START
+        return fileSize - AbfsInputStream.FOOTER_SIZE + 1;
+    }
+
+    private void seekReadAndTest(final AzureBlobFileSystem fs,
+                                 final Path testFilePath, final int seekPos, final int length,
+                                 final byte[] fileContent, int bufferSize) throws Exception {
+        AbfsConfiguration conf = getAbfsStore(fs).getAbfsConfiguration();
+        long actualContentLength = fileContent.length;
+        FutureDataInputStreamBuilder builder = getParameterizedBuilder(
+                testFilePath, fs, bufferSize);
+        try (FSDataInputStream iStream = builder.build().get()) {
+            AbfsInputStream abfsInputStream = (AbfsInputStream) iStream.getWrappedStream();
+            verifyConfigValueInStream(iStream, bufferSize);
+            long bufferSizeInStream = abfsInputStream.getBufferSize();
+            seek(iStream, seekPos);
+            byte[] buffer = new byte[length];
+            long bytesRead = iStream.read(buffer, 0, length);
+
+            long footerStart = max(0,
+                    actualContentLength - AbfsInputStream.FOOTER_SIZE);
+            boolean optimizationOn =
+                    conf.optimizeFooterRead() && seekPos >= footerStart;
+
+            long actualLength = length;
+            if (seekPos + length > actualContentLength) {
+                long delta = seekPos + length - actualContentLength;
+                actualLength = length - delta;
+            }
+            long expectedLimit;
+            long expectedBCursor;
+            long expectedFCursor;
+            if (optimizationOn) {
+                if (actualContentLength <= bufferSize) {
+                    expectedLimit = actualContentLength;
+                    expectedBCursor = seekPos + actualLength;
+                } else {
+                    expectedLimit = bufferSize;
+                    long lastBlockStart = max(0, actualContentLength - bufferSize);
+                    expectedBCursor = seekPos - lastBlockStart + actualLength;
+                }
+                expectedFCursor = actualContentLength;
+            } else {
+                if (seekPos + bufferSizeInStream < actualContentLength) {
+                    expectedLimit = bufferSizeInStream;
+                    expectedFCursor = bufferSizeInStream;
+                } else {
+                    expectedLimit = actualContentLength - seekPos;
+                    expectedFCursor = min(seekPos + bufferSizeInStream, actualContentLength);
+                }
+                expectedBCursor = actualLength;
+            }
+
+            assertEquals(expectedFCursor, abfsInputStream.getFCursor());
+            assertEquals(expectedFCursor, abfsInputStream.getFCursorAfterLastRead());
+            assertEquals(expectedLimit, abfsInputStream.getLimit());
+            assertEquals(expectedBCursor, abfsInputStream.getBCursor());
+            assertEquals(actualLength, bytesRead);
+            //  Verify user-content read
+            assertContentReadCorrectly(fileContent, seekPos, (int) actualLength, buffer, testFilePath);
+            //  Verify data read to AbfsInputStream buffer
+            int from = seekPos;
+            if (optimizationOn) {
+                from = (int) max(0, actualContentLength - bufferSize);
+            }
+            assertContentReadCorrectly(fileContent, from, (int) abfsInputStream.getLimit(),
+                    abfsInputStream.getBuffer(), testFilePath);
+        }
+    }
+
+    // Further implementation remains the same with the variable names updated accordingly.
+}
+```
+
+The renaming to `bufferSize` streamlines the naming convention, aligning it better with its usage and making it more intuitive for developers to understand the purpose of the variable.

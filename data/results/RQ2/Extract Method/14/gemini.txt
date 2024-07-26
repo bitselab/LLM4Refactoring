@@ -1,0 +1,37 @@
+Absolutely, you've identified a perfect candidate for an extract method refactoring! Here's the refactored code with the duplicate snippet extracted into a new method:
+
+```java
+private void setTransitionInfo(Transition t) {
+  t.dest = dStates[t.source].transitions[t.transitionUpto];
+  t.min = points[t.transitionUpto];
+  if (t.transitionUpto == points.length - 1) {
+    t.max = alphabetSize - 1;
+  } else {
+    t.max = points[t.transitionUpto + 1] - 1;
+  }
+}
+
+// ... rest of the code ...
+
+// Inside getNextTransition method
+while (dStates[t.source].transitions[++t.transitionUpto] == MISSING) {
+  // ...
+}
+setTransitionInfo(t);
+
+// Inside getTransition method
+while (outgoingTransitions < index && t.transitionUpto < points.length - 1) {
+  if (dStates[t.source].transitions[++t.transitionUpto] != MISSING) {
+    outgoingTransitions++;
+  }
+}
+setTransitionInfo(t);
+```
+
+Changes made:
+
+1. **New Method:** A new private method `setTransitionInfo` is created to encapsulate the duplicate logic.
+2. **Method Parameters:** The `Transition` object `t` is passed as a parameter to the new method.
+3. **Method Calls:** The duplicate code snippet in both `getNextTransition` and `getTransition` is replaced with a call to the `setTransitionInfo` method.
+
+This refactoring improves code readability and maintainability by removing duplication. Now, any changes to this logic can be done in one place (within `setTransitionInfo`). 

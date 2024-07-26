@@ -1,0 +1,60 @@
+ **Here are some refactoring opportunities I identified in the code:**
+
+**1. Constructor Chaining and Initialization:**
+
+- Consider chaining the constructors to reduce redundant initialization logic.
+- Potentially move the validation and setup of `httpClient` and `components` to a private initialization method to make the constructors more concise.
+
+**2. Builder Pattern for Complex Construction:**
+
+- If the constructors become more complex due to additional configuration options, consider using the Builder pattern to provide a fluent interface for creation.
+
+**3. Dependency Injection:**
+
+- Explore using dependency injection to manage the `httpClient` and `webSocketComponents` dependencies, potentially reducing the need for multiple constructors and configuration logic within the class.
+
+**4. Simplifying Conditional Logic:**
+
+- The logic for creating `WebSocketComponents` could be simplified by using conditional initialization within a single constructor.
+
+**5. Logging:**
+
+- Consider using a logger for the class instead of a static logger field for better separation of concerns.
+
+**6. Encapsulation:**
+
+- The `components` object is exposed publicly, but its internal methods are only used within the class. Consider making those methods private to improve encapsulation.
+
+**Here's a refactored version incorporating some of these suggestions:**
+
+```java
+public class WebSocketCoreClient extends ContainerLifeCycle {
+
+    private final HttpClient httpClient;
+    private final WebSocketComponents components;
+    private ClassLoader classLoader;
+
+    private WebSocketCoreClient(HttpClient httpClient, WebSocketComponents components) {
+        this.httpClient = httpClient;
+        this.components = components;
+        initialize();
+        classLoader = Thread.currentThread().getContextClassLoader();
+    }
+
+    public WebSocketCoreClient() {
+        this(null, null);
+    }
+
+    public WebSocketCoreClient(WebSocketComponents webSocketComponents) {
+        this(null, webSocketComponents);
+    }
+
+    private void initialize() {
+        addBean(httpClient);
+        addBean(components);
+        // ... other initialization logic
+    }
+
+    // ... other methods
+}
+```

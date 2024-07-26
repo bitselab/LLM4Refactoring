@@ -1,0 +1,104 @@
+This Java code is well-written but there are a few refactoring opportunities to improve its clarity and maintainability:
+
+1. **Use of Constants:** `DEFAULT_MAX_CONN` and `DEFAULT_BEAM_WIDTH` are imported statically but used only once. Instead, they can be directly used in the constructor call to avoid unnecessary static imports.
+
+2. **Redundant Default Constructor:** The default constructor `HibernateSearchKnnVectorsFormat()` is redundant as it just calls another constructor with default values. These values can be set as default parameters in the main constructor.
+
+3. **Comment on `getMaxDimensions` Method:** The `TODO` comment in `getMaxDimensions` suggests a future improvement. It's good practice to track these kinds of comments in a project's issue tracking system instead of leaving them in the code.
+
+4. **Code Documentation:** The code lacks Javadoc comments. Adding documentation for public classes and methods would be beneficial, especially for methods like `fieldsWriter`, `fieldsReader`, and constructors.
+
+5. **Final Class:** If this class is not intended to be extended, declaring it as `final` would be a good practice.
+
+6. **Use of 'this' Keyword:** The use of `this` is consistent but not necessary unless resolving ambiguity. Reducing its usage can make the code slightly cleaner.
+
+Here's the refactored code incorporating these suggestions:
+```java
+package org.hibernate.search.backend.lucene.lowlevel.codec.impl;
+
+import java.io.IOException;
+import java.util.Objects;
+
+import org.apache.lucene.codecs.KnnVectorsFormat;
+import org.apache.lucene.codecs.KnnVectorsReader;
+import org.apache.lucene.codecs.KnnVectorsWriter;
+import org.apache.lucene.codecs.lucene95.Lucene95HnswVectorsFormat;
+import org.apache.lucene.index.SegmentReadState;
+import org.apache.lucene.index.SegmentWriteState;
+
+/**
+ * Implementation of Hibernate Search KNN Vectors Format.
+ */
+public final class HibernateSearchKnnVectorsFormat extends KnnVectorsFormat {
+    public static final int DEFAULT_MAX_DIMENSIONS = KnnVectorsFormat.DEFAULT_MAX_DIMENSIONS;
+    private static final KnnVectorsFormat DEFAULT_KNN_VECTORS_FORMAT = new HibernateSearchKnnVectorsFormat();
+
+    private final KnnVectorsFormat delegate;
+    private final int maxConn;
+    private final int beamWidth;
+
+    public static KnnVectorsFormat defaultFormat() {
+        return DEFAULT_KNN_VECTORS_FORMAT;
+    }
+
+    public HibernateSearchKnnVectorsFormat() {
+        this(KnnVectorsFormat.DEFAULT_MAX_CONN, org.apache.lucene.util.h
+
+nsw.HnswGraphBuilder.DEFAULT_BEAM_WIDTH);
+    }
+
+    public HibernateSearchKnnVectorsFormat(int maxConnection, int beamWidth) {
+        super(HibernateSearchKnnVectorsFormat.class.getSimpleName());
+        this.delegate = new Lucene95HnswVectorsFormat(maxConnection, beamWidth);
+        this.maxConn = maxConnection;
+        this.beamWidth = beamWidth;
+    }
+
+    @Override
+    public KnnVectorsWriter fieldsWriter(SegmentWriteState state) throws IOException {
+        return delegate.fieldsWriter(state);
+    }
+
+    @Override
+    public KnnVectorsReader fieldsReader(SegmentReadState state) throws IOException {
+        return delegate.fieldsReader(state);
+    }
+
+    /**
+     * Gets the maximum dimensions for a given field name.
+     * 
+     * @param fieldName The field name.
+     * @return The maximum dimensions.
+     */
+    @Override
+    public int getMaxDimensions(String fieldName) {
+        return DEFAULT_MAX_DIMENSIONS;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        HibernateSearchKnnVectorsFormat that = (HibernateSearchKnnVectorsFormat) o;
+        return maxConn == that.maxConn && beamWidth == that.beamWidth;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(maxConn, beamWidth);
+    }
+
+    @Override
+    public String toString() {
+        return "HibernateSearchKnnVectorsFormat{" +
+                "maxConnection=" + maxConn +
+                ", beamWidth=" + beamWidth +
+                '}';
+    }
+}
+```
+This refactoring focuses on enhancing readability and maintainability while preserving the original functionality of the code.

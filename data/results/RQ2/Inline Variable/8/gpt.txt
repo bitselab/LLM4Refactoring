@@ -1,0 +1,44 @@
+To refactor the `configuration` method for improved readability and to eliminate the unnecessary `configuration` variable, we can directly return the result of the `DATABASE.configuration` call instead of storing it in a variable. This approach simplifies the code and makes it more straightforward. Here's the refactored code:
+
+Refactored Code:
+
+```java
+public final class DatabaseContainer {
+    // ... [other class members]
+
+    public static Configuration configuration() {
+        String url = System.getProperty("jdbc.url");
+        if (url != null && !url.trim().isEmpty()) {
+            // Inline the return statement for external DB connection
+            return DATABASE.configuration(url, DATABASE_CONTAINER)
+                    .withDialect(System.getProperty("db.dialect"))
+                    .withDriver(System.getProperty("jdbc.driver"))
+                    .withUser(System.getProperty("jdbc.user"))
+                    .withPass(System.getProperty("jdbc.pass"))
+                    .withIsolation(System.getProperty("jdbc.isolation"));
+        } else {
+            // Start the container if it's not running
+            if (DATABASE_CONTAINER != null && !DATABASE_CONTAINER.isRunning()) {
+                synchronized (DATABASE_CONTAINER) {
+                    if (!DATABASE_CONTAINER.isRunning()) {
+                        DATABASE_CONTAINER.start();
+                    }
+                }
+            }
+            // Inline the return statement for internal configuration
+            return DATABASE.configuration(DATABASE_CONTAINER);
+        }
+    }
+
+    // ... [rest of the DatabaseContainer class]
+}
+
+// ... [rest of the code including other classes and enums]
+```
+
+In this refactored version:
+
+1. Removed the local `configuration` variable in the `else` block and directly returned the `DATABASE.configuration` call result.
+2. Kept the conditional logic to check and start `DATABASE_CONTAINER` if it's not already running.
+
+This inline variable refactoring makes the method more concise and easier to read while maintaining the same functionality.

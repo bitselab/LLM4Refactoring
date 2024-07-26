@@ -1,0 +1,32 @@
+ **Here's the refactored code with a more descriptive method name:**
+
+```java
+package org.apache.commons.lang3.builder;
+
+// ... (rest of the code remains the same)
+
+@Test
+public void testDefaultToStringStyle() {
+  final DiffResult<SimpleClass> diffResult = new DiffResult<>(SIMPLE_TRUE, SIMPLE_FALSE, SIMPLE_TRUE.diff(SIMPLE_FALSE).getDiffs(),
+      ToStringStyle.DEFAULT_STYLE, DiffBuilder.TO_STRING_FORMAT);
+  assertEquals(ToStringStyle.DEFAULT_STYLE, diffResult.getToStringStyle());
+}
+
+// ... (rest of the code remains the same)
+```
+
+**Explanation of the refactoring:**
+
+- **Original method name:** `testNullStyle()`
+- **Refactored method name:** `testDefaultToStringStyle()`
+
+**Improvements:**
+
+- **Clarity:** The new name explicitly conveys what the test is actually verifying, which is the behavior of the `getToStringStyle()` method when the default style is used. This makes the test's intent clearer and easier to understand.
+- **Consistency:** The new name aligns with other test names in the class that also use more descriptive wording to describe their focus.
+- **Accuracy:** The original name implied a focus on "null styles," which is not directly relevant to the test's core functionality. The new name more accurately reflects what the test is checking.
+
+**Additional notes:**
+
+- The rest of the code remains the same, as the refactoring only involves renaming a method.
+- Choosing descriptive method names is essential for both production code and test cases to enhance readability and maintainability.

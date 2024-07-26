@@ -1,0 +1,98 @@
+Upon reviewing the code snippet from the JUnit Platform Engine Discovery package, here are some refactoring opportunities:
+
+1. **Consolidation of Constructors**: The class `ClassSelector` has three constructors, two of which are overloads. These can be consolidated into a single constructor using variable arguments (varargs) or optional parameters.
+
+2. **Lazy Loading Enhancement**: The method `getJavaClass()` performs a lazy loading operation. This can be optimized using a double-checked locking pattern to ensure thread safety without the overhead of synchronized access to the entire method.
+
+3. **Error Handling in `getJavaClass()`**: The current error handling within `getJavaClass()` may be improved for clarity and maintainability.
+
+4. **Use of Optional**: Java 8 introduced `Optional` which is a more elegant way to handle null values. We can use `Optional` for methods like `getJavaClass()`.
+
+5. **Documentation Enhancement**: While the code is well-documented, adding some more details to the class and method level documentation would be beneficial.
+
+6. **Final Fields**: The fields `className` and `classLoader` can be made final as they are only set in the constructor and not expected to change.
+
+Here is the refactored code:
+
+```java
+package org.junit.platform.engine.discovery;
+
+import static org.apiguardian.api.API.Status.EXPERIMENTAL;
+import static org.apiguardian.api.API.Status.STABLE;
+
+import java.util.Objects;
+import java.util.Optional;
+
+import org.apiguardian.api.API;
+import org.junit.platform.commons.PreconditionViolationException;
+import org.junit.platform.commons.function.Try;
+import org.junit.platform.commons.util.ReflectionUtils;
+import org.junit.platform.commons.util.ToStringBuilder;
+import org.junit.platform.engine.DiscoverySelector;
+
+@API(status = STABLE, since = "1.0")
+public class ClassSelector implements DiscoverySelector {
+
+    private final String className;
+    private final ClassLoader classLoader;
+    private volatile Class<?> javaClass;
+
+    ClassSelector(String className, ClassLoader classLoader) {
+        this.className = Objects.requireNonNull(className, "Class name cannot be null");
+        this.classLoader = classLoader;
+    }
+
+    public ClassSelector(Class<?> javaClass) {
+        this(javaClass.getName(), javaClass.getClassLoader());
+        this.javaClass = javaClass;
+    }
+
+    public String getClassName() {
+        return this.className;
+    }
+
+    @API(status = EXPERIMENTAL, since = "1.10")
+    public ClassLoader getClassLoader() {
+        return this.classLoader;
+    }
+
+    public Optional<Class<?>> getJavaClass() {
+        if (this.javaClass == null) {
+            synchronized (this) {
+                if (this.javaClass == null) {
+                    Try<Class<?>> clazz = Optional.ofNullable(this.classLoader)
+                            .map(loader -> ReflectionUtils.tryToLoadClass(this.className, loader))
+                            .orElseGet(() -> ReflectionUtils.tryToLoadClass(this.className));
+                    this.javaClass = clazz.getOrThrow(cause ->
+                            new PreconditionViolationException("Could not load class with name: " + this.className, cause));
+                }
+            }
+        }
+        return Optional.of(this.javaClass);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ClassSelector that = (ClassSelector) o;
+        return Objects.equals(this.className, that.className);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.className);
+    }
+
+    @Override
+    public String toString() {
+        return new ToStringBuilder(this)
+                .append("className", this.className)
+                .append("classLoader", this.classLoader)
+                .toString();
+    }
+
+}
+```
+
+These changes are aimed at improving the efficiency, readability, and maintainability of the code.

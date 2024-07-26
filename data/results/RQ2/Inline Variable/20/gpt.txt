@@ -1,0 +1,16 @@
+To refactor the method `mappingRowSimpleObject()` using inline variable refactoring, we can eliminate the `mockRow` variable and directly use the `SIMPLE_PERSON_ROW` constant in the `mapper.apply()` call. This simplification should improve readability by reducing the number of lines and making the code more direct. Here's the refactored method:
+
+```java
+@Test
+void mappingRowSimpleObject() {
+    BeanPropertyRowMapper<Person> mapper = new BeanPropertyRowMapper<>(Person.class);
+
+    Person result = mapper.apply(SIMPLE_PERSON_ROW);
+
+    assertThat(result.firstName).as("firstName").isEqualTo("John");
+    assertThat(result.lastName).as("lastName").isEqualTo("Doe");
+    assertThat(result.age).as("age").isEqualTo(30);
+}
+```
+
+In this refactored version, the `mockRow` variable is removed, and `SIMPLE_PERSON_ROW` is directly passed to the `mapper.apply()` method. This change makes the code more concise and straightforward without affecting its functionality.

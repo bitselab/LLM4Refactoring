@@ -1,0 +1,35 @@
+The identified opportunity for inline variable refactoring in the `preGenerate` method involves the temporary variable `doc`. Since this variable is used only once immediately after its declaration, it's a good candidate for inline variable refactoring. This will enhance the readability of the code by reducing clutter.
+
+Here's the refactored `preGenerate` method:
+
+```java
+@SuppressForbidden(reason = "This module does not need to deal with logging context")
+public Iterator<SolrInputDocument> preGenerate(int numDocs) throws InterruptedException {
+    log("preGenerate docs=" + numDocs + " ...");
+    docs.clear();
+    executorService = Executors.newFixedThreadPool(
+            Runtime.getRuntime().availableProcessors() + 1,
+            new SolrNamedThreadFactory("SolrJMH DocMaker"));
+
+    for (int i = 0; i < numDocs; i++) {
+        executorService.submit(() -> docs.add(Docs.this.inputDocument()));
+    }
+
+    executorService.shutdown();
+    boolean result = executorService.awaitTermination(10, TimeUnit.MINUTES);
+    if (!result) {
+        throw new RuntimeException("Timeout waiting for doc adds to finish");
+    }
+    log("done preGenerateDocs docs=" + docs.size() + " ram=" +
+        RamUsageEstimator.humanReadableUnits(RamUsageEstimator.sizeOfObject(docs)));
+
+    if (numDocs != docs.size()) {
+        throw new IllegalStateException("numDocs != " + docs.size());
+    }
+
+    return docs.iterator();
+}
+```
+
+Changes made:
+- The temporary variable `doc` is eliminated. Instead, `Docs.this.inputDocument()` is directly used in the `docs.add(...)` method call within the lambda expression of `executorService.submit(...)`. This makes the code more concise and direct, improving its readability.

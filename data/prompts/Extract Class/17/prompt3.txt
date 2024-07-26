@@ -1,0 +1,102 @@
+As a developer, imagine your team leader requests you to refactor a piece of code. The original code snippet is as follows:
+```
+package net.sourceforge.pmd.cpd;
+
+import java.io.IOException;
+
+import net.sourceforge.pmd.lang.document.TextDocument;
+
+/**
+ * Tokenizes a source file into tokens consumable by CPD.
+ */
+public interface Tokenizer {
+
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_LITERAL_SEQUENCES =
+            PropertyFactory.booleanProperty("cpdIgnoreLiteralSequences")
+                    .defaultValue(false)
+                    .desc("Ignore sequences of literals, eg `0, 0, 0, 0`")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_LITERAL_AND_IDENTIFIER_SEQUENCES =
+            PropertyFactory.booleanProperty("cpdIgnoreLiteralAndIdentifierSequences")
+                    .defaultValue(false)
+                    .desc("Ignore sequences of literals, eg `a, b, 0, 0`")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_ANONYMIZE_LITERALS =
+            PropertyFactory.booleanProperty("cpdAnonymizeLiterals")
+                    .defaultValue(false)
+                    .desc("Anonymize literals. They are still part of the token stream but all literals appear to have the same value.")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_ANONYMIZE_IDENTIFIERS =
+            PropertyFactory.booleanProperty("cpdAnonymizeIdentifiers")
+                    .defaultValue(false)
+                    .desc("Anonymize identifiers. They are still part of the token stream but all identifiers appear to have the same value.")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_IMPORTS =
+            PropertyFactory.booleanProperty("cpdIgnoreImports")
+                    .defaultValue(true)
+                    .desc("Ignore import statements and equivalent (eg using statements in C#).")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_METADATA =
+            PropertyFactory.booleanProperty("cpdIgnoreMetadata")
+                    .defaultValue(false)
+                    .desc("Ignore metadata such as Java annotations or C# attributes.")
+                    .build();
+
+    @Deprecated
+    // TODO what to do with this?
+    public static final String DEFAULT_SKIP_BLOCKS_PATTERN = "#if 0|#endif";
+
+    /**
+     * Tokenize the source code and record tokens using the provided token factory.
+     */
+    void tokenize(TextDocument document, TokenFactory tokens) throws IOException;
+
+    /**
+     * Wraps a call to {@link #tokenize(TextDocument, TokenFactory)} to properly
+     * create and close the token factory.
+     */
+    static void tokenize(Tokenizer tokenizer, TextDocument textDocument, Tokens tokens) throws IOException {
+        try (TokenFactory tf = Tokens.factoryForFile(textDocument, tokens)) {
+            tokenizer.tokenize(textDocument, tf);
+        }
+    }
+}
+```
+Extract class refactorings are frequently employed to decompose complex classes to improve readability. In the preceding code, some code elements should be extracted as a new class:
+```
+public static final PropertyDescriptor<Boolean> CPD_IGNORE_LITERAL_SEQUENCES =
+        PropertyFactory.booleanProperty("cpdIgnoreLiteralSequences")
+                .defaultValue(false)
+                .desc("Ignore sequences of literals, eg `0, 0, 0, 0`")
+                .build();
+public static final PropertyDescriptor<Boolean> CPD_IGNORE_LITERAL_AND_IDENTIFIER_SEQUENCES =
+        PropertyFactory.booleanProperty("cpdIgnoreLiteralAndIdentifierSequences")
+                .defaultValue(false)
+                .desc("Ignore sequences of literals, eg `a, b, 0, 0`")
+                .build();
+public static final PropertyDescriptor<Boolean> CPD_ANONYMIZE_LITERALS =
+        PropertyFactory.booleanProperty("cpdAnonymizeLiterals")
+                .defaultValue(false)
+                .desc("Anonymize literals. They are still part of the token stream but all literals appear to have the same value.")
+                .build();
+public static final PropertyDescriptor<Boolean> CPD_ANONYMIZE_IDENTIFIERS =
+        PropertyFactory.booleanProperty("cpdAnonymizeIdentifiers")
+                .defaultValue(false)
+                .desc("Anonymize identifiers. They are still part of the token stream but all identifiers appear to have the same value.")
+                .build();
+public static final PropertyDescriptor<Boolean> CPD_IGNORE_IMPORTS =
+        PropertyFactory.booleanProperty("cpdIgnoreImports")
+                .defaultValue(true)
+                .desc("Ignore import statements and equivalent (eg using statements in C#).")
+                .build();
+public static final PropertyDescriptor<Boolean> CPD_IGNORE_METADATA =
+        PropertyFactory.booleanProperty("cpdIgnoreMetadata")
+                .defaultValue(false)
+                .desc("Ignore metadata such as Java annotations or C# attributes.")
+                .build();
+
+@Deprecated
+// TODO what to do with this?
+public static final String DEFAULT_SKIP_BLOCKS_PATTERN = "#if 0|#endif";
+```
+You may employ extract class refactorings to improve the preceding code and generate the refactored code.

@@ -1,0 +1,106 @@
+Reviewing the code snippet provided, we can look for attribute names that might not conform to Java's common naming conventions. Typically, in Java, constants are named using all upper case letters with underscores to separate words, and non-constant fields are in camelCase starting with a lowercase letter. Based on these rules, here are the potential changes:
+
+1. **`customImportOrderRules`**: Since this is a constant, it should follow the convention for constants.
+2. **`samePackageDomainsRegExp`**: It should be a constant based on the context, thus should follow the uppercase naming convention.
+3. **`samePackageMatchingDepth`**: This variable seems to be a constant, though it is not marked as `final`. If it's intended to be a constant, it should also be named accordingly and marked as final.
+
+Let's apply these changes assuming they are intended to be constants (which seems reasonable given the context):
+
+```java
+@FileStatefulCheck
+public class CustomImportOrderCheck extends AbstractCheck {
+
+    /**
+     * A key is pointing to the warning message text in "messages.properties"
+     * file.
+     */
+    public static final String MSG_LINE_SEPARATOR = "custom.import.order.line.separator";
+
+    /**
+     * A key is pointing to the warning message text in "messages.properties"
+     * file.
+     */
+    public static final String MSG_SEPARATED_IN_GROUP = "custom.import.order.separated.internally";
+
+    /**
+     * A key is pointing to the warning message text in "messages.properties"
+     * file.
+     */
+    public static final String MSG_LEX = "custom.import.order.lex";
+
+    /**
+     * A key is pointing to the warning message text in "messages.properties"
+     * file.
+     */
+    public static final String MSG_NONGROUP_IMPORT = "custom.import.order.nonGroup.import";
+
+    /**
+     * A key is pointing to the warning message text in "messages.properties"
+     * file.
+     */
+    public static final String MSG_NONGROUP_EXPECTED = "custom.import.order.nonGroup.expected";
+
+    /**
+     * A key is pointing to the warning message text in "messages.properties"
+     * file.
+     */
+    public static final String MSG_ORDER = "custom.import.order";
+
+    /** STATIC group name. */
+    public static final String STATIC_RULE_GROUP = "STATIC";
+
+    /** SAME_PACKAGE group name. */
+    public static final String SAME_PACKAGE_RULE_GROUP = "SAME_PACKAGE";
+
+    /** THIRD_PARTY_PACKAGE group name. */
+    public static final String THIRD_PARTY_PACKAGE_RULE_GROUP = "THIRD_PARTY_PACKAGE";
+
+    /** STANDARD_JAVA_PACKAGE group name. */
+    public static final String STANDARD_JAVA_PACKAGE_RULE_GROUP = "STANDARD_JAVA_PACKAGE";
+
+    /** SPECIAL_IMPORTS group name. */
+    public static final String SPECIAL_IMPORTS_RULE_GROUP = "SPECIAL_IMPORTS";
+
+    /** NON_GROUP group name. */
+    private static final String NON_GROUP_RULE_GROUP = "NOT_ASSIGNED_TO_ANY_GROUP";
+
+    /** Pattern used to separate groups of imports. */
+    private static final Pattern GROUP_SEPARATOR_PATTERN = Pattern.compile("\\s*###\\s*");
+
+    /** Specify format of order declaration customizing by user. */
+    private static final String CUSTOM_IMPORT_ORDER_RULES = "";
+
+    /** Processed list of import order rules. */
+    private final List<String> customOrderRules = new ArrayList<>();
+
+    /** Contains objects with import attributes. */
+    private final List<ImportDetails> importToGroupList = new ArrayList<>();
+
+    /** Specify RegExp for SAME_PACKAGE group imports. */
+    private static final String SAME_PACKAGE_DOMAINS_REG_EXP = "";
+
+    /** Specify RegExp for STANDARD_JAVA_PACKAGE group imports. */
+    private static final Pattern STANDARD_PACKAGE_REG_EXP = Pattern.compile("^(java|javax)\\.");
+
+    /** Specify RegExp for THIRD_PARTY_PACKAGE group imports. */
+    private static final Pattern THIRD_PARTY_PACKAGE_REG_EXP = Pattern.compile(".*");
+
+    /** Specify RegExp for SPECIAL_IMPORTS group imports. */
+    private static final Pattern SPECIAL_IMPORTS_REG_EXP = Pattern.compile("^$");
+
+    /** Force empty line separator between import groups. */
+    private boolean separateLineBetweenGroups = true;
+
+    /**
+     * Force grouping alphabetically,
+     * in <a href="https://en.wikipedia.org/wiki/ASCII#Order"> ASCII sort order</a>.
+     */
+    private boolean sortImportsInGroupAlphabetically;
+
+    /** Number of first domains for SAME_PACKAGE group. */
+    private static final int SAME_PACKAGE_MATCHING_DEPTH = 2;
+
+}
+```
+
+This refactoring assumes that the non-final fields are indeed meant to be constants based on your system's design, thus they are declared as `static final` and renamed accordingly.

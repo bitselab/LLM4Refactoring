@@ -1,0 +1,90 @@
+The provided code snippet from a test class in the Spring Framework contains a significant amount of logic that could benefit from an "Extract Class" refactoring. This refactoring strategy involves moving a portion of the code from an existing class into a new class to improve readability, maintainability, and separation of concerns.
+
+### Refactoring Strategy:
+
+1. **Extract End-to-End Test Logic**: The `endToEndTests` method contains a complex logic flow that could be extracted into a new class, such as `EndToEndTestProcessor`. This new class would handle the setup, execution, and assertions of end-to-end tests.
+
+2. **Extract Runtime Hint Assertions**: The methods `assertRuntimeHints`, `assertReflectionRegistered`, and `assertAnnotationRegistered` are focused on asserting various runtime hints. These could be moved to a separate class like `RuntimeHintAssertor`.
+
+3. **Extract Context Assertion Methods**: The methods `assertContextForBasicTests`, `assertContextForJdbcTests`, and `assertContextForWebTests` could be extracted into a class like `ApplicationContextAssertor`.
+
+4. **Extract Process Ahead of Time Logic**: The method `processAheadOfTime` and its related functionality could be moved to a new class, such as `TestProcessor`, which would be responsible for the processing of test classes ahead of time.
+
+### Example of Refactored Code:
+
+Here's an example of how the `endToEndTests` method and related functionality could be refactored into a new class, `EndToEndTestProcessor`:
+
+```java
+// New class: EndToEndTestProcessor.java
+package org.springframework.test.context.aot;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.aot.generate.InMemoryGeneratedFiles;
+import org.springframework.aot.test.generate.CompilerFiles;
+import org.springframework.core.test.tools.TestCompiler;
+import org.springframework.util.function.ThrowingConsumer;
+import org.springframework.aot.AotDetector;
+import org.springframework.javapoet.ClassName;
+import org.springframework.test.context.MergedContextConfiguration;
+import java.util.Set;
+import java.util.List;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+
+public class EndToEndTestProcessor {
+    private final TestContextAotGenerator generator;
+    private final Set<Class<?>> testClasses;
+    private final InMemoryGeneratedFiles generatedFiles;
+    private final RuntimeHintAssertor runtimeHintAssertor;
+    private final ApplicationContextAssertor contextAssertor;
+
+    public EndToEndTestProcessor(Set<Class<?>> testClasses) {
+        this.testClasses = testClasses;
+        this.generatedFiles = new InMemoryGeneratedFiles();
+        this.generator = new TestContextAotGenerator(generatedFiles);
+        this.runtimeHintAssertor = new RuntimeHintAssertor();
+        this.contextAssertor = new ApplicationContextAssertor();
+    }
+
+    public void executeTests() {
+        generator.processAheadOfTime(testClasses.stream().sorted(comparing(Class::getName)));
+        runtimeHintAssertor.assertRuntimeHints(generator.getRuntimeHints());
+        List<String> sourceFiles = generatedFiles.getGeneratedFiles(Kind.SOURCE).keySet().stream().toList();
+        assertThat(sourceFiles).containsExactlyInAnyOrder(expectedSourceFiles);
+
+        TestCompiler.forSystem().with(CompilerFiles.from(generatedFiles)).compile(ThrowingConsumer.of(compiled -> {
+            // Test execution logic
+        }));
+    }
+
+    // Other methods and assertions moved from the original class
+}
+```
+
+In the original test class, you would then create an instance of `EndToEndTestProcessor` and call its `executeTests` method.
+
+```java
+class TestContextAotGeneratorTests {
+    @Test
+    void endToEndTests() {
+        Set<Class<?>> testClasses = Set.of(
+            // list of classes
+        );
+        EndToEndTestProcessor testProcessor = new EndToEndTestProcessor(testClasses);
+        testProcessor.executeTests();
+    }
+
+    // Other methods and properties
+}
+```
+
+This refactoring enhances the clarity of the original class by delegating specific responsibilities to new, more focused classes. Each new class has a clear purpose, making the code easier to understand, test, and maintain.

@@ -1,0 +1,112 @@
+After reviewing the provided code snippet, there are several opportunities for refactoring to enhance readability, maintainability, and overall structure. Here are the key points for refactoring:
+
+1. **Duplication in Test Methods**: There's a repeated pattern in the test methods where a `MapValueResolver` and a `DataBinder` are created, and then the `DataBinder` is used to bind data to a class. This process can be refactored into a separate method to reduce duplication.
+
+2. **Use of Raw Type in `Map`**: The `Map` in `MapValueResolver` should use a specific type rather than a raw type. This improves type safety and readability.
+
+3. **Method Naming Consistency**: The method names in the test class are not entirely consistent. It's a good practice to follow a consistent naming convention for test methods.
+
+4. **Extracting Common Assertions**: Common assertions can be extracted into separate methods. For example, assertions related to `DataClass` can be extracted to validate all its properties in one go.
+
+5. **Improving Class Structure**: The inner classes `DataClass` and `NestedDataClass` can be separated out into their own files if they are used beyond this test class, improving modularity and readability.
+
+6. **Commenting and Documentation**: Adding comments to explain the purpose of tests and methods would make the code more maintainable, especially for others who might work with this code in the future.
+
+7. **Usage of Java 8 Features**: If applicable, using Java 8 features like Streams and Lambda expressions can make the code more concise and readable.
+
+Let's refactor the code accordingly:
+
+```java
+package org.springframework.validation;
+
+import java.beans.ConstructorProperties;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import jakarta.validation.constraints.NotNull;
+import org.junit.jupiter.api.Test;
+
+import org.springframework.core.ResolvableType;
+import org.springframework.format.support.DefaultFormattingConversionService;
+import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Unit tests for {@link DataBinder} with constructor binding.
+ *
+ * @author Rossen Stoyanchev
+ */
+public class DataBinderConstructTests {
+
+    @Test
+    void shouldBindDataToDataClass() {
+        DataClass dataClass = bindAndReturn(DataClass.class, Map.of("param1", "value1", "param2", "true"));
+        assertDataClass(dataClass, "value1", true, 0);
+    }
+
+    @Test
+    void shouldBindDataWithOptionalParameterToDataClass() {
+        DataClass dataClass = bindAndReturn(DataClass.class, 
+            Map.of("param1", "value1", "param2", "true", "optionalParam", "8"));
+        assertDataClass(dataClass, "value1", true, 8);
+    }
+
+    @Test
+    void shouldHandleMissingParameterInDataClassBinding() {
+        BindingResult result = bindAndGetBindingResult(DataClass.class, Map.of("param1", "value1"));
+        assertBindingResultForMissingParameters(result, "value1");
+    }
+
+    @Test
+    void shouldBindDataToNestedDataClassWithMissingParameter() {
+        NestedDataClass dataClass = bindAndReturn(NestedDataClass.class, Map.of("param1", "value1"));
+        assertThat(dataClass.param1()).isEqualTo("value1");
+        assertThat(dataClass.nestedParam2()).isNull();
+    }
+
+    @Test
+    void shouldHandleConversionErrorInDataClassBinding() {
+        BindingResult result = bindAndGetBindingResult(DataClass.class, Map.of("param1", "value1", "param2", "x"));
+        assertBindingResultForConversionError(result, "value1", "x");
+    }
+
+    private static <T> T bindAndReturn(Class<T> targetType, Map<String, String> values) {
+        DataBinder binder = initDataBinder(targetType);
+        binder.bind(new MapValueResolver(values));
+        return getTarget(binder);
+    }
+
+    private static BindingResult bindAndGetBindingResult(Class<?> targetType, Map<String, String> values) {
+        DataBinder binder = initDataBinder(targetType);
+        binder.bind(new MapValueResolver(values));
+        return binder.getBindingResult();
+    }
+
+    private static void assertDataClass(DataClass dataClass, String expectedParam1, boolean expectedParam2, int expectedParam3) {
+        assertThat(dataClass.param1()).isEqualTo(expectedParam1);
+        assertThat(dataClass.param2()).isEqualTo(expectedParam2);
+        assertThat(dataClass.param3()).isEqualTo(expectedParam3);
+    }
+
+    private static void assertBindingResultForMissingParameters(BindingResult result, String expectedParam1) {
+        assertThat(result.getAllErrors()).hasSize(1);
+        assertThat(result.getFieldValue("param1")).isEqualTo(expectedParam1);
+        assertThat(result.getFieldValue("param2")).isNull();
+        assertThat(result.getFieldValue("param3")).isNull();
+    }
+
+    private static void assertBindingResultForConversionError(BindingResult result, String expectedParam1, String expectedParam2) {
+        assertThat(result.getAllErrors()).hasSize(1);
+        assertThat(result.getFieldValue("param1")).isEqualTo(expectedParam1);
+        assertThat(result.getFieldValue("param2")).isEqualTo(expectedParam2);
+        assertThat(result.getFieldValue("param3")).isNull();
+    }
+
+    // Other methods and classes remain unchanged
+}
+```
+
+This refactoring focuses on reducing duplication, improving readability, and enhancing the structure of the test methods. The core functionality of the code remains the same.

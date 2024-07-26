@@ -1,0 +1,88 @@
+Absolutely, there is a refactoring opportunity in the provided code snippet! This is a prime candidate for the "Extract Variable" refactoring. Here's the breakdown:
+
+* The code snippet repeatedly calculates the value of `fileSize - AbfsInputStream.FOOTER_SIZE`. This value is used in multiple places across the class,  including  `testNumBackendCalls`, `testSeekAndReadWithConf`, and `testPartialReadWithNoData`.
+
+By extracting this calculation into a separate variable, we can improve code readability and maintainability. Here's the refactored code:
+
+```java
+class ITestAbfsInputStreamReadFooter extends ITestAbfsInputStream {
+
+  private static final int TEN = 10;
+  private static final int TWENTY = 20;
+
+  public ITestAbfsInputStreamReadFooter() throws Exception {
+  }
+
+  @Test
+  public void testOnlyOneServerCallIsMadeWhenTheConfIsTrue() throws Exception {
+    testNumBackendCalls(true);
+  }
+
+  @Test
+  public void testMultipleServerCallsAreMadeWhenTheConfIsFalse()
+      throws Exception {
+    testNumBackendCalls(false);
+  }
+
+  private void testNumBackendCalls(boolean optimizeFooterRead)
+      throws Exception {
+    int fileIdx = 0;
+    for (int i = 0; i <= 4; i++) {
+      for (int j = 0; j <= 2; j++) {
+        int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+        int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+        final AzureBlobFileSystem fs = getFileSystem(
+            optimizeFooterRead, fileSize);
+        Path testFilePath = createPathAndFileWithContent(
+            fs, fileIdx++, fileSize);
+        int footerStart = Math.max(0, fileSize - AbfsInputStream.FOOTER_SIZE); // Extract this calculation
+        final int effectiveReadStart = optimizeFooterRead && fileSize > footerStart ? footerStart : 0;
+
+        int length = AbfsInputStream.FOOTER_SIZE;
+        FutureDataInputStreamBuilder builder = getParameterizedBuilder(
+            testFilePath, fs, footerReadBufferSize);
+        try (FSDataInputStream iStream = builder.build().get()) {
+          verifyConfigValueInStream(iStream, footerReadBufferSize);
+          byte[] buffer = new byte[length];
+
+          Map<String, Long> metricMap = getInstrumentationMap(fs);
+          long requestsMadeBeforeTest = metricMap
+              .get(CONNECTIONS_MADE.getStatName());
+
+          iStream.seek(effectiveReadStart);
+          iStream.read(buffer, 0, length);
+
+          iStream.seek(fileSize - (TEN * ONE_KB));
+          iStream.read(buffer, 0, length);
+
+          iStream.seek(fileSize - (TWENTY * ONE_KB));
+          iStream.read(buffer, 0, length);
+
+          metricMap = getInstrumentationMap(fs);
+          long requestsMadeAfterTest = metricMap
+              .get(CONNECTIONS_MADE.getStatName());
+
+          if (optimizeFooterRead) {
+            assertEquals(1,
+                requestsMadeAfterTest - requestsMadeBeforeTest);
+          } else {
+            assertEquals(3,
+                requestsMadeAfterTest - requestsMadeBeforeTest);
+          }
+        }
+      }
+    }
+  }
+
+  // ... other test methods ...
+
+  private static int calculateEffectiveReadStart(boolean optimizeFooterRead, int fileSize) {
+    int footerStart = Math.max(0, fileSize - AbfsInputStream.FOOTER_SIZE);
+    return optimizeFooterRead && fileSize > footerStart ? footerStart : 0;
+  }
+
+  // ... other methods ...
+}
+```
+
+In the refactored code, we've extracted the calculation of `fileSize - AbfsInputStream.FOOTER_SIZE` into a separate method called `calculateEffectiveReadStart`. This method takes the `optimizeFooterRead` flag and `fileSize` as parameters and returns the effective read start position. The test methods now call this method to calculate the value instead of duplicating the logic.

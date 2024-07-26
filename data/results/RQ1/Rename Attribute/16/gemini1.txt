@@ -1,0 +1,56 @@
+ **Here are some refactoring opportunities for the given code:**
+
+1. **Combine `initDataBinder` and `getTarget`:**
+   - These methods are frequently used together, so merging them into a single method like `getTargetFromBinder` would streamline test setup.
+
+2. **Extract Repeated Value Creation:**
+   - The `Map.of("param1", "value1", "param2", "true")` value is created multiple times. Extract it into a well-named variable to enhance readability and maintainability.
+
+3. **Consider Test Parameterization:**
+   - The tests have similar structures with minor variations in input values. Refactoring them as parameterized tests could reduce code duplication and improve test organization.
+
+4. **Simplify `MapValueResolver`:**
+   - The `MapValueResolver` class could be simplified using a functional interface or lambda expression for its `resolveValue` method implementation.
+
+5. **Utilize Java Records for Data Classes:**
+   - If using Java 16 or later, consider using `record` classes for `DataClass` and `NestedDataClass` to reduce boilerplate code.
+
+6. **Review Assert Usage:**
+   - The use of `Assert.notNull` within the `DataClass` constructor might be more appropriate as a validation constraint within the DataBinder framework itself.
+
+7. **Explore Builder Pattern for Optional Parameters:**
+   - While not strictly refactoring, consider using the builder pattern for `DataClass` to make creating instances with optional parameters more fluent and less error-prone.
+
+**Here's a refactored version with some of these changes:**
+
+```java
+// ... other imports ...
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+public class DataBinderConstructTests {
+
+    private static final Map<String, Object> baseParameters = Map.of("param1", "value1", "param2", "true");
+
+    @ParameterizedTest
+    @ValueSource(strings = {"8", "10", ""}) // Test with different optional parameter values
+    void dataClassBinding(String optionalParamValue) {
+        // ... setup with parameterized value
+    }
+
+    // ... other refactored tests ...
+
+    private static <T> T getTargetFromBinder(Class<T> targetType, MapValueResolver valueResolver) {
+        DataBinder binder = new DataBinder(null);
+        binder.setTargetType(ResolvableType.forClass(targetType));
+        binder.setConversionService(new DefaultFormattingConversionService());
+        binder.construct(valueResolver);
+        // ... error handling
+        return binder.getTarget();
+    }
+
+    // ... other refactored methods ...
+}
+```
+
+**Remember that refactoring is an ongoing process, and further improvements could be made based on specific project needs and coding standards.**

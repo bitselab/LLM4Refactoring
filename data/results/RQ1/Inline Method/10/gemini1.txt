@@ -1,0 +1,56 @@
+ **I've identified several refactoring opportunities in the code:**
+
+1. **Remove Deprecated Methods:**
+   - The methods `chooseJdk(Project, Collection)` and `chooseJdk(Collection)` are marked as deprecated and intended for removal. They should be safely removed to enhance code clarity and avoid confusion.
+
+2. **Combine Duplicated Logic:**
+   - The logic for finding a Java SDK is duplicated in both `getAnyJdk(Project)` and `chooseJdk(Project, Collection)`. This logic can be consolidated into a single private method to reduce redundancy and improve maintainability.
+
+3. **Extract Method for Sdk Filtering:**
+   - The filtering of modules to find Java SDKs within `chooseJdk(Collection)` can be extracted into a separate method, making the code more readable and modular.
+
+**Here's the refactored code incorporating these suggestions:**
+
+```java
+package com.intellij.openapi.projectRoots.ex;
+
+// ... imports
+
+public final class PathUtilEx {
+
+    @Nullable
+    public static Sdk getAnyJdk(@NotNull Project project) {
+        return tryFindAnyJdk(project);
+    }
+
+    @Nullable
+    private static Sdk tryFindAnyJdk(@NotNull Project project) {
+        Sdk projectJdk = ProjectRootManager.getInstance(project).getProjectSdk();
+        if (isJavaSdk(projectJdk)) {
+            return projectJdk;
+        }
+        return tryFindAnyJdkFromModules(ModuleManager.getInstance(project).getModules());
+    }
+
+    private static boolean isJavaSdk(@Nullable Sdk sdk) {
+        return sdk != null && sdk.getSdkType() instanceof JavaSdkType;
+    }
+
+    @Nullable
+    private static Sdk tryFindAnyJdkFromModules(@NotNull Collection<? extends Module> modules) {
+        return filterJavaSdks(modules).stream()
+                .max(Comparator.comparing(jdk -> JavaVersion.tryParse(jdk.getVersionString()), Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElse(null);
+    }
+
+    private static List<Sdk> filterJavaSdks(@NotNull Collection<? extends Module> modules) {
+        return ContainerUtil.mapNotNull(modules, module -> {
+            if (module == null) return null;
+            Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
+            return isJavaSdk(sdk) ? sdk : null;
+        });
+    }
+}
+```
+
+These refactorings enhance code readability, maintainability, and reduce redundancy. It's recommended to review these changes within the broader context of the project and its usage patterns to ensure they align with intended functionality.

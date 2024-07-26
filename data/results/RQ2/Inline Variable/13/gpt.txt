@@ -1,0 +1,51 @@
+To apply inline variable refactoring to the given code snippet, we'll focus on the method `allFieldsAreClosedIfAnyFieldThrowsAnException`. The variable `staticField1` is only used once in a subsequent assertion, so we can inline its value directly into the assertion. This will make the code more concise and maintain readability. 
+
+Here is the refactored code:
+
+```java
+@Test
+void allFieldsAreClosedIfAnyFieldThrowsAnException() {
+    // Prerequisites to ensure fields are "ordered" as expected (based on the hash codes for their names).
+    assertThat("staticField1".hashCode()).isLessThan("staticField2".hashCode()).isLessThan("staticField3".hashCode());
+    assertThat("field1".hashCode()).isLessThan("field2".hashCode()).isLessThan("field3".hashCode());
+
+    Class<?> testClass = FailingFieldsTestCase.class;
+    EngineExecutionResults allEvents = executeTestsForClass(testClass);
+
+    Events tests = allEvents.testEvents();
+    tests.assertStatistics(stats -> stats.succeeded(0).failed(1));
+
+    // Verify that ALL fields were closed in the proper order.
+    assertThat(recorder).containsExactly(
+        "FailingFieldsTestCase.field1.close()",
+        "FailingFieldsTestCase.field2.close()",
+        "FailingFieldsTestCase.field3.close()",
+        "FailingFieldsTestCase.staticField1.close()",
+        "FailingFieldsTestCase.staticField2.close()",
+        "FailingFieldsTestCase.staticField3.close()"
+    );
+
+    // Test-level failures
+    assertThat(findFailure(tests, "test()"))
+        .isExactlyInstanceOf(RuntimeException.class)
+        .hasMessage("FailingFieldsTestCase.field1.close()")
+        .hasNoCause()
+        .hasSuppressedException(new RuntimeException("FailingFieldsTestCase.field2.close()"));
+
+    Events containers = allEvents.containerEvents();
+    containers.assertStatistics(stats -> stats.succeeded(1).failed(1));
+
+    // Container-level failures
+    assertThat(findFailure(containers, testClass.getSimpleName()))
+        .isExactlyInstanceOf(RuntimeException.class)
+        .hasMessage("FailingFieldsTestCase.staticField1.close()")
+        .hasNoCause()
+        .hasSuppressedException(new RuntimeException("FailingFieldsTestCase.staticField2.close()"));
+}
+```
+
+### Key Changes:
+- Removed the `staticField1` variable and directly used its value `"staticField1"` in the `assertThat` statement.
+- The rest of the method remains unchanged as it is already optimized for readability and does not contain unnecessary variables.
+
+This refactoring simplifies the method by removing an unnecessary variable declaration and using the literal string directly in the assertion. The overall functionality and readability of the code are maintained.

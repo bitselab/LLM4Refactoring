@@ -1,0 +1,71 @@
+Analyzing the given code snippet, it's apparent that the class `PropertyMappingVectorFieldStepImpl` involves several method implementations that are largely delegating functionality to the `fieldModelContributor`. Each method implementation in this class configures different properties for a vector field in a programmatic mapping setup.
+
+A potential refactoring opportunity here would involve extracting the repetitive pattern of calling `fieldModelContributor.add()` with different configuration lambdas into a dedicated method. This will simplify the method bodies and centralize the configuration logic, making the class more maintainable and the code easier to read.
+
+Here's the refactored code:
+
+```java
+package org.hibernate.search.mapper.pojo.mapping.definition.programmatic.impl;
+
+import org.hibernate.search.engine.backend.types.Projectable;
+import org.hibernate.search.engine.backend.types.Searchable;
+import org.hibernate.search.engine.backend.types.VectorSimilarity;
+import org.hibernate.search.mapper.pojo.bridge.binding.spi.FieldModelContributorContext;
+import org.hibernate.search.mapper.pojo.extractor.mapping.programmatic.ContainerExtractorPath;
+import org.hibernate.search.mapper.pojo.mapping.building.spi.PojoPropertyMetadataContributor;
+import org.hibernate.search.mapper.pojo.mapping.definition.programmatic.PropertyMappingStep;
+import org.hibernate.search.mapper.pojo.mapping.definition.programmatic.PropertyMappingVectorFieldStep;
+
+class PropertyMappingVectorFieldStepImpl extends AbstractPropertyMappingFieldOptionsStep<PropertyMappingVectorFieldStepImpl>
+        implements PropertyMappingVectorFieldStep, PojoPropertyMetadataContributor {
+
+    PropertyMappingVectorFieldStepImpl(PropertyMappingStep parent, int dimension, String relativeFieldName) {
+        super( parent, relativeFieldName, FieldModelContributorContext::vectorTypeOptionsStep );
+        extractors( ContainerExtractorPath.noExtractors() );
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep projectable(Projectable projectable) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().projectable(projectable));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep searchable(Searchable searchable) {
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep vectorSimilarity(VectorSimilarity vectorSimilarity) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().vectorSimilarity(vectorSimilarity));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep beamWidth(int beamWidth) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().beamWidth(beamWidth));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep maxConnections(int maxConnections) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().maxConnections(maxConnections));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep indexNullAs(String indexNullAs) {
+        addFieldModelContributor(c -> c.indexNullAs(indexNullAs));
+        return this;
+    }
+
+    private void addFieldModelContributor(Consumer<FieldModelContributorContext> contributorLambda) {
+        fieldModelContributor.add(contributorLambda);
+    }
+}
+```
+
+**Explanation:**
+- A new method `addFieldModelContributor` has been introduced. This method accepts a lambda expression and delegates it to the `fieldModelContributor.add()` method. This extraction reduces redundancy and makes each attribute setter method in the class clearer and more concise.
+- The method `searchable(Searchable searchable)` remains unchanged as it doesn't contribute to the `fieldModelContributor`, thus no extraction is done here.
+- This refactoring improves readability and concentrates the common logic of adding a contributor to a single place, facilitating easier updates or enhancements in the future.

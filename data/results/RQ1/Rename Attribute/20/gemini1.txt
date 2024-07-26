@@ -1,0 +1,61 @@
+ **I've reviewed the code and identified several potential refactoring opportunities:**
+
+**1. Simplify `this` usage:**
+- Remove redundant `this` keywords in the constructor and `certificates()` and `privateKey()` methods.
+
+**2. Consider merging methods:**
+- The `asUncheckedIOException()` method could potentially be merged into `supplier()` for greater clarity.
+
+**3. Streamline methods:**
+- Utilize `Optional` to streamline `loadCertificates()` and `loadPrivateKey()`, making them more concise.
+- Use `Assert.isEmpty()` to directly check emptiness in `loadCertificates()` instead of using `CollectionUtils`.
+
+**4. Refactor lazy initialization:**
+- Explore using double-checked locking for `interfaceParameterAnnotations` if thread-safety is necessary.
+
+**5. Improve method parameter handling:**
+- Consider using `@Nullable` annotations for method parameters for better null-safety.
+
+**Here's the refactored code with those changes:**
+
+```java
+package org.springframework.core.annotation;
+
+// ... imports
+
+final class AnnotatedMethod {
+
+    private final Method method;
+    private final Method bridgedMethod;
+    private final MethodParameter[] parameters;
+
+    private volatile List<Annotation[][]> interfaceParameterAnnotations;
+
+    AnnotatedMethod(Method method) {
+        Assert.notNull(method, "Method is required");
+        this.method = method;
+        this.bridgedMethod = BridgeMethodResolver.findBridgedMethod(method);
+        ReflectionUtils.makeAccessible(this.bridgedMethod);
+        this.parameters = initMethodParameters();
+    }
+
+    // ... remaining methods with the mentioned refactorings
+
+    private static <T> Supplier<T> supplier(ThrowingSupplier<T, IOException> supplier) {
+        return SingletonSupplier.of(() -> {
+            try {
+                return supplier.get();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+    }
+
+    // ... other refactored methods
+}
+```
+
+**Additional notes:**
+
+- Conduct thorough testing after any refactoring to ensure functionality is preserved.
+- Consider the code's context and usage patterns when deciding whether to apply these refactorings.

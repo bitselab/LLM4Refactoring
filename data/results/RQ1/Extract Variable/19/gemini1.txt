@@ -1,0 +1,101 @@
+The provided code for `UndertowServletWebServer` demonstrates a well-organized and readable approach. There are minimal refactoring opportunities due to the clear separation of concerns and well-defined methods. However, there are a few minor suggestions for improvement:
+
+1. **Simplify `findManager`:**  
+The `findManager` method iterates through `httpHandlerFactories` to find a `DeploymentManagerHttpHandlerFactory`. This can be simplified using `Optional` from Java 8 or later:
+
+```java
+private Optional<DeploymentManager> findManager(Iterable<HttpHandlerFactory> httpHandlerFactories) {
+  return StreamSupport.stream(httpHandlerFactories.spliterator(), false)
+      .filter(factory -> factory instanceof DeploymentManagerHttpHandlerFactory)
+      .map(factory -> ((DeploymentManagerHttpHandlerFactory) factory).getDeploymentManager())
+      .findFirst();
+}
+```
+
+2. **Consider Optional or null return for `getDeploymentManager`:**  
+The `getDeploymentManager` method currently returns the manager directly. If there's a possibility that the manager might not be found during initialization, you could consider returning `Optional<DeploymentManager>` or `null` to indicate this possibility.
+
+Here's the refactored code with the suggested improvements:
+
+```java
+package org.springframework.boot.web.embedded.undertow;
+
+import io.undertow.Handlers;
+import io.undertow.Undertow.Builder;
+import io.undertow.server.HttpHandler;
+import io.undertow.servlet.api.DeploymentManager;
+
+import java.util.Optional;
+import java.util.stream.StreamSupport;
+
+import org.springframework.boot.web.server.WebServer;
+import org.springframework.util.StringUtils;
+
+/**
+ * {@link WebServer} that can be used to control an embedded Undertow server. Typically
+ * this class should be created using {@link UndertowServletWebServerFactory} and not
+ * directly.
+ *
+ * @author Ivan Sopov
+ * @author Andy Wilkinson
+ * @author Eddú Meléndez
+ * @author Christoph Dreis
+ * @author Kristine Jetzke
+ * @since 2.0.0
+ * @see UndertowServletWebServerFactory
+ */
+public class UndertowServletWebServer extends UndertowWebServer {
+
+  private final String contextPath;
+
+  private final Optional<DeploymentManager> manager;
+
+  /**
+   * Create a new {@link UndertowServletWebServer} instance.
+   *
+   * @param builder the builder
+   * @param httpHandlerFactories the handler factories
+   * @param contextPath the root context path
+   * @param autoStart if the server should be started
+   * @since 2.3.0
+   */
+  public UndertowServletWebServer(Builder builder, Iterable<HttpHandlerFactory> httpHandlerFactories,
+                                 String contextPath, boolean autoStart) {
+    super(builder, httpHandlerFactories, autoStart);
+    this.contextPath = contextPath;
+    this.manager = findManager(httpHandlerFactories);
+  }
+
+  private Optional<DeploymentManager> findManager(Iterable<HttpHandlerFactory> httpHandlerFactories) {
+    return StreamSupport.stream(httpHandlerFactories.spliterator(), false)
+        .filter(factory -> factory instanceof DeploymentManagerHttpHandlerFactory)
+        .map(factory -> ((DeploymentManagerHttpHandlerFactory) factory).getDeploymentManager())
+        .findFirst();
+  }
+
+  @Override
+  protected HttpHandler createHttpHandler() {
+    HttpHandler handler = super.createHttpHandler();
+    if (StringUtils.hasLength(this.contextPath)) {
+      handler = Handlers.path().addPrefixPath(this.contextPath, handler);
+    }
+    return handler;
+  }
+
+  @Override
+  protected String getStartLogMessage() {
+    StringBuilder message = new StringBuilder(super.getStartLogMessage());
+    message.append(" with context path '");
+    message.append(StringUtils.hasText(this.contextPath) ? this.contextPath : "/");
+    message.append("'");
+    return message.toString();
+  }
+
+  public Optional<DeploymentManager> getDeploymentManager() {
+    return manager;
+  }
+
+}
+```
+
+These are minor improvements, and the original code is well-structured and functional.  

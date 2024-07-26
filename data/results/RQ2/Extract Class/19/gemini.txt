@@ -1,0 +1,124 @@
+## Refactoring with Extract Class
+
+Here's the refactored code using Extract Class refactoring:
+
+```java
+package org.springframework.boot.autoconfigure.jackson;
+
+import java.util.EnumMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.TimeZone;
+
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.cfg.EnumFeature;
+import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+/**
+ * Configuration properties to configure Jackson.
+ *
+ * @author Andy Wilkinson
+ * @author Marcel Overdijk
+ * @author Johannes Edmeier
+ * @author Eddú Meléndez
+ * @since 1.2.0
+ */
+@ConfigurationProperties(prefix = "spring.jackson")
+public class JacksonProperties {
+
+  /**
+   * Date format string or a fully-qualified date format class name. For instance,
+   * 'yyyy-MM-dd HH:mm:ss'.
+   */
+  private String dateFormat;
+
+  /**
+   * One of the constants on Jackson's PropertyNamingStrategies. Can also be a
+   * fully-qualified class name of a PropertyNamingStrategy implementation.
+   */
+  private String propertyNamingStrategy;
+
+  /**
+   * Jackson visibility thresholds that can be used to limit which methods (and fields)
+   * are auto-detected.
+   */
+  private final Map<PropertyAccessor, JsonAutoDetect.Visibility> visibility = new EnumMap<>(PropertyAccessor.class);
+
+  /**
+   * Jackson on/off features that affect the way Java objects are serialized.
+   */
+  private final Map<SerializationFeature, Boolean> serialization = new EnumMap<>(SerializationFeature.class);
+
+  /**
+   * Jackson on/off features that affect the way Java objects are deserialized.
+   */
+  private final Map<DeserializationFeature, Boolean> deserialization = new EnumMap<>(DeserializationFeature.class);
+
+  /**
+   * Jackson general purpose on/off features.
+   */
+  private final Map<MapperFeature, Boolean> mapper = new EnumMap<>(MapperFeature.class);
+
+  /**
+   * Jackson on/off features for parsers.
+   */
+  private final Map<JsonParser.Feature, Boolean> parser = new EnumMap<>(JsonParser.Feature.class);
+
+  /**
+   * Jackson on/off features for generators.
+   */
+  private final Map<JsonGenerator.Feature, Boolean> generator = new EnumMap<>(JsonGenerator.Feature.class);
+
+  // ... other properties and methods
+
+  /**
+   * Inner class to hold Jackson on/off features for Enums and JsonNodes.
+   */
+  public static class JacksonNodeFeatures {
+
+    private final Map<EnumFeature, Boolean> enumFeatures = new EnumMap<>(EnumFeature.class);
+    private final Map<JsonNodeFeature, Boolean> jsonNode = new EnumMap<>(JsonNodeFeature.class);
+
+    public Map<EnumFeature, Boolean> getEnumFeatures() {
+      return this.enumFeatures;
+    }
+
+    public Map<JsonNodeFeature, Boolean> getJsonNodeFeatures() {
+      return this.jsonNode;
+    }
+  }
+
+  private final JacksonNodeFeatures nodeFeatures = new JacksonNodeFeatures();
+
+  public String getDateFormat() {
+    return this.dateFormat;
+  }
+
+  // ... other getters and setters
+
+  public JacksonNodeFeatures getNodeFeatures() {
+    return nodeFeatures;
+  }
+
+  // ... other methods
+}
+```
+
+**Explanation:**
+
+1. We've created a new inner class named `JacksonNodeFeatures` to encapsulate the features related to `Enum` and `JsonNode`.
+2. The `enumFeatures` and `jsonNode` maps are moved to the inner class.
+3. The corresponding getter methods (`getEnumFeatures` and `getJsonNodeFeatures`) are added to the inner class.
+4. An instance of `JacksonNodeFeatures` is created within `JacksonProperties` using a private constructor.
+5. A new getter method (`getNodeFeatures`) is added to `JacksonProperties` to access the `JacksonNodeFeatures` instance.
+
+This refactoring improves code organization by grouping related features and reduces code duplication within `Jackson

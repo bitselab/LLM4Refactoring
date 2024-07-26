@@ -1,0 +1,45 @@
+## Refactoring the `enableSkipping` Parameter
+
+You're correct! The parameter `enableSkipping` in the constructor of `DoubleValuesSourceComparator` could be renamed for better clarity. Here's how to refactor it:
+
+**1. Analyze Parameter Usage:**
+
+- This parameter is a `Pruning` enum value.
+- It controls whether Lucene performs optimizations like skipping irrelevant documents during searching.
+
+**2. Choose a Descriptive Name:**
+
+Here are some options that better reflect the parameter's purpose:
+
+- `useSkipping`: This clearly indicates whether skipping is enabled.
+- `allowPruning`: This emphasizes potential performance optimizations.
+
+**3. Refactoring:**
+
+Use your IDE's refactoring tools to safely rename the parameter throughout the constructor:
+
+```java
+public DoubleValuesSourceComparator(int numHits, String field, Double missingValue, boolean reversed,
+                                     Pruning useSkipping, // Renamed parameter
+                                     DoubleMultiValuesToSingleValuesSource source) {
+  super(numHits, field, missingValue, reversed, useSkipping);
+  this.source = source;
+}
+```
+
+**4. Testing:**
+
+- Recompile the code to ensure no errors arise.
+- Execute unit tests to verify all functionalities remain intact.
+
+**Choosing the Best Name:**
+
+- If clarity is the primary concern, `useSkipping` might be more readable.
+- If the focus is on performance optimization, `allowPruning` could be suitable.
+
+**Additional Considerations:**
+
+- Maintain consistency with existing naming conventions in the Lucene library.
+- Ensure the new name aligns with the broader context of search optimization.
+
+By following these steps, you can improve the code's readability and maintainability for developers familiar with Lucene concepts. 

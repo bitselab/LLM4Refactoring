@@ -1,0 +1,314 @@
+Extract method refactorings are frequently employed to remove duplicate code snippets to improve readability and reusability.
+##################################################
+An extract method refactoring pattern is to extract repeated statements as a new method within the class. Here is an example of the extract method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+class ClientThread extends Thread
+{
+    public void run()
+    {
+        try
+        {
+            _db.init();
+        }
+        catch (DBException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+        try
+        {
+            _workloadstate=_workload.initThread(_props,_threadid,_threadcount);
+        }
+        catch (WorkloadException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+        //spread the thread operations out so they don't all hit the DB at the same time
+        try
+        {
+            //GH issue 4 - throws exception if _target>1 because random.nextInt argument must be >0
+            //and the sleep() doesn't make sense for granularities < 1 ms anyway
+            if ( (_target>0) && (_target<=1.0) )
+            {
+                sleep(Utils.random().nextInt((int)(1.0/_target)));
+            }
+        }
+        catch (InterruptedException e)
+        {
+            // do nothing.
+        }
+
+        try
+        {
+            if (_dotransactions)
+            {
+                long st=System.currentTimeMillis();
+                while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested())
+                {
+                    if (!_workload.doTransaction(_db,_workloadstate))
+                    {
+                        break;
+                    }
+
+                    _opsdone++;
+
+                    if (_target>0)
+                    {
+                        while (System.currentTimeMillis()-currTimeMillis<((double)_opsdone)/_target)
+                        {
+                            try
+                            {
+                                sleep(1);
+                            }
+                            catch (InterruptedException e)
+                            {
+                                // do nothing.
+                            }
+
+                        }
+                    }
+                }
+            }
+            else
+            {
+                long st=System.currentTimeMillis();
+                while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested())
+                {
+                    if (!_workload.doInsert(_db,_workloadstate))
+                    {
+                        break;
+                    }
+
+                    _opsdone++;
+
+                    if (_target>0)
+                    {
+                        while (System.currentTimeMillis()-currTimeMillis<((double)_opsdone)/_target)
+                        {
+                            try
+                            {
+                                sleep(1);
+                            }
+                            catch (InterruptedException e)
+                            {
+                                // do nothing.
+                            }
+
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            System.exit(0);
+        }
+        try
+        {
+            _db.cleanup();
+        }
+        catch (DBException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+    }
+
+}
+```
+The source code after refactoring is:
+```
+class ClientThread extends Thread
+{
+    public void run()
+    {
+        try
+        {
+            _db.init();
+        }
+        catch (DBException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+        try
+        {
+            _workloadstate=_workload.initThread(_props,_threadid,_threadcount);
+        }
+        catch (WorkloadException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+        //spread the thread operations out so they don't all hit the DB at the same time
+        try
+        {
+            //GH issue 4 - throws exception if _target>1 because random.nextInt argument must be >0
+            //and the sleep() doesn't make sense for granularities < 1 ms anyway
+            if ( (_target>0) && (_target<=1.0) )
+            {
+                sleep(Utils.random().nextInt((int)(1.0/_target)));
+            }
+        }
+        catch (InterruptedException e)
+        {
+            // do nothing.
+        }
+
+        try
+        {
+            if (_dotransactions)
+            {
+                long st=System.currentTimeMillis();
+                while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested())
+                {
+                    if (!_workload.doTransaction(_db,_workloadstate))
+                    {
+                        break;
+                    }
+
+                    _opsdone++;
+
+                    throttle(st);
+                }
+            }
+            else
+            {
+                long st=System.currentTimeMillis();
+                while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested())
+                {
+                    if (!_workload.doInsert(_db,_workloadstate))
+                    {
+                        break;
+                    }
+
+                    _opsdone++;
+
+                    throttle(st);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            System.exit(0);
+        }
+        try
+        {
+            _db.cleanup();
+        }
+        catch (DBException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+    }
+
+    private void throttle(long currTimeMillis) {
+        if (_target>0)
+        {
+            while (System.currentTimeMillis()-currTimeMillis<((double)_opsdone)/_target)
+            {
+                try
+                {
+                    sleep(1);
+                }
+                catch (InterruptedException e)
+                {
+                    // do nothing.
+                }
+
+            }
+        }
+    }
+}
+```
+In this example, the developer extracted the following statements:
+```
+if (_target>0)
+{
+    while (System.currentTimeMillis()-currTimeMillis<((double)_opsdone)/_target)
+    {
+        try
+        {
+            sleep(1);
+        }
+        catch (InterruptedException e)
+        {
+            // do nothing.
+        }
+
+    }
+}
+```
+as new method "throttle".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+class AutoCloseTests extends AbstractJupiterTestEngineTests {
+
+    @Test
+    void allFieldsAreClosedIfAnyFieldThrowsAnException() {
+        String staticField1 = "staticField1";
+        String staticField2 = "staticField2";
+        String staticField3 = "staticField3";
+        String field1 = "field1";
+        String field2 = "field2";
+        String field3 = "field3";
+
+        // Prerequisites to ensure fields are "ordered" as expected (based on the hash codes for their names).
+        assertThat(staticField1.hashCode()).isLessThan(staticField2.hashCode()).isLessThan(staticField3.hashCode());
+        assertThat(field1.hashCode()).isLessThan(field2.hashCode()).isLessThan(field3.hashCode());
+
+        Class<?> testClass = FailingFieldsTestCase.class;
+        EngineExecutionResults allEvents = executeTestsForClass(testClass);
+
+        Events tests = allEvents.testEvents();
+        tests.assertStatistics(stats -> stats.succeeded(0).failed(1));
+        // Verify that ALL fields were closed.
+        assertThat(recorder).containsExactly(//
+                "FailingFieldsTestCase.field1.close()", //
+                "FailingFieldsTestCase.field2.close()", //
+                "FailingFieldsTestCase.field3.close()", //
+                "FailingFieldsTestCase.staticField1.close()", //
+                "FailingFieldsTestCase.staticField2.close()", //
+                "FailingFieldsTestCase.staticField3.close()" //
+        );
+
+        // Test-level failures
+        Throwable throwable = findExecution(tests, "test()")//
+                .getTerminationInfo().getExecutionResult().getThrowable().orElseThrow();
+        assertThat(throwable) //
+                .isExactlyInstanceOf(RuntimeException.class) //
+                .hasMessage("FailingFieldsTestCase.field1.close()")//
+                .hasNoCause()//
+                .hasSuppressedException(new RuntimeException("FailingFieldsTestCase.field2.close()"));
+
+        Events containers = allEvents.containerEvents();
+        containers.assertStatistics(stats -> stats.succeeded(1).failed(1));
+
+        // Container-level failures
+        throwable = findExecution(tests, testClass.getSimpleName())//
+                .getTerminationInfo().getExecutionResult().getThrowable().orElseThrow();
+        assertThat(throwable)//
+                .getTerminationInfo().getExecutionResult().getThrowable().orElseThrow()) //
+                .isExactlyInstanceOf(RuntimeException.class) //
+                .hasMessage("FailingFieldsTestCase.staticField1.close()")//
+                .hasNoCause()//
+                .hasSuppressedException(new RuntimeException("FailingFieldsTestCase.staticField2.close()"));
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

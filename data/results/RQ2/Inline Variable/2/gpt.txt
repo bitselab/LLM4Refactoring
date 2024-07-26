@@ -1,0 +1,13 @@
+To apply inline variable refactoring to the method `parseCharset`, you would replace the usage of the local variable `getenc` with the method call it represents (`xml.getEncoding()`) directly in the `assertEquals` method. This simplifies the code by removing the unnecessary intermediate variable. Here's how the refactored method looks:
+
+```java
+private void parseCharset(final String hdr, final String enc, final IOFunction<InputStream, XmlStreamReader> factory) throws Exception {
+    try (final InputStream stream = new ByteArrayInputStream(hdr.getBytes(StandardCharsets.UTF_8))) {
+        try (final XmlStreamReader xml = factory.apply(stream)) {
+            assertEquals(enc.toUpperCase(Locale.ROOT), xml.getEncoding(), enc);
+        }
+    }
+}
+```
+
+In this refactored version, `xml.getEncoding()` is directly used in the `assertEquals` method call, eliminating the need for the `getenc` variable. This keeps the code concise and focused, improving readability.

@@ -1,0 +1,44 @@
+There are indeed refactoring opportunities in the provided code snippet using the Extract Method technique. We can identify duplicate code blocks responsible for adding options to the field model contributor. Here's the refactored code:
+
+```java
+class PropertyMappingVectorFieldStepImpl extends AbstractPropertyMappingFieldOptionsStep<PropertyMappingVectorFieldStepImpl>
+        implements PropertyMappingVectorFieldStep, PojoPropertyMetadataContributor {
+
+    PropertyMappingVectorFieldStepImpl(PropertyMappingStep parent, int dimension, String relativeFieldName) {
+        super( parent, relativeFieldName, FieldModelContributorContext::vectorTypeOptionsStep );
+        extractors( ContainerExtractorPath.noExtractors() );
+    }
+
+  private void addToVectorTypeOptions(Consumer<VectorTypeOptionsStep> consumer) {
+    fieldModelContributor.add(consumer);
+    return this;
+  }
+
+    @Override
+    public PropertyMappingVectorFieldStep projectable(Projectable projectable) {
+     return addToVectorTypeOptions(step -> step.projectable(projectable));
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep searchable(Searchable searchable) {
+     return addToVectorTypeOptions(step -> step.searchable(searchable));
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep vectorSimilarity(VectorSimilarity vectorSimilarity) {
+     return addToVectorTypeOptions(step -> step.vectorSimilarity(vectorSimilarity));
+    }
+
+    // ... other methods with similar pattern can be refactored using addToVectorTypeOptions
+
+}
+```
+
+Changes made:
+
+1. We created a new private method `addToVectorTypeOptions` that takes a `Consumer<VectorTypeOptionsStep>` argument. 
+2. Inside this method, we use the `fieldModelContributor.add` with a lambda expression that calls the provided consumer with the `c.vectorTypeOptionsStep()`. 
+3. We then call `return this;` to maintain method chaining.
+4. All the methods that previously had similar logic of adding options to the field model contributor (projectable, searchable, vectorSimilarity etc.) are now refactored to call the `addToVectorTypeOptions` method with an appropriate lambda expression.
+
+This refactoring improves code readability and reduces redundancy by encapsulating the common logic of adding options into a separate method.

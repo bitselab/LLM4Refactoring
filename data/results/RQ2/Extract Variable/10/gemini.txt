@@ -1,0 +1,63 @@
+ **Here's the refactored code with the extracted variable:**
+
+```java
+package com.github.javaparser.resolution.types.parametrization;
+
+import com.github.javaparser.resolution.declarations.ResolvedTypeParameterDeclaration;
+import com.github.javaparser.resolution.types.ResolvedType;
+import com.github.javaparser.resolution.types.ResolvedWildcard;
+
+import java.util.Optional;
+
+/**
+ * @author Federico Tomassetti
+ */
+public interface ResolvedTypeParameterValueProvider {
+
+    /**
+     * Calculate the value for the given type parameter.
+     * It could be inherited.
+     */
+    Optional<ResolvedType> typeParamValue(ResolvedTypeParameterDeclaration typeParameterDeclaration);
+
+    /**
+     * Replace the type typeParametersValues present in the given type with the ones for which this type
+     * has a value.
+     */
+    default ResolvedType useThisTypeParametersOnTheGivenType(ResolvedType type) {
+        if (type.isTypeVariable()) {
+            ResolvedTypeParameterDeclaration typeParameter = type.asTypeParameter();
+            if (typeParameter.declaredOnType()) {
+                Optional<ResolvedType> typeParam = typeParamValue(typeParameter);
+                if (typeParam.isPresent()) {
+                    ResolvedType actualTypeParam = typeParam.get(); // Extracted variable
+
+                    // Try to avoid an infinite loop when the type is a wildcard type bounded by a type variable like "? super T"
+                    if (actualTypeParam.isWildcard() &&
+                            !actualTypeParam.asWildcard().equals(ResolvedWildcard.UNBOUNDED)
+                            && type.equals(actualTypeParam.asWildcard().getBoundedType())) {
+                        return type;
+                    }
+
+                    type = actualTypeParam;
+                }
+            }
+        }
+        // ... rest of the code
+    }
+
+    Optional<ResolvedType> getGenericParameterByName(String name);
+}
+```
+
+**Explanation of the changes:**
+
+1. **Extract variable:** The expression `typeParam.get()` was repeated twice within the `if` block. It has been encapsulated in a new variable named `actualTypeParam`.
+2. **Replace with variable:** The original occurrences of `typeParam.get()` have been replaced with the new variable `actualTypeParam`.
+
+**Benefits of this refactoring:**
+
+- **Improved readability:** The code is easier to read and understand because the purpose of the expression is now clearer.
+- **Reduced redundancy:** Eliminating duplicate code makes the code more concise and less prone to errors.
+- **Enhanced maintainability:** Changes to the extracted expression only need to be made in one place, making maintenance easier.
+- **Potential for further refactoring:** Extracting variables often reveals further refactoring opportunities, such as moving code to separate methods or classes.

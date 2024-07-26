@@ -1,0 +1,119 @@
+After reviewing the provided code from `JavaCoverageEngine`, here are the observations and recommendations for extract method refactoring to enhance readability and maintainability:
+
+### Refactoring Opportunities
+
+1. **Extract Method for Target Environment Checks:**
+   - **Description:** The method `isApplicableTo` checks if the run configuration is applicable based on certain conditions. This can be broken down into a separate method to handle target environment-related conditions.
+   - **Proposed Method:** `isTargetEnvironmentApplicable`
+   - **Rationale:** Encapsulating the logic related to checking the target environment simplifies the `isApplicableTo` method and centralizes target environment logic for easier modifications.
+
+2. **Extract Method for Trace File Handling:**
+   - **Description:** In the method `extractTracedTests`, there is logic to handle opening and reading from trace files. This logic can be extracted into a separate method.
+   - **Proposed Method:** `readTraceFile`
+   - **Rationale:** This will simplify the `extractTracedTests` method and centralize file handling, making it reusable and easier to manage.
+
+3. **Extract Method for File-to-VirtualFile Conversion:**
+   - **Description:** The logic to convert a file to a VirtualFile with refresh in `fileToVirtualFileWithRefresh` is a candidate for extraction.
+   - **Proposed Method:** `refreshAndFindVirtualFile`
+   - **Rationale:** Although currently used only once, extracting this as a method can enhance readability and would be beneficial if more such conversions are needed elsewhere in the codebase in the future.
+
+Here is the refactored code implementing the suggested refactorings:
+
+```java
+package com.intellij.coverage;
+
+// Imports remain unchanged
+
+public class JavaCoverageEngine extends CoverageEngine {
+    // Other parts of the class remain unchanged
+    
+    @Override
+    public boolean isApplicableTo(@NotNull final RunConfigurationBase conf) {
+        if (conf instanceof CommonJavaRunConfigurationParameters) {
+            return true;
+        }
+
+        if (isTargetEnvironmentApplicable(conf)) {
+            return false;
+        }
+
+        for (JavaCoverageEngineExtension extension : JavaCoverageEngineExtension.EP_NAME.getExtensionList()) {
+            if (extension.isApplicableTo(conf)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isTargetEnvironmentApplicable(@NotNull final RunConfigurationBase conf) {
+        if (RunTargetsEnabled.get()
+                && conf instanceof TargetEnvironmentAwareRunProfile
+                && willRunOnTarget((TargetEnvironmentAwareRunProfile) conf)) {
+            return true;
+        }
+        return false;
+    }
+
+    private static Set<String> extractTracedTests(CoverageSuitesBundle bundle, final String classFQName, final int lineNumber) {
+        Set<String> tests = new HashSet<>();
+        final File[] traceFiles = getTraceFiles(bundle);
+        if (traceFiles == null) return tests;
+        for (File traceFile : traceFiles) {
+            readTraceFile(traceFile, tests, classFQName, lineNumber);
+        }
+        return tests;
+    }
+
+    private static void readTraceFile(final File traceFile,
+                                      final Set<? super String> tests,
+                                      final String classFQName,
+                                      final int lineNumber) {
+        DataInputStream in = null;
+        try {
+            in = new DataInputStream(new FileInputStream(traceFile));
+            long traceSize = in.readInt();
+            for (int i = 0; i < traceSize; i++) {
+                final String className = in.readUTF();
+                final int linesSize = in.readInt();
+                for(int l = 0; l < linesSize; l++) {
+                    final int line = in.readInt();
+                    if (Comparing.strEqual(className, classFQName)) {
+                        if (lineNumber == line) {
+                            tests.add(FileUtilRt.getNameWithoutExtension(traceFile.getName()));
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex) {
+            LOG.error(traceFile.getName(), ex);
+        }
+        finally {
+            try {
+                if (in != null) {
+                    in.close();
+                }
+            }
+            catch (IOException ex) {
+                LOG.error(ex);
+            }
+        }
+    }
+
+    @Nullable
+    private static VirtualFile fileToVirtualFileWithRefresh(@Nullable File file) {
+        return refreshAndFindVirtualFile(file);
+    }
+
+    @Nullable
+    private static VirtualFile refreshAndFindVirtualFile(@Nullable File file) {
+        if (file == null) return null;
+        return WriteAction.computeAndWait(() -> VfsUtil.findFileByIoFile(file, true));
+    }
+
+    // The rest of the class remains unchanged
+}
+```
+
+These refactorings should improve the code organization and maintainability without altering the functionality.

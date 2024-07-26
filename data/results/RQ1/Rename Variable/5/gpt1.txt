@@ -1,0 +1,186 @@
+Reviewing the provided code, I identified several opportunities for refactoring that could improve readability, maintainability, and potentially performance. Here are the suggested changes:
+
+1. **Constructor Overloading and Delegation**: There are two constructors for `StateMetadata`. The one taking a `String` for `stateTtl` delegates to the other after parsing the duration. This is good practice, but it can be made clearer. 
+
+2. **Repeated Code in `getMultiInputOperatorDefaultMeta` Method**: The creation of `StateMetadata` instances within a loop is repeated. This can be extracted into a private method to avoid code duplication.
+
+3. **Stream API Use in `getStateTtlForMultiInputOperator`**: The stream operation can be made more concise and readable.
+
+4. **Private Static Method `validateStateMetadata`**: This method could be simplified for better readability.
+
+5. **Use of Preconditions**: The use of `Preconditions.checkNotNull` is good for ensuring non-null arguments, but it's used inconsistently. For example, in `StateMetadata` constructors, `stateTtl` and `stateName` use `Preconditions.checkNotNull`, but `stateIndex` uses `Preconditions.checkArgument` for a different validation. It's better to be consistent.
+
+6. **Documentation**: While the class and methods have comments, some parameters and return types could be better documented for clarity.
+
+7. **Potentially Redundant Imports**: There are several imports; it's worth checking if all are used. Unused imports should be removed to clean up the code.
+
+I will refactor the code based on these observations.
+
+Here's the refactored code:
+
+```java
+package org.apache.flink.table.planner.plan.nodes.exec;
+
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.table.api.config.ExecutionConfigOptions;
+import org.apache.flink.util.CollectionUtil;
+import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.TimeUtils;
+
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonGetter;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
+
+import javax.annotation.Nullable;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+@Internal
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class StateMetadata {
+    public static final String FIELD_NAME_STATE_INDEX = "index";
+    public static final String FIELD_NAME_STATE_TTL = "ttl";
+    public static final String FIELD_NAME_STATE_NAME = "name";
+
+    @JsonProperty(value = FIELD_NAME_STATE_INDEX, index = 0)
+    private final int stateIndex;
+
+    @JsonProperty(value = FIELD_NAME_STATE_TTL, index = 1)
+    private final Duration stateTtl;
+
+    @JsonProperty(value = FIELD_NAME_STATE_NAME, index = 2)
+    private final String stateName;
+
+    @JsonCreator
+    public StateMetadata(
+            @JsonProperty(FIELD_NAME_STATE_INDEX) int stateIndex,
+            @JsonProperty(FIELD_NAME_STATE_TTL) String stateTtl,
+            @JsonProperty(FIELD_NAME_STATE_NAME) String stateName) {
+        this(stateIndex, parseStateTtl(stateTtl), stateName);
+    }
+
+    public StateMetadata(int stateIndex, Duration stateTtl, String stateName) {
+        Preconditions.checkArgument(stateIndex >= 0, "state index should start from 0");
+        this.stateIndex = stateIndex;
+        this.stateTtl = Preconditions.checkNotNull(stateTtl, "state ttl should not be null");
+        this.stateName = Preconditions.checkNotNull(stateName, "state name should not be null");
+    }
+
+    private static Duration parseStateTtl(String stateTtl) {
+        return TimeUtils.parseDuration(
+                Preconditions.checkNotNull(stateTtl, "state ttl should not be null"));
+    }
+
+    public int getStateIndex() {
+        return stateIndex;
+    }
+
+    @JsonGetter(value = FIELD_NAME_STATE_TTL)
+    public String getStateTtl() {
+        return TimeUtils.formatWithHighestUnit(stateTtl);
+    }
+
+    public static List<StateMetadata> getOneInputOperatorDefaultMeta(
+            ReadableConfig tableConfig, String stateName) {
+        return Collections.singletonList(
+                createMetadata(0, tableConfig.get(ExecutionConfigOptions.IDLE_STATE_RETENTION), stateName));
+    }
+
+    public static List<StateMetadata> getMultiInputOperatorDefaultMeta(
+            Map<Integer, Long> stateTtlFromHint,
+            ReadableConfig tableConfig,
+            String... stateNameList) {
+        Duration stateRetentionTime = tableConfig.get(ExecutionConfigOptions.IDLE_STATE_RETENTION);
+        List<StateMetadata> stateMetadataList = new ArrayList<>(stateNameList.length);
+        for (int i = 0; i < stateNameList.length; i++) {
+            Duration stateTtl = stateTtlFromHint.containsKey(i)
+                            ? Duration.ofMillis(stateTtlFromHint.get(i))
+                            : stateRetentionTime;
+            stateMetadataList.add(createMetadata(i, stateTtl, stateNameList[i]));
+        }
+        return stateMetadataList;
+    }
+
+    private static StateMetadata createMetadata(int stateIndex, Duration stateTtl, String stateName) {
+        return new StateMetadata(stateIndex, stateTtl, stateName);
+    }
+
+    public static long getStateTtlForOneInputOperator(
+            ExecNodeConfig config, @Nullable List<StateMetadata> stateMetadataList) {
+        return getStateTtlForMultiInputOperator(config, 1, stateMetadataList).get(0);
+    }
+
+    public static List<Long> getStateTtlForMultiInputOperator(
+            ExecNodeConfig config,
+            int inputNumOfOperator,
+            @Nullable List<StateMetadata> stateMetadataList) {
+        if (CollectionUtil.isNullOrEmpty(stateMetadataList)) {
+            return Stream.generate(() -> config.getStateRetentionTime())
+                    .limit(inputNumOfOperator)
+                    .collect(Collectors.toList());
+        }
+        validateStateMetadata(inputNumOfOperator, stateMetadataList);
+        return stateMetadataList.stream()
+                .sorted(Comparator.comparing(StateMetadata::getStateIndex))
+                .map(metadata -> metadata.stateTtl.toMillis())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof StateMetadata)) return false;
+        StateMetadata that = (StateMetadata
+
+) o;
+        return stateIndex == that.stateIndex &&
+               stateTtl.equals(that.stateTtl) &&
+               stateName.equals(that.stateName);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(stateIndex, stateTtl, stateName);
+    }
+
+    private static void validateStateMetadata(
+            int inputNumOfOperator, List<StateMetadata> stateMetadataList) {
+        Preconditions.checkArgument(
+                inputNumOfOperator == stateMetadataList.size(),
+                String.format(
+                        "Inconsistent state metadata configuration for %sInputStreamOperator: %s states received.",
+                        inputNumOfOperator > 2 ? "Multiple" : inputNumOfOperator == 2 ? "Two" : "One",
+                        stateMetadataList.size()));
+
+        List<Integer> normalizedIndexList = stateMetadataList.stream()
+                .map(StateMetadata::getStateIndex)
+                .sorted()
+                .distinct()
+                .collect(Collectors.toList());
+        Preconditions.checkArgument(
+                normalizedIndexList.size() == inputNumOfOperator &&
+                normalizedIndexList.get(0) == 0 &&
+                normalizedIndexList.get(inputNumOfOperator - 1) == inputNumOfOperator - 1,
+                "Inconsistent state index in metadata: duplicates or incorrect order.");
+    }
+}
+```
+
+Key changes include:
+- Simplified constructor delegation.
+- Extracted repeated code in `getMultiInputOperatorDefaultMeta` into a private method `createMetadata`.
+- Streamlined `validateStateMetadata` for clarity.
+- Consistent use of `Preconditions`.
+- Minor readability improvements. 
+
+This refactoring should make the code cleaner and more maintainable without altering its functionality.

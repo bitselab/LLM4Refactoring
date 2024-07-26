@@ -1,0 +1,75 @@
+There is an opportunity to refactor the code using the Extract Method refactoring technique. Here's how the refactored code would look like:
+
+```java
+public class ITestAbfsInputStreamReadFooter extends ITestAbfsInputStream {
+
+    private static final int TEN = 10;
+    private static final int TWENTY = 20;
+
+    public ITestAbfsInputStreamReadFooter() throws Exception {
+    }
+
+    @Test
+    public void testOnlyOneServerCallIsMadeWhenTheConfIsTrue() throws Exception {
+        testNumBackendCalls(true);
+    }
+
+    @Test
+    public void testMultipleServerCallsAreMadeWhenTheConfIsFalse() throws Exception {
+        testNumBackendCalls(false);
+    }
+
+    private void testNumBackendCalls(boolean optimizeFooterRead) throws Exception {
+        for (int fileIdx = 0; fileIdx <= 4; fileIdx++) {
+            for (int j = 0; j <= 2; j++) {
+                int fileSize = (int) Math.pow(2, fileIdx) * 256 * ONE_KB;
+                int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+                final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+                performTestWithFileSystem(fs, fileSize, footerReadBufferSize);
+            }
+        }
+    }
+
+    private void performTestWithFileSystem(final AzureBlobFileSystem fs, int fileSize, int footerReadBufferSize) throws Exception {
+        String fileName = methodName.getMethodName() + fileIdx++;
+        byte[] fileContent = getRandomBytesArray(fileSize);
+        Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+        int length = AbfsInputStream.FOOTER_SIZE;
+        FutureDataInputStreamBuilder builder = getParameterizedBuilder(testFilePath, fs, footerReadBufferSize);
+        try (FSDataInputStream iStream = builder.build().get()) {
+            verifyConfigValueInStream(iStream, footerReadBufferSize);
+            byte[] buffer = new byte[length];
+
+            Map<String, Long> metricMap = getInstrumentationMap(fs);
+            long requestsMadeBeforeTest = metricMap.get(CONNECTIONS_MADE.getStatName());
+
+            iStream.seek(fileSize - 8);
+            iStream.read(buffer, 0, length);
+
+            iStream.seek(fileSize - (TEN * ONE_KB));
+            iStream.read(buffer, 0, length);
+
+            iStream.seek(fileSize - (TWENTY * ONE_KB));
+            iStream.read(buffer, 0, length);
+
+            long requestsMadeAfterTest = metricMap.get(CONNECTIONS_MADE.getStatName());
+
+            if (optimizeFooterRead) {
+                assertEquals(1, requestsMadeAfterTest - requestsMadeBeforeTest);
+            } else {
+                assertEquals(3, requestsMadeAfterTest - requestsMadeBeforeTest);
+            }
+        }
+    }
+
+    // ... other test methods and helper methods ...
+
+    private static int seekPos(SeekTo seekTo, int fileSize) {
+        // ... existing implementation ...
+    }
+}
+```
+
+The refactoring involves creating a new private method named `performTestWithFileSystem` that encapsulates the logic of creating the file system, performing file operations, and verifying the results. This method takes the `AzureBlobFileSystem`, `fileSize`, and `footerReadBufferSize` as arguments, making the code more reusable and easier to read.
+
+The original code within the `testNumBackendCalls` method has been moved into the `performTestWithFileSystem` method. This improves the modularity of the code and reduces code duplication.

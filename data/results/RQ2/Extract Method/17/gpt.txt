@@ -1,0 +1,53 @@
+To refactor the given code snippet using the "extract method" technique, we will create a new method that encapsulates the try-catch block for closing a resource. This new method will make the code more readable and reusable. We'll name this new method `closeResource`.
+
+The original code within the `closeAll` method will be replaced with a call to this new method. Here's how the refactored code will look:
+
+```java
+public final class IOUtil {
+    // ... [rest of the class members]
+
+    /**
+     * Close all closeable resources in order. If any exception occurs,
+     * it is saved and returned. If more than one exception occurs, the
+     * following are accumulated as suppressed exceptions in the first.
+     *
+     * @param closeables Resources to close
+     *
+     * @return An exception, or null if no 'close' routine threw
+     */
+    @SuppressWarnings("PMD.CloseResource") // false-positive
+    public static Exception closeAll(Collection<? extends AutoCloseable> closeables) {
+        Exception composed = null;
+        for (AutoCloseable it : closeables) {
+            composed = closeResource(it, composed);
+        }
+        return composed;
+    }
+
+    /**
+     * Tries to close a single resource, handling exceptions.
+     *
+     * @param resource The resource to close.
+     * @param composed The previously thrown exception, if any.
+     * @return The exception, either the passed one or a new one if thrown during closing.
+     */
+    private static Exception closeResource(AutoCloseable resource, Exception composed) {
+        try {
+            resource.close();
+        } catch (Exception e) {
+            if (composed == null) {
+                composed = e;
+            } else {
+                composed.addSuppressed(e);
+            }
+        }
+        return composed;
+    }
+
+    // ... [rest of the class methods]
+}
+```
+
+In this refactoring, the `closeResource` method takes an `AutoCloseable` resource and an existing exception (if any). It attempts to close the resource, and if an exception occurs during this process, it either returns this new exception (if there was no prior exception) or adds it as a suppressed exception to the existing one.
+
+This refactoring improves the readability of the `closeAll` method and encapsulates the resource-closing logic in a dedicated method, which can potentially be reused in other parts of the class or even made public if needed for use outside the class.

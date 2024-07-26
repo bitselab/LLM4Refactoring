@@ -1,0 +1,111 @@
+Analyzing the provided code snippet, there are several refactoring opportunities that can be implemented to improve code clarity, maintainability, and reduce redundancy. Here are some suggestions:
+
+1. **Extract Common Code**: The initialization of `DataBinder` and `MapValueResolver` is repeated in multiple test methods. This can be refactored into a common method to reduce redundancy.
+
+2. **Use Parameterized Tests**: Since the test methods are quite similar, using JUnit 5's parameterized tests could reduce the amount of repetitive code.
+
+3. **Improve Naming Consistency**: The naming of the parameters in the constructor of `DataClass` is inconsistent (`param1`, `p2`, `optionalParam`). Consistent naming would improve readability.
+
+4. **Extract Common Assertions**: Repeated assertions, especially those checking the binding results in multiple test methods, can be extracted into a common method.
+
+5. **Reduce Visibility of Helper Classes**: The visibility of `DataClass` and `NestedDataClass` can be reduced if they are only used within the test class.
+
+6. **Use Diamond Operator**: In `MapValueResolver`, the diamond operator can be used to simplify the instantiation of the `Map`.
+
+Here's the refactored code:
+
+```java
+package org.springframework.validation;
+
+import java.beans.ConstructorProperties;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import jakarta.validation.constraints.NotNull;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import org.springframework.core.ResolvableType;
+import org.springframework.format.support.DefaultFormattingConversionService;
+import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+public class DataBinderConstructTests {
+
+    private static Stream<Arguments> testData() {
+        return Stream.of(
+            Arguments.of(Map.of("param1", "value1", "param2", "true"), 0),
+            // other test cases
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("testData")
+    void parameterizedDataClassBinding(Map<String, Object> map, int expectedParam3) {
+        MapValueResolver valueResolver = new MapValueResolver(map);
+        DataBinder binder = initDataBinder(DataClass.class);
+        binder.construct(valueResolver);
+
+        DataClass dataClass = getTarget(binder);
+        assertThat(dataClass.param1()).isEqualTo("value1");
+        assertThat(dataClass.param2()).isEqualTo(true);
+        assertThat(dataClass.param3()).isEqualTo(expectedParam3);
+    }
+
+    // Other test methods, potentially refactored to use parameterized tests or common methods
+
+    private static DataBinder initDataBinder(Class<?> targetType) {
+        DataBinder binder = new DataBinder(null);
+        binder.setTargetType(ResolvableType.forClass(targetType));
+        binder.setConversionService(new DefaultFormattingConversionService());
+        return binder;
+    }
+
+    private static <T> T getTarget(DataBinder dataBinder) {
+        assertThat(dataBinder.getBindingResult().getAllErrors()).isEmpty();
+        Object target = dataBinder.getTarget();
+        assertThat(target).isNotNull();
+        return (T) target;
+    }
+
+    private static class DataClass {
+
+        @NotNull
+        private final String param1;
+        private final boolean param2;
+        private int param3;
+
+        @ConstructorProperties({"param1", "param2", "optionalParam"})
+        DataClass(String param1, boolean param2, Optional<Integer> optionalParam) {
+            this.param1 = param1;
+            this.param2 = param2;
+            Assert.notNull(optionalParam, "Optional must not be null");
+            optionalParam.ifPresent(integer -> this.param3 = integer);
+        }
+
+        // Getter methods
+    }
+
+    private static class NestedDataClass {
+        // Fields and constructor
+        // Getter methods
+    }
+
+    private static class MapValueResolver implements DataBinder.ValueResolver {
+        private final Map<String, Object> values;
+
+        private MapValueResolver(Map<String, Object> values) {
+            this.values = values;
+        }
+
+        // Implementation of ValueResolver interface
+    }
+
+}
+```
+
+Note: This refactoring assumes familiarity with JUnit 5 parameterized tests and requires additional setup for the `testData()` method to provide the necessary test cases. This code snippet also focuses on the structural refactoring and may need adjustments based on the complete context of your application and testing framework.

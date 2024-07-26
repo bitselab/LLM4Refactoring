@@ -1,0 +1,52 @@
+To improve the readability of the code snippet provided, particularly focusing on the method `shouldStackTraceGetFilteredOnUserExceptionsReflection`, a rename refactoring is advisable. The current name of this method is overly complex and lengthy, which can hinder understanding. A more concise and descriptive name would enhance clarity.
+
+I propose renaming it to `shouldFilterStackTraceForReflectionExceptionsPreJava21`, which succinctly conveys the method's purpose while maintaining specificity about the conditions under which it operates (reflection exceptions in Java versions prior to 21).
+
+Here is the refactored version of the code with the renamed method:
+
+```java
+package org.mockitousage.spies;
+
+// import statements...
+
+@SuppressWarnings("unchecked")
+public class PartialMockingWithSpiesTest extends TestBase {
+
+    // Other class members...
+
+    Person spy = spy(new Person());
+
+    // Other test methods...
+
+    @Test
+    public void shouldFilterStackTraceForReflectionExceptionsPreJava21() {
+        Assume.assumeThat(Plugins.getMockMaker(), instanceOf(InlineByteBuddyMockMaker.class));
+        Assume.assumeThat(Plugins.getMemberAccessor(), instanceOf(ReflectionMemberAccessor.class));
+        Assume.assumeTrue(ClassFileVersion.ofThisVm().isLessThan(JAVA_V21));
+
+        try {
+            // when
+            spy.getNameButDelegateToMethodThatThrows();
+            fail();
+        } catch (Throwable t) {
+            // then
+            Assertions.assertThat(t)
+                    .has(
+                            methodsInStackTrace(
+                                "throwSomeException",
+                                "invoke0",
+                                "invoke",
+                                "invoke",
+                                "invoke",
+                                "getNameButDelegateToMethodThatThrows",
+                                "shouldFilterStackTraceForReflectionExceptionsPreJava21"));
+        }
+    }
+
+    // Remaining test methods...
+}
+
+// Inner classes...
+```
+
+With this change, the method name is more straightforward and easier to understand, enhancing the overall readability and maintainability of the code.

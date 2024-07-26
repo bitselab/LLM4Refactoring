@@ -1,0 +1,81 @@
+Absolutely, I can help you with refactoring the code snippet.
+
+The identified variable for refactoring is `origQuery` within the `extract` method. This variable holds the original query before it's potentially rewritten. However, the logic utilizes the rewritten query (`rewritten`) later in the method. 
+
+Here's the refactored code eliminating the unnecessary `origQuery` variable:
+
+```java
+protected void extract(Query query, float boost, Map<String, WeightedSpanTerm> terms)
+    throws IOException {
+  if (query instanceof BoostQuery) {
+    BoostQuery boostQuery = (BoostQuery) query;
+    extract(boostQuery.getQuery(), boost * boostQuery.getBoost(), terms);
+  } else if (query instanceof BooleanQuery) {
+    for (BooleanClause clause : (BooleanQuery) query) {
+      if (!clause.isProhibited()) {
+        extract(clause.getQuery(), boost, terms);
+      }
+    }
+  } else if (query instanceof PhraseQuery) {
+    PhraseQuery phraseQuery = ((PhraseQuery) query);
+    Term[] phraseQueryTerms = phraseQuery.getTerms();
+    if (phraseQueryTerms.length == 1) {
+      extractWeightedSpanTerms(terms, new SpanTermQuery(phraseQueryTerms[0]), boost);
+    } else {
+      SpanQuery[] clauses = new SpanQuery[phraseQueryTerms.length];
+      for (int i = 0; i < phraseQueryTerms.length; i++) {
+        clauses[i] = new SpanTermQuery(phraseQueryTerms[i]);
+      }
+
+      // sum position increments beyond 1
+      int positionGaps = 0;
+      int[] positions = phraseQuery.getPositions();
+      if (positions.length >= 2) {
+        // positions are in increasing order.  max(0,...) is just a safeguard.
+        positionGaps =
+            Math.max(0, positions[positions.length - 1] - positions[0] - positions.length + 1);
+      }
+
+      // if original slop is 0 then require inOrder
+      boolean inorder = (phraseQuery.getSlop() == 0);
+
+      SpanNearQuery sp = new SpanNearQuery(clauses, phraseQuery.getSlop() + positionGaps, inorder);
+      extractWeightedSpanTerms(terms, sp, boost);
+    }
+  } else if (query instanceof ConstantScoreQuery) {
+    final Query q = ((ConstantScoreQuery) query).getQuery();
+    if (q != null) {
+      extract(q, boost, terms);
+    }
+  } else if (query instanceof CommonTermsQuery) {
+    // specialized since rewriting would change the result query
+    // this query is index sensitive.
+    extractWeightedTerms(terms, query, boost);
+  } else if (query instanceof DisjunctionMaxQuery) {
+    for (Query clause : ((DisjunctionMaxQuery) query)) {
+      extract(clause, boost, terms);
+    }
+  } else if (query instanceof MultiPhraseQuery) {
+    // ... rest of the logic for MultiPhraseQuery ...
+  } else if (query instanceof MatchAllDocsQuery) {
+    // nothing
+  } else if (query instanceof FieldExistsQuery) {
+    // nothing
+  } else if (query instanceof FunctionScoreQuery) {
+    extract(((FunctionScoreQuery) query).getWrappedQuery(), boost, terms);
+  } else if (isQueryUnsupported(query.getClass())) {
+    // nothing
+  } else {
+    final IndexReader reader = getLeafContext().reader();
+    Query rewritten = query.rewrite(new IndexSearcher(reader));
+    if (rewritten != query) {
+      // only rewrite once and then flatten again
+      extract(rewritten, boost, terms);
+    } else {
+      extractUnknownQuery(query, terms);
+    }
+  }
+}
+```
+
+In the refactored code, we directly use the `rewritten` query obtained through `query.rewrite(...)` instead of introducing an intermediate `origQuery` variable. This streamlines the code and eliminates unnecessary variable usage.

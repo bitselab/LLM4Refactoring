@@ -1,0 +1,35 @@
+The goal of rename parameter refactoring is to improve code readability and ensure consistency in naming conventions. In the provided code snippet, the parameter `excludeFieldNamesParam` could be renamed to better match the field it initializes, which is `excludeFieldNames`.
+
+### Original Code
+```java
+public static final class Builder<T> {
+
+    private String[] excludeFieldNames = ArrayUtils.EMPTY_STRING_ARRAY;
+    private DiffBuilder<T> diffBuilder;
+
+    public Builder<T> setExcludeFieldNames(final String... excludeFieldNamesParam) {
+        this.excludeFieldNames = toExcludeFieldNames(excludeFieldNamesParam);
+        return this;
+    }
+
+}
+```
+
+### Refactored Code
+The parameter `excludeFieldNamesParam` is renamed to `excludeFieldNames` to directly match the field name, improving consistency and readability.
+
+```java
+public static final class Builder<T> {
+
+    private String[] excludeFieldNames = ArrayUtils.EMPTY_STRING_ARRAY;
+    private DiffBuilder<T> diffBuilder;
+
+    public Builder<T> setExcludeFieldNames(final String... excludeFieldNames) {
+        this.excludeFieldNames = toExcludeFieldNames(excludeFieldNames);
+        return this;
+    }
+
+}
+```
+
+This change aligns the parameter name with the field name, adhering to the renaming pattern you described.

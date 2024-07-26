@@ -1,0 +1,103 @@
+Here's the refactored code after inlining the `getCreateArrayTypeCommand` method:
+
+```java
+package org.hibernate.dialect;
+
+import oracle.jdbc.OracleConnection;
+import org.hibernate.HibernateException;
+import org.hibernate.boot.model.relational.Database;
+import org.hibernate.boot.model.relational.NamedAuxiliaryDatabaseObject;
+import org.hibernate.engine.jdbc.Size;
+import org.hibernate.type.SqlTypes;
+import org.hibernate.type.descriptor.ValueBinder;
+import org.hibernate.type.descriptor.ValueExtractor;
+import org.hibernate.type.descriptor.WrapperOptions;
+import org.hibernate.type.descriptor.java.BasicPluralJavaType;
+import org.hibernate.type.descriptor.java.JavaType;
+import org.hibernate.type.descriptor.jdbc.BasicBinder;
+import org.hibernate.type.descriptor.jdbc.BasicExtractor;
+import org.hibernate.type.descriptor.jdbc.JdbcLiteralFormatter;
+import org.hibernate.type.descriptor.jdbc.JdbcType;
+import org.hibernate.type.internal.BasicTypeImpl;
+import org.hibernate.type.spi.TypeConfiguration;
+
+import java.lang.reflect.Array;
+import java.sql.CallableStatement;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Locale;
+
+import static java.sql.Types.ARRAY;
+import static java.util.Collections.emptySet;
+import static org.hibernate.internal.util.StringHelper.truncate;
+import static org.hibernate.internal.util.collections.ArrayHelper.EMPTY_STRING_ARRAY;
+
+/**
+  * Descriptor for {@link Types#ARRAY ARRAY} handling.
+  *
+  * @author Christian Beikov
+  * @author Jordan Gigov
+  */
+public class OracleNestedTableJdbcType implements JdbcType {
+
+    private final JdbcType elementJdbcType;
+    private final String typeName;
+
+    public OracleNestedTableJdbcType(JdbcType elementJdbcType, String typeName) {
+        this.elementJdbcType = elementJdbcType;
+        this.typeName = typeName;
+    }
+
+    // ... other methods ...
+
+    @Override
+    public void addAuxiliaryDatabaseObjects(
+            JavaType<?> javaType,
+            Size columnSize,
+            Database database,
+            TypeConfiguration typeConfiguration) {
+        final Dialect dialect = database.getDialect();
+        final BasicPluralJavaType<?> pluralJavaType = (BasicPluralJavaType<?>) javaType;
+        final JavaType<?> elementJavaType = pluralJavaType.getElementJavaType();
+        final String arrayTypeName = typeName==null ? getTypeName( elementJavaType, dialect ) : typeName;
+        final String elementType =
+                typeConfiguration.getDdlTypeRegistry().getTypeName(
+                        getElementJdbcType().getDdlTypeCode(),
+                        dialect.getSizeStrategy().resolveSize(
+                                getElementJdbcType(),
+                                elementJavaType,
+                                columnSize.getPrecision(),
+                                columnSize.getScale(),
+                                columnSize.getLength()
+                        ),
+                        new BasicTypeImpl<>( elementJavaType, getElementJdbcType() )
+                );
+        database.addAuxiliaryDatabaseObject(
+                new NamedAuxiliaryDatabaseObject(
+                        arrayTypeName,
+                        database.getDefaultNamespace(),
+                        "create or replace type " + arrayTypeName + " as table of " + elementType,
+                        new String[] { "drop type " + arrayTypeName + " force" },
+                        emptySet(),
+                        true
+                )
+        );
+    }
+
+    // ... other methods ...
+
+}
+```
+
+**Key points about the refactoring:**
+
+- **Removed method:** The `getCreateArrayTypeCommand` method is removed, and its logic is directly integrated into the `addAuxiliaryDatabaseObjects` method.
+- **Inlined logic:** The string array creation for the CREATE TYPE command is now performed within the `addAuxiliaryDatabaseObjects` method.
+- **Concise structure:** Eliminating the helper method makes the code more compact and easier to follow.
+
+**Additional considerations for further refactoring:**
+
+- **Descriptive variable names:** Consider using more descriptive names like `nestedTypeName` instead of `arrayTypeName` for improved clarity.
+- **Extract common logic:**  If the logic for building the `elementType` is used elsewhere, consider extracting it into a separate method to avoid code duplication.

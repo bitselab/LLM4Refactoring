@@ -1,0 +1,44 @@
+Absolutely, there is a potential inline method refactoring opportunity in the provided code snippet. The method  `writeBytes(long dest, byte[] b, int offset, int len)` can be inlined within the `copyBytes(long src, long dest, int len)` method.
+
+Here's the refactored code with the inlined method:
+
+```java
+class BytesStore extends DataOutput implements FSTReader {
+
+  // ... other class members ...
+
+  void copyBytes(long src, long dest, int len) {
+    // System.out.println("BS.copyBytes src=" + src + " dest=" + dest + " len=" + len);
+    assert src < dest;
+
+    long end = src + len;
+
+    int blockIndex = (int) (end >> blockBits);
+    int downTo = (int) (end & blockMask);
+    if (downTo == 0) {
+      blockIndex--;
+      downTo = blockSize;
+    }
+    byte[] block = blocks.get(blockIndex);
+
+    while (len > 0) {
+      if (len <= downTo) {
+        // System.out.println("finish");
+        System.arraycopy(block, downTo - len, blocks.get((int) (dest >> blockBits)), (int) (dest & blockMask), len);
+        break;
+      } else {
+        // System.out.println("partial");
+        len -= downTo;
+        System.arraycopy(block, 0, blocks.get((int) (dest + len >> blockBits)), (int) ((dest + len) & blockMask), downTo);
+        blockIndex--;
+        block = blocks.get(blockIndex);
+        downTo = blockSize;
+      }
+    }
+  }
+
+  // ... other class members ...
+}
+```
+
+The `writeBytes(long dest, byte[] b, int offset, int len)` method was utilizing `System.arraycopy` to copy bytes to the destination block. This functionality is already achieved within the `copyBytes` method. Inlining the logic removes the unnecessary method call and improves code readability. 

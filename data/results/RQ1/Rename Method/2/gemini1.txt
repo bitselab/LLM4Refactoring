@@ -1,0 +1,100 @@
+ **Here's a review of the code snippet, identifying potential refactoring opportunities:**
+
+**1. Simplifying Constructor Chaining:**
+- The constructors could be refactored to reduce redundancy and create a more streamlined code flow.
+- The default constructor could directly call the most comprehensive constructor with default values for size, markSupported, and throwEofException.
+
+**2. Optimizing EOF Handling:**
+- The `checkThrowEof` method is called frequently within different methods. It could be refactored to be called only once within the `doEndOfFile` method, reducing code duplication.
+
+**3. Encapsulating Mark/Reset State:**
+- The `markSupported`, `mark`, `readLimit`, and `eof` variables are closely related to the mark/reset functionality. They could be encapsulated within a helper class or private inner class to improve code organization and maintainability.
+
+**4. Handling Unsupported Operations:**
+- The `throw UnsupportedOperationException` lines within `mark` and `reset` could be consolidated into a single helper method or using a checked exception for better exception handling.
+
+**Here's the refactored code incorporating these suggestions:**
+
+```java
+package org.apache.commons.io.input;
+
+// ... imports
+
+public class NullInputStream extends InputStream {
+
+    public static final NullInputStream INSTANCE = new NullInputStream();
+
+    private final long size;
+    private long position;
+    private final boolean markSupported;
+    private final boolean throwEofException;
+
+    private MarkResetHelper markResetHelper = new MarkResetHelper();
+
+    public NullInputStream() {
+        this(0, true, false);
+    }
+
+    public NullInputStream(long size) {
+        this(size, true, false);
+    }
+
+    public NullInputStream(long size, boolean markSupported, boolean throwEofException) {
+        this.size = size;
+        this.markSupported = markSupported;
+        this.throwEofException = throwEofException;
+    }
+
+    // ... other methods (available, close, getPosition, getSize)
+
+    @Override
+    public synchronized void mark(int readLimit) {
+        markResetHelper.mark(readLimit);
+    }
+
+    @Override
+    public boolean markSupported() {
+        return markSupported;
+    }
+
+    @Override
+    public synchronized void reset() throws IOException {
+        markResetHelper.reset();
+    }
+
+    // ... other methods (processByte, processBytes, read, skip)
+
+    private int doEndOfFile() throws EOFException {
+        if (throwEofException) {
+            throw new EOFException("End of file reached");
+        }
+        return EOF;
+    }
+
+    private class MarkResetHelper {
+        private long mark = -1;
+        private long readLimit;
+
+        void mark(int readLimit) {
+            if (!markSupported) {
+                throw new UnsupportedOperationException("Mark not supported");
+            }
+            this.mark = position;
+            this.readLimit = readLimit;
+        }
+
+        void reset() throws IOException {
+            if (!markSupported) {
+                throw new UnsupportedOperationException("Reset not supported");
+            }
+            if (mark < 0) {
+                throw new IOException("No position has been marked");
+            }
+            if (position > mark + readLimit) {
+                throw new IOException("Marked position no longer valid");
+            }
+            position = mark;
+        }
+    }
+}
+```

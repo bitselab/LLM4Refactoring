@@ -1,0 +1,109 @@
+After reviewing the provided code snippet, I've identified a few opportunities for extract method refactoring. These refactorings aim to improve code readability and maintainability by reducing redundancy and making the code more modular. Here are the suggested refactorings:
+
+1. **Extract Message Construction Logic**: The logic for constructing the message string in `findMatch()` and `logMessage()` is duplicated. This can be extracted into a separate method.
+
+2. **Extract Logging Logic**: The logic for logging messages based on the pattern type (`illegalPattern`) is repeated in `findMatch()` and `logMessage()`. This can be refactored into a separate method.
+
+3. **Refactor `isIgnore` Method**: The `isIgnore` method can be made more readable by extracting the logic for calculating the end `LineColumn`.
+
+4. **Extract Match Processing Logic**: The logic within the `if (foundMatch)` block in `findMatch()` can be extracted into a new method to handle match processing.
+
+I will refactor the code based on these suggestions.
+
+Here's the refactored version of the `RegexpCheck` class:
+
+```java
+package com.puppycrawl.tools.checkstyle.checks.regexp;
+
+// ... [Other imports]
+
+@FileStatefulCheck
+public class RegexpCheck extends AbstractCheck {
+
+    // ... [Constants and fields declarations]
+
+    // ... [Setters and other methods remain unchanged]
+
+    @Override
+    public void beginTree(DetailAST rootAST) {
+        matcher = format.matcher(getFileContents().getText().getFullText());
+        matchCount = 0;
+        errorCount = 0;
+        findMatch();
+    }
+
+    private void findMatch() {
+        while (matcher.find()) {
+            processMatch();
+        }
+        handleNoMatchFound();
+    }
+
+    private void processMatch() {
+        final FileText text = getFileContents().getText();
+        final LineColumn start = text.lineColumn(matcher.start());
+        final int startLine = start.getLine();
+
+        if (!isIgnore(startLine, text, start)) {
+            matchCount++;
+            if (shouldLogViolation()) {
+                logViolation(startLine);
+            }
+        }
+    }
+
+    private boolean shouldLogViolation() {
+        return illegalPattern || checkForDuplicates && matchCount - 1 > duplicateLimit;
+    }
+
+    private void logViolation(int lineNumber) {
+        String msg = constructMessage();
+        if (illegalPattern) {
+            log(lineNumber, MSG_ILLEGAL_REGEXP, msg);
+        } else {
+            log(lineNumber, MSG_DUPLICATE_REGEXP, msg);
+        }
+    }
+
+    private String constructMessage() {
+        String msg = (message == null || message.isEmpty()) ? format.pattern() : message;
+        if (errorCount >= errorLimit) {
+            msg = ERROR_LIMIT_EXCEEDED_MESSAGE + msg;
+        }
+        return msg;
+    }
+
+    private void handleNoMatchFound() {
+        if (!illegalPattern && matchCount == 0) {
+            log(1, MSG_REQUIRED_REGEXP, constructMessage());
+        }
+    }
+
+    private boolean isIgnore(int startLine, FileText text, LineColumn start) {
+        final LineColumn end = getEndLineColumn(text);
+        if (ignoreComments) {
+            return getFileContents().hasIntersectionWithComment(
+                startLine, start.getColumn(), end.getLine(), end.getColumn());
+        }
+        return false;
+    }
+
+    private LineColumn getEndLineColumn(FileText text) {
+        if (matcher.end() == 0) {
+            return text.lineColumn(0);
+        }
+        return text.lineColumn(matcher.end() - 1);
+    }
+
+    // ... [Rest of the methods]
+}
+```
+
+### Changes Made:
+
+1. **Extracted Message Construction**: Created `constructMessage()` to handle message construction.
+2. **Extracted Logging Logic**: Created `logViolation()` to handle the logic of logging messages.
+3. **Refactored `isIgnore` Method**: Extracted `getEndLineColumn()` from `isIgnore` for calculating the end `LineColumn`.
+4. **Extracted Match Processing Logic**: Created `processMatch()` to handle the logic when a match is found and `handleNoMatchFound()` for when no match is found.
+
+These refactorings have made the code more modular, easier to read, and maintain. Each method now has a clearer, more focused responsibility.

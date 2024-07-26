@@ -1,0 +1,23 @@
+The given code snippet can benefit from an extract variable refactoring, particularly to avoid repeated method calls and improve readability. In this case, the method `getPathFromClass(klass)` is called multiple times. Extracting this expression into a variable could make the code cleaner and potentially more efficient, as it reduces the number of method invocations.
+
+Here's the refactored code:
+
+```java
+private static Path getSomeRoot(Class<?> klass) {
+    // Under jps-bootstrap home is already known, reuse it
+    String communityHome = System.getenv(JPS_BOOTSTRAP_COMMUNITY_HOME_ENV_NAME);
+    if (communityHome != null) {
+        return Path.of(communityHome).normalize();
+    }
+
+    Path classPath = getPathFromClass(klass);
+    if (!classPath.toString().endsWith("class")) {
+        throw new IllegalArgumentException(
+                String.format("To guess idea home, you must provide class that resides in .class file inside of idea home dir. " +
+                        "But provided %s resides in %s", klass, classPath));
+    }
+    return classPath;
+}
+```
+
+By extracting `getPathFromClass(klass)` into a variable `classPath`, the code avoids the repeated method call, enhancing the maintainability and possibly improving performance if the method call is non-trivial. This refactoring aligns with the pattern of reducing redundancy and improving code clarity.

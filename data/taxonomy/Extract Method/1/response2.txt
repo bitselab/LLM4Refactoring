@@ -1,0 +1,60 @@
+In the provided `RegexpCheck` class, we can observe a clear opportunity for applying the "Extract Method" refactoring pattern to enhance the modularity and readability of the code. Here, the construction of the log message is duplicated in two separate methods: `findMatch` and `logMessage`. By extracting this repeated logic into a new method, we can reduce redundancy and centralize the message creation logic, making the code easier to maintain and modify.
+
+### Refactored Code
+```java
+@FileStatefulCheck
+public class RegexpCheck extends AbstractCheck {
+
+    @SuppressWarnings("deprecation")
+    private void findMatch() {
+        final boolean foundMatch = matcher.find();
+        if (foundMatch) {
+            final FileText text = getFileContents().getText();
+            final LineColumn start = text.lineColumn(matcher.start());
+            final int startLine = start.getLine();
+
+            final boolean ignore = isIgnore(startLine, text, start);
+
+            if (!ignore) {
+                matchCount++;
+                if (illegalPattern || (checkForDuplicates && matchCount - 1 > duplicateLimit)) {
+                    errorCount++;
+                    logMessage(startLine);
+                }
+            }
+            if (canContinueValidation(ignore)) {
+                findMatch();
+            }
+        }
+        else if (!illegalPattern && matchCount == 0) {
+            String msg = constructMessage();
+            log(1, MSG_REQUIRED_REGEXP, msg);
+        }
+    }
+
+    private void logMessage(int lineNumber) {
+        String msg = constructMessage();
+        if (illegalPattern) {
+            log(lineNumber, MSG_ILLEGAL_REGEXP, msg);
+        }
+        else {
+            log(lineNumber, MSG_DUPLICATE_REGEXP, msg);
+        }
+    }
+
+    private String constructMessage() {
+        String msg = message != null && !message.isEmpty() ? message : format.pattern();
+        if (errorCount >= errorLimit) {
+            msg = ERROR_LIMIT_EXCEEDED_MESSAGE + msg;
+        }
+        return msg;
+    }
+}
+```
+
+### Explanation
+- **Constructing Message Logic Extracted**: The logic for constructing the error message was duplicated in both `findMatch` and `logMessage` methods. This has been extracted into a new method called `constructMessage`, which forms the message based on the current `message`, `format.pattern()`, and checks if the error count has reached the error limit.
+- **Reduction in Code Duplication**: By extracting the message construction into its own method, both `findMatch` and `logMessage` are now calling this method, thereby reducing duplication and potential errors in message formation.
+- **Enhanced Readability and Maintenance**: Centralizing message construction into a single method improves the readability of the code and makes it easier to maintain or modify the logic for message construction in one place rather than multiple locations.
+
+This refactoring follows the established pattern of "Extract Method" by isolating repeated code into a separate method, thus enhancing the code structure and maintainability.

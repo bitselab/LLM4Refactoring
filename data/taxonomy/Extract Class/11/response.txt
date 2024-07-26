@@ -1,0 +1,164 @@
+Analyzing the provided code from `CircuitBreakerManager`, several elements might be candidates for extract class refactoring based on principles of single responsibility and reducing complexity. Here’s the analysis:
+
+1. **Handling of Specific Circuit Breakers**: The class manages both memory and CPU circuit breakers, and their enabled states, thresholds, and specific operations are intertwined within the main class. Extracting these into a dedicated `CircuitBreakerConfiguration` class could encapsulate the logic related to each circuit breaker type.
+
+2. **Circuit Breaker Registry**: The management of the list of circuit breakers (`circuitBreakerList`) and related methods (`register`, `deregisterAll`, `checkTripped`, etc.) could be abstracted into a separate class that handles the registry and operations of circuit breakers.
+
+Based on this analysis, here's the proposed refactoring:
+
+### Proposed Extracted Classes
+
+1. **CircuitBreakerConfiguration**:
+   - Contains the configuration for each type of circuit breaker (Memory and CPU).
+   - Manages enabling/disabling, setting thresholds, and getting debug and error messages for each type.
+
+2. **CircuitBreakerRegistry**:
+   - Manages the collection of circuit breakers.
+   - Includes methods for adding, clearing, checking if any are tripped, and generating error messages.
+
+Here is the refactored code incorporating these changes:
+
+```java
+package org.apache.solr.util.circuitbreaker;
+
+import java.lang.invoke.MethodHandles;
+import org.apache.solr.common.util.NamedList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@Deprecated(since = "9.4")
+public class CircuitBreakerManager extends CircuitBreaker {
+    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+    private CircuitBreakerConfiguration cbConfig = new CircuitBreakerConfiguration();
+    private CircuitBreakerRegistry cbRegistry = new CircuitBreakerRegistry();
+
+    public CircuitBreakerManager() {
+        super();
+    }
+
+    public void init(NamedList<?> args) {
+        super.init(args);
+        log.warn("CircuitBreakerManager is deprecated. Use individual Circuit Breakers instead");
+        cbConfig.initializeConfiguration();
+    }
+
+    @Override
+    public boolean isTripped() {
+        return cbConfig.isAnyCircuitBreakerTripped();
+    }
+
+    @Override
+    public String getDebugInfo() {
+        return cbConfig.getAllDebugInfo();
+    }
+
+    @Override
+    public String getErrorMessage() {
+        return cbConfig.getAllErrorMessages();
+    }
+
+    public boolean isEnabled() {
+        return cbRegistry.isAnyRegistered();
+    }
+}
+
+class CircuitBreakerConfiguration {
+    private boolean memEnabled;
+    private int memThreshold = 100;
+    private MemoryCircuitBreaker memCB;
+
+    private boolean cpuEnabled;
+    private int cpuThreshold = 100;
+    private CPUCircuitBreaker cpuCB;
+
+    public void initializeConfiguration() {
+        if (memEnabled) {
+            memCB = new MemoryCircuitBreaker();
+            memCB.setThreshold(memThreshold);
+        }
+        if (cpuEnabled) {
+            cpuCB = new CPUCircuitBreaker();
+            cpuCB.setThreshold(cpuThreshold);
+        }
+    }
+
+    public boolean isAnyCircuitBreakerTripped() {
+        return (memEnabled && memCB.isTripped()) || (cpuEnabled && cpuCB.isTripped());
+    }
+
+    public String getAllDebugInfo() {
+        StringBuilder sb = new StringBuilder();
+        if (memEnabled) {
+            sb.append(memCB.getDebugInfo()).append("\n");
+        }
+        if (cpuEnabled) {
+            sb.append(cpuCB.getDebugInfo());
+        }
+        return sb.toString();
+    }
+
+    public String getAllErrorMessages() {
+        StringBuilder sb = new StringBuilder();
+        if (memEnabled) {
+            sb.append(memCB.getErrorMessage());
+        }
+        if (memEnabled && cpuEnabled) {
+            sb.append("\n");
+        }
+        if (cpuEnabled) {
+            sb.append(cpuCB.getErrorMessage());
+        }
+        return sb.toString();
+    }
+}
+
+class CircuitBreakerRegistry {
+    private final List<CircuitBreaker> circuitBreakerList = new ArrayList<>();
+
+    public void register(CircuitBreaker circuitBreaker) {
+        circuitBreakerList.add(circuitBreaker);
+    }
+
+    public void deregisterAll() {
+        circuitBreakerList.clear();
+    }
+
+    public List<CircuitBreaker> checkTripped() {
+        List<CircuitBreaker> triggeredCircuitBreakers = null;
+        for (CircuitBreaker circuitBreaker : circuitBreakerList) {
+            if (circuitBreaker.isTripped()) {
+                if (triggeredCircuitBreakers == null) {
+                    triggeredCircuitBreakers = new ArrayList<>();
+                }
+                triggeredCircuitBreakers.add(circuitBreaker);
+            }
+        }
+        return triggeredCircuitBreakers;
+    }
+
+    public boolean checkAnyTripped() {
+        for (CircuitBreaker circuitBreaker : circuitBreakerList) {
+            if (circuitBreaker.isTripped()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean isAnyRegistered() {
+        return !circuitBreakerList.isEmpty();
+    }
+
+    public static String toErrorMessage(List<CircuitBreaker> circuitBreakerList) {
+        StringBuilder sb = new StringBuilder();
+        for (CircuitBreaker circuitBreaker : circuitBreakerList) {
+            sb.append(circuitBreaker.getErrorMessage());
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+}
+```
+
+This refactoring separates concerns, making the codebase more maintainable and potentially reducing coupling between distinct functionalities within the class.

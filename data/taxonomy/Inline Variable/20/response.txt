@@ -1,0 +1,16 @@
+In the code provided for the `R2dbcBeanPropertyRowMapperTests` class, the primary pattern to look for in inline variable refactoring is the use of intermediate variables that serve only as pass-through references. These variables can be inlined directly where they are used if it does not complicate the readability of the code.
+
+Upon reviewing the code snippet you provided, here are the observations:
+
+1. **Inline Variables**:
+   The code already seems quite optimized in terms of variable usage. There are no redundant or intermediary variables that are only used once or that could be easily inlined without reducing code clarity.
+
+2. **Repeated Instantiation**:
+   In the `@Test` methods like `mappingRowSimpleObject`, `mappingRowMissingAttributeAccepted`, and `mappingRowWithDifferentName`, the instantiation of `BeanPropertyRowMapper<Person>` (or its derivatives) and the application of this mapper to a static `MockRow` object is repeated. This does not strictly fall under inline variable refactoring, but if the intention is to clean up the code, it might be useful to consolidate repetitive code.
+
+   However, since each test method should be independent to ensure they do not interfere with each other and to keep tests maintainable and understandable, refactoring this aspect is not advisable.
+
+3. **Static Mock Rows**:
+   The declarations for `SIMPLE_PERSON_ROW`, `EXTENDED_PERSON_ROW`, and `EMAIL_PERSON_ROW` are all correct and do not have inline refactoring opportunities since each is structured correctly for their use in specific tests.
+
+Given these observations, there are no inline variable refactoring opportunities in the provided code snippet that follow the specific pattern you're looking for. The code is efficiently structured with an appropriate level of abstraction and variable usage for the test scenarios it is designed to handle.

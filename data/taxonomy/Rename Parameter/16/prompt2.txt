@@ -1,0 +1,71 @@
+Rename parameter refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename parameter refactoring pattern is to rename parameters whose semantics are inappropriate in the context. Here is an example of the rename parameter refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private ResultPair unionTester(Schema s, Schema rs, GenericData.Record record)
+        throws SerDeException, IOException {
+    assertTrue(GENERIC_DATA.validate(s, record));
+    AvroGenericRecordWritable garw = Utils.serializeAndDeserializeRecord(record);
+
+    AvroObjectInspectorGenerator aoig = new AvroObjectInspectorGenerator(rs);
+
+    AvroDeserializer de = new AvroDeserializer();
+    ArrayList<Object> row =
+            (ArrayList<Object>) de.deserialize(aoig.getColumnNames(), aoig.getColumnTypes(), garw, rs);
+    assertEquals(1, row.size());
+    StandardStructObjectInspector oi = (StandardStructObjectInspector) aoig.getObjectInspector();
+    List<? extends StructField> fieldRefs = oi.getAllStructFieldRefs();
+    assertEquals(1, fieldRefs.size());
+    StructField fieldRef = fieldRefs.get(0);
+    assertEquals("aunion", fieldRef.getFieldName());
+    Object theUnion = oi.getStructFieldData(row, fieldRef);
+    assertTrue(fieldRef.getFieldObjectInspector() instanceof UnionObjectInspector);
+    UnionObjectInspector fieldObjectInspector =
+            (UnionObjectInspector) fieldRef.getFieldObjectInspector();
+    Object value = fieldObjectInspector.getField(theUnion);
+    return new ResultPair(fieldObjectInspector, value, theUnion);
+}
+```
+The source code after refactoring is:
+```
+private ResultPair unionTester(Schema ws, Schema rs, GenericData.Record record)
+        throws SerDeException, IOException {
+    assertTrue(GENERIC_DATA.validate(ws, record));
+    AvroGenericRecordWritable garw = Utils.serializeAndDeserializeRecord(record);
+
+    AvroObjectInspectorGenerator aoig = new AvroObjectInspectorGenerator(rs);
+
+    AvroDeserializer de = new AvroDeserializer();
+    ArrayList<Object> row =
+            (ArrayList<Object>) de.deserialize(aoig.getColumnNames(), aoig.getColumnTypes(), garw, rs);
+    assertEquals(1, row.size());
+    StandardStructObjectInspector oi = (StandardStructObjectInspector) aoig.getObjectInspector();
+    List<? extends StructField> fieldRefs = oi.getAllStructFieldRefs();
+    assertEquals(1, fieldRefs.size());
+    StructField fieldRef = fieldRefs.get(0);
+    assertEquals("aunion", fieldRef.getFieldName());
+    Object theUnion = oi.getStructFieldData(row, fieldRef);
+    assertTrue(fieldRef.getFieldObjectInspector() instanceof UnionObjectInspector);
+    UnionObjectInspector fieldObjectInspector =
+            (UnionObjectInspector) fieldRef.getFieldObjectInspector();
+    Object value = fieldObjectInspector.getField(theUnion);
+    return new ResultPair(fieldObjectInspector, value, theUnion);
+}
+```
+In this example, the developer renamed the parameter "s" to "ws".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename parameter refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+private void closeWebSockets(WebSocket webSocket, WebSocket server) {
+    server.close(1001, "");
+    clientListener.assertClosing(1001, "");
+    webSocket.close(1000, "");
+    serverListener.assertClosing(1000, "");
+    clientListener.assertClosed(1001, "");
+    serverListener.assertClosed(1000, "");
+    clientListener.assertExhausted();
+    serverListener.assertExhausted();
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

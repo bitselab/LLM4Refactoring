@@ -1,0 +1,60 @@
+ **Here's the refactored code with the `doAdd` method inlined:**
+
+```java
+package org.hibernate.search.engine.reporting.spi;
+
+import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.StringJoiner;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.hibernate.search.engine.logging.impl.Log;
+import org.hibernate.search.engine.reporting.impl.EngineEventContextMessages;
+import org.hibernate.search.util.common.SearchException;
+import org.hibernate.search.util.common.data.impl.InsertionOrder;
+import org.hibernate.search.util.common.impl.ToStringStyle;
+import org.hibernate.search.util.common.impl.ToStringTreeBuilder;
+import org.hibernate.search.util.common.logging.impl.LoggerFactory;
+import org.hibernate.search.util.common.reporting.EventContext;
+import org.hibernate.search.util.common.reporting.EventContextElement;
+import org.hibernate.search.util.common.reporting.impl.CommonEventContextMessages;
+
+public final class RootFailureCollector implements FailureCollector {
+
+    // ... other code ...
+
+    private static class ContextualFailureCollectorImpl extends NonRootFailureCollector implements ContextualFailureCollector {
+      // ... other code ...
+
+      private void doAdd(Throwable failure, String failureMessage) {
+        StringJoiner contextJoiner = new StringJoiner( CommonEventContextMessages.INSTANCE.contextSeparator() );
+        appendContextTo( contextJoiner );
+        log.newCollectedFailure( root.process, contextJoiner.toString(), failure );
+
+        // Inlined content of doAdd(String failureMessage)
+        if (root.shouldAddFailure()) {
+            failureMessages.add(failureMessage);
+        }
+    }
+
+    // ... other code ...
+    }
+
+}
+```
+
+**Key changes:**
+
+- The `doAdd(String failureMessage)` method has been removed.
+- Its logic has been directly integrated into the `doAdd(Throwable failure, String failureMessage)` method.
+
+**Benefits of inlining:**
+
+- **Improved readability:** The code is more concise and easier to follow without the extra method call.
+- **Reduced method overhead:** Eliminating the method call can potentially improve performance, although the impact is usually minimal.
+- **Simplified maintenance:** Having fewer methods can make the code easier to manage and modify.

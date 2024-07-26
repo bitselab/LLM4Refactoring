@@ -1,0 +1,53 @@
+In the provided code snippet, the identifier `NO_LISTENER` stands out as a potential candidate for renaming to improve clarity. The name `NO_LISTENER` is a bit misleading as it suggests that there is no listener, but in reality, it's a listener that performs no action. A more descriptive name would be `EMPTY_LISTENER` or `NO_OP_LISTENER`, indicating that it's a listener that doesn't perform any operations. Here's the refactored code with the suggested renaming:
+
+```java
+package org.eclipse.jgit.revwalk;
+
+// ... [import statements remain unchanged] ...
+
+public final class BitmapWalker {
+
+    // ... [Other class members remain unchanged] ...
+
+    /**
+     * Empty listener that performs no operations.
+     *
+     * @since 6.8
+     */
+    public static final BitmapWalkListener EMPTY_LISTENER = new BitmapWalkListener() {
+        @Override
+        public void onCommitSeen(ObjectId oid) {
+            // Nothing to do
+        }
+
+        @Override
+        public void onCommitWithBitmap(ObjectId oid) {
+            // Nothing to do
+        }
+
+        @Override
+        public void onCommitWithoutBitmap(ObjectId oid) {
+            // Nothing to do
+        }
+    };
+
+    private final BitmapWalkListener listener;
+
+    public BitmapWalker(
+            ObjectWalk walker, BitmapIndex bitmapIndex, ProgressMonitor pm) {
+        this(walker, bitmapIndex, pm, EMPTY_LISTENER);
+    }
+
+    public BitmapWalker(ObjectWalk walker, BitmapIndex bitmapIndex,
+                        ProgressMonitor pm, BitmapWalkListener listener) {
+        this.walker = walker;
+        this.bitmapIndex = bitmapIndex;
+        this.pm = (pm == null) ? NullProgressMonitor.INSTANCE : pm;
+        this.listener = listener;
+    }
+
+    // ... [Rest of the methods remain unchanged] ...
+}
+```
+
+In this refactoring, the `NO_LISTENER` has been renamed to `EMPTY_LISTENER`. This name change makes it clearer that the listener is present but intentionally does nothing. This kind of renaming is important for readability and maintainability, especially for other developers who might read or modify the code in the future.

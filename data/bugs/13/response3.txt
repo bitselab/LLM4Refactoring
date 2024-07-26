@@ -1,0 +1,128 @@
+To improve the readability and maintainability of the `DefaultArgumentConverter` class, we can extract a new class that handles the specific functionality related to the conversion of strings to various object types and the determination of wrapper types for primitives. This approach aligns with the Single Responsibility Principle, ensuring that each class has one primary responsibility.
+
+We will create two new classes: `StringConversionManager` to manage the string to object conversions, and `TypeWrapperResolver` to handle the determination of wrapper types for given target types.
+
+### Extracted `StringConversionManager` Class
+
+This class will encapsulate the logic related to the list of `StringToObjectConverter` instances. It will manage the conversion process from a `String` to various object types.
+
+```java
+package org.junit.jupiter.params.converter;
+
+import java.util.List;
+import java.util.Optional;
+import static java.util.Collections.unmodifiableList;
+import static java.util.Arrays.asList;
+
+public class StringConversionManager {
+    private static final List<StringToObjectConverter> stringToObjectConverters = unmodifiableList(asList(
+        new StringToBooleanConverter(),
+        new StringToCharacterConverter(),
+        new StringToNumberConverter(),
+        new StringToClassConverter(),
+        new StringToEnumConverter(),
+        new StringToJavaTimeConverter(),
+        new StringToCommonJavaTypesConverter(),
+        new FallbackStringToObjectConverter()
+    ));
+
+    public Optional<StringToObjectConverter> findSuitableConverter(Class<?> targetType) {
+        return stringToObjectConverters.stream()
+            .filter(converter -> converter.canConvert(targetType))
+            .findFirst();
+    }
+}
+```
+
+### Extracted `TypeWrapperResolver` Class
+
+This class will be responsible for determining the wrapper type for a given target type, especially when dealing with primitive types.
+
+```java
+package org.junit.jupiter.params.converter;
+
+public class TypeWrapperResolver {
+
+    public static Class<?> toWrapperType(Class<?> targetType) {
+        Class<?> wrapperType = getWrapperType(targetType);
+        return wrapperType != null ? wrapperType : targetType;
+    }
+
+    private static Class<?> getWrapperType(Class<?> targetType) {
+        // Existing logic to get wrapper type
+    }
+}
+```
+
+### Refactored `DefaultArgumentConverter` Class
+
+With the above extractions, the `DefaultArgumentConverter` class will now delegate the responsibilities to the new classes.
+
+```java
+package org.junit.jupiter.params.converter;
+
+import static org.apiguardian.api.API.Status.INTERNAL;
+
+import org.apiguardian.api.API;
+import org.junit.jupiter.api.extension.ParameterContext;
+import org.junit.platform.commons.support.conversion.ConversionException;
+import org.junit.platform.commons.util.ClassLoaderUtils;
+import org.junit.platform.commons.util.ReflectionUtils;
+
+@API(status = INTERNAL, since = "5.0")
+public class DefaultArgumentConverter implements ArgumentConverter {
+
+    public static final DefaultArgumentConverter INSTANCE = new DefaultArgumentConverter();
+    private final StringConversionManager conversionManager = new StringConversionManager();
+
+    private DefaultArgumentConverter() {
+        // nothing to initialize
+    }
+
+    @Override
+    public final Object convert(Object source, ParameterContext context) {
+        Class<?> targetType = context.getParameter().getType();
+        return convert(source, targetType, context);
+    }
+
+    public final Object convert(Object source, Class<?> targetType, ParameterContext context) {
+        if (source == null) {
+            if (targetType.isPrimitive()) {
+                throw new ArgumentConversionException(
+                        "Cannot convert null to primitive value of type " + targetType.getTypeName());
+            }
+            return null;
+        }
+
+        if (ReflectionUtils.isAssignableTo(source, targetType)) {
+            return source;
+        }
+
+        if (source instanceof String) {
+            Class<?> targetTypeToUse = TypeWrapperResolver.toWrapperType(targetType);
+            return conversionManager.findSuitableConverter(targetTypeToUse)
+                .map(converter -> convertString(source, targetTypeToUse, context, converter))
+                .orElseThrow(() -> new ArgumentConversionException(
+                        "Failed to convert String \"" + source + "\" to type " + targetType.getTypeName()));
+        }
+
+        throw new ArgumentConversionException(
+                String.format("No built-in converter for source type %s and target type %s",
+                        source.getClass().getTypeName(), targetType.getTypeName()));
+    }
+
+    private Object convertString(Object source, Class<?> targetType, ParameterContext context, StringToObjectConverter converter) {
+        try {
+            ClassLoader classLoader = ClassLoaderUtils.getClassLoader(context.getDeclaringExecutable().getDeclaringClass());
+            return converter.convert((String) source, targetType, classLoader);
+        } catch (Exception ex) {
+            if (ex instanceof ArgumentConversionException) {
+                throw ex;
+            }
+            throw new ArgumentConversionException("Failed to convert String \"" + source + "\" to type " + targetType.getTypeName(), ex);
+        }
+    }
+}
+```
+
+With these changes, the `DefaultArgumentConverter` class becomes more focused and delegates specific tasks to the `StringConversionManager` and `TypeWrapperResolver`, improving its overall structure and maintainability.

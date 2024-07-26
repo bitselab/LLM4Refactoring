@@ -1,0 +1,37 @@
+In the provided `GenericMaster` class code snippet, both `getGenericType` methods for `Field` and `Parameter` types exhibit a very similar pattern. They check if the type is an instance of `ParameterizedType` and then extract the actual type arguments accordingly. This repetitive logic can be factored out into a separate method to improve code reusability and maintainability.
+
+Here’s how you can refactor the `GenericMaster` class by extracting the common logic into a new method:
+
+### Refactored Code
+```java
+public class GenericMaster {
+
+    public Class<?> getGenericType(Field field) {
+        return extractClassFromType(field.getGenericType());
+    }
+
+    public Class<?> getGenericType(Parameter parameter) {
+        return extractClassFromType(parameter.getType());
+    }
+
+    private Class<?> extractClassFromType(Type generic) {
+        if (generic instanceof ParameterizedType) {
+            Type actual = ((ParameterizedType) generic).getActualTypeArguments()[0];
+            if (actual instanceof Class) {
+                return (Class<?>) actual;
+            } else if (actual instanceof ParameterizedType) {
+                // in case of nested generics we don't go deep
+                return (Class<?>) ((ParameterizedType) actual).getRawType();
+            }
+        }
+        return Object.class;
+    }
+}
+```
+
+### Explanation of Changes
+1. **Extracted Method (`extractClassFromType`)**: The repetitive logic checking the type and extracting the class information is moved into its own method, `extractClassFromType`, which takes a `Type` as its parameter. This method encapsulates the logic for extracting class information from a type, improving code reusability.
+
+2. **Simplified `getGenericType` Methods**: Both methods now call the new `extractClassFromType` method. This results in cleaner, more maintainable code since any modifications related to type extraction will now only need to be made in one place.
+
+This refactor follows the extract method pattern by reducing redundancy and improving clarity without changing the behavior of the code.

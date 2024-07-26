@@ -1,0 +1,74 @@
+ **Refactoring Opportunities:**
+
+While the code is generally well-structured, a few refactoring opportunities could enhance readability and maintainability:
+
+1. **Combine Common Setup Logic:**
+   - The setup parts of `testSetGetXAttr`, `testSetGetXAttrCreateReplace`, and `testSetGetXAttrReplace` share common code blocks. 
+   - Create a `setUp()` method with shared setup steps to reduce duplication.
+
+2. **Delegate to a Helper Method:** 
+   - The logic within `testGetSetXAttrHelper` could be extracted into a separate, reusable method with a descriptive name, clarifying its purpose within the test cases.
+
+3. **Utilize a Test Data Builder:**
+   - Consider using a test data builder to create test file paths, attribute names, and values, enhancing readability and maintainability.
+
+4. **Apply `@Before` and `@After` Annotations:**
+   - Utilize JUnit's `@Before` and `@After` annotations for recurring setup and teardown actions, ensuring execution consistency.
+
+5. **Use Field-Level Annotations:** 
+   - Use `@Rule` or `@ClassRule` annotations for resources like `TracingHeaderValidator` instead of manual registration and unregistration within test methods.
+
+Here's the refactored code incorporating these suggestions:
+
+```java
+public class ITestAzureBlobFileSystemAttributes extends AbstractAbfsIntegrationTest {
+
+    private static final EnumSet<XAttrSetFlag> CREATE_FLAG = EnumSet.of(XAttrSetFlag.CREATE);
+    private static final EnumSet<XAttrSetFlag> REPLACE_FLAG = EnumSet.of(XAttrSetFlag.REPLACE);
+
+    private AzureBlobFileSystem fs;
+    private AbfsConfiguration conf;
+    private Path testFile;
+
+    @Rule
+    public TracingHeaderValidator validator = new TracingHeaderValidator(...); // Configure validator
+
+    @Before
+    public void setUp() throws Exception {
+        fs = getFileSystem();
+        conf = fs.getAbfsStore().getAbfsConfiguration();
+        Assume.assumeTrue(getIsNamespaceEnabled(fs));
+        testFile = path("setGetXAttr");
+    }
+
+    @Test
+    public void testSetGetXAttr() throws Exception {
+        testXAttrOperations("user.asciiAttribute", "hi", "你好");
+    }
+
+    @Test
+    public void testSetGetXAttrCreateReplace() throws Exception {
+        testXAttrCreateReplace("user.someAttribute", "one");
+    }
+
+    @Test
+    public void testSetGetXAttrReplace() throws Exception {
+        testXAttrReplace("user.someAttribute", "one", "two");
+    }
+
+    // Refactored helper method with a descriptive name
+    private void testXAttrOperations(String attributeName1, String value1, String value2) throws Exception {
+        // ... test logic
+    }
+
+    // Refactored helper method for create/replace tests
+    private void testXAttrCreateReplace(String attributeName, String value) throws Exception {
+        // ... test logic
+    }
+
+    // Refactored helper method for replace tests
+    private void testXAttrReplace(String attributeName, String value1, String value2) throws Exception {
+        // ... test logic
+    }
+}
+```

@@ -1,0 +1,33 @@
+Absolutely! Here's the refactored code with a more descriptive method name:
+
+```java
+package org.elasticsearch.xpack.ql.util;
+
+// ... (rest of the code remains the same)
+
+public enum SpatialCoordinateTypes {
+  // ... (other code remains the same)
+
+  public BytesRef geometryToWkb(Geometry geometry) {
+    return new BytesRef(WellKnownBinary.toWKB(geometry, ByteOrder.LITTLE_ENDIAN));
+  }
+
+  // ... (rest of the code remains the same)
+}
+```
+
+**Explanation of the refactoring:**
+
+- **Original method name:** `pointAsWKB(Geometry geometry)`
+- **Refactored method name:** `geometryToWkb(Geometry geometry)`
+
+**Improvements:**
+
+- **Clarity:** The new name, `geometryToWkb`, explicitly conveys the purpose of the method, which is to convert a `Geometry` object to its Well-Known Binary (WKB) representation. This makes it clearer what the method does and avoids the ambiguity of assuming it only works with points.
+- **Accuracy:** The original name, `pointAsWKB`, implied the method only handles points, which wasn't entirely accurate. The method can handle any geometry type supported by Well-Known Binary.
+- **Consistency:** The naming convention in the class uses methods like `longAsPoint` and `pointAsLong` to describe conversions between specific types. This refactoring aligns with that pattern.
+
+**Additional notes:**
+
+- The rest of the code remains unchanged.
+- Using descriptive method names enhances code readability and maintainability. 

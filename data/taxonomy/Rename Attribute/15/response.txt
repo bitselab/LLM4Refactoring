@@ -1,0 +1,104 @@
+In reviewing the code snippet you provided, the intent is to find potential renaming opportunities for attributes that could enhance readability and consistency. The code mainly involves a `StrictRunner` class that wraps another `InternalRunner` and adds some additional behavior, like reporting on unnecessary stubbings and applying a custom filter.
+
+Here are some observations and suggested refactorings based on the existing code:
+
+1. **Attribute Naming Consistency**:
+    - `filterRequested`: The purpose of this attribute is to indicate whether a filter has been requested during the test run. Given its usage primarily within the nested `RecordingFilter` class, a more descriptive name might be `isFilterApplied`. This aligns better with boolean naming conventions and gives a clearer indication of its state and purpose.
+
+2. **Class Naming**:
+    - `RecordingFilter`: This is a private nested class within `StrictRunner`. The name is reasonably descriptive, but could be improved to reflect its purpose more explicitly, such as `TestFilterRecorder` or `FilterApplicationRecorder`, which would make it clearer that it records the application of filters.
+
+Here's the refactored code based on the suggestion above:
+
+```java
+package org.mockito.internal.runners;
+
+import org.junit.runner.Description;
+import org.junit.runner.manipulation.Filter;
+import org.junit.runner.manipulation.NoTestsRemainException;
+import org.junit.runner.notification.RunNotifier;
+import org.mockito.Mockito;
+import org.mockito.internal.junit.UnnecessaryStubbingsReporter;
+import org.mockito.internal.runners.util.FailureDetector;
+
+public class StrictRunner implements InternalRunner {
+
+    private final Class<?> testClass;
+    private final InternalRunner runner;
+    private boolean isFilterApplied; // Renamed from filterRequested
+
+    /**
+     * @param runner - the runner to wrap around
+     * @param testClass - for reporting purposes
+     */
+    public StrictRunner(InternalRunner runner, Class<?> testClass) {
+        this.runner = runner;
+        this.testClass = testClass;
+        this.isFilterApplied = false; // Renamed from filterRequested
+    }
+
+    @Override
+    public void run(RunNotifier notifier) {
+        UnnecessaryStubbingsReporter reporter = new UnnecessaryStubbingsReporter();
+        FailureDetector listener = new FailureDetector();
+
+        Mockito.framework().addListener(reporter);
+        try {
+            notifier.addListener(listener);
+            runner.run(notifier);
+        } finally {
+            Mockito.framework().removeListener(reporter);
+        }
+
+        if (!isFilterApplied && listener.isSuccessful()) { // Renamed from filterRequested
+            reporter.validateUnusedStubs(testClass, notifier);
+        }
+    }
+
+    @Override
+    public Description getDescription() {
+        return runner.getDescription();
+    }
+
+    @Override
+    public void filter(Filter filter) throws NoTestsRemainException {
+        Filter recordingFilter = new TestFilterRecorder(filter); // Renamed RecordingFilter to TestFilterRecorder
+        runner.filter(recordingFilter);
+    }
+
+    private class TestFilterRecorder extends Filter { // Renamed RecordingFilter to TestFilterRecorder
+
+        private final Filter delegate;
+
+        public TestFilterRecorder(Filter delegate) { // Renamed RecordingFilter to TestFilterRecorder
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void apply(Object child) throws NoTestsRemainException {
+            delegate.apply(child);
+        }
+
+        @Override
+        public Filter intersect(Filter second) {
+            return delegate.intersect(second);
+        }
+
+        @Override
+        public boolean shouldRun(Description description) {
+            boolean result = delegate.shouldRun(description);
+            if (!result) {
+                isFilterApplied = true; // Renamed from filterRequested
+            }
+            return result;
+        }
+
+        @Override
+        public String describe() {
+            return delegate.describe();
+        }
+    }
+}
+```
+
+These changes focus on improving the clarity and intent of variable and class names within the context of the `StrictRunner` and its functionality.

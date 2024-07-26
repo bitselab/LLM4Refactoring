@@ -1,0 +1,49 @@
+The provided code snippet is a part of a Java parser and is quite extensive, showcasing a variety of parsing methods for different Java statements. In such a complex codebase, there are always opportunities for refactoring to improve readability, maintainability, and performance. However, without the context of the entire project and its specific requirements, any refactoring suggestions should be considered carefully. Here are a few general suggestions:
+
+1. **Extract Repeated Code into Methods**: There are patterns of code that are repeated, such as error handling and token type checking. These can be extracted into separate methods to reduce duplication and improve clarity.
+
+2. **Use More Descriptive Method Names**: Some method names like `parseExprInParenthWithBlock` are not immediately clear. Renaming them to more descriptive names can improve readability.
+
+3. **Improve Error Handling**: The current error handling often consists of direct calls to an `error` method. It might be beneficial to have a more structured approach to error reporting, possibly using exceptions or an error handling class.
+
+4. **Refactor Large Methods**: Some methods, like `parseStatement`, are quite long and handle multiple cases. Breaking these down into smaller, more focused methods can improve readability and maintainability.
+
+5. **Optimize TokenSet Usage**: `TokenSet` instances are used frequently. It might be beneficial to review these usages for performance implications, especially in hot code paths.
+
+6. **Consistent Formatting and Style**: Ensure that the code follows a consistent formatting and style guide. This is more about maintainability and readability than functional changes.
+
+7. **Comments and Documentation**: Adding or improving comments, especially for complex logic, would be beneficial for future maintainability.
+
+8. **Review Access Modifiers**: Ensure that class members have appropriate access modifiers (`private`, `protected`, `public`) based on their usage.
+
+Here's an example of a small refactor of the `parseStatement` method, showcasing some of these principles. Due to the complexity and length of the code, a complete refactor is beyond the scope of this response, but the example demonstrates the approach:
+
+```java
+// Example refactor of parseStatement method
+@Nullable
+public PsiBuilder.Marker parseStatement(@NotNull PsiBuilder builder) {
+    IElementType tokenType = builder.getTokenType();
+    
+    if (tokenType == null) {
+        return null;
+    }
+
+    // Refactored switch statement for clarity
+    switch (tokenType) {
+        case JavaTokenType.IF_KEYWORD:
+            return parseIfStatement(builder);
+        case JavaTokenType.WHILE_KEYWORD:
+            return parseWhileStatement(builder);
+        // ... other cases
+        default:
+            return handleDefaultCaseInParseStatement(builder, tokenType);
+    }
+}
+
+private PsiBuilder.Marker handleDefaultCaseInParseStatement(PsiBuilder builder, IElementType tokenType) {
+    // Handling of the default case extracted into a method
+    // ... implementation
+}
+```
+
+This refactoring is just an illustrative example. The actual implementation details would depend on the overall architecture and design principles of the project.

@@ -1,0 +1,64 @@
+Analyzing the provided code snippet for potential rename parameter refactorings to enhance readability, I have identified several opportunities where renaming parameters would improve clarity. These changes aim to make the code more self-explanatory and easier to understand, especially for developers who might be new to the codebase.
+
+### Proposed Refactoring Changes:
+
+1. **Rename `properties` in `PulsarPropertiesMapper` Constructor**: The parameter `properties` could be more descriptive. A name like `pulsarProperties` would clarify that these are properties specific to Pulsar.
+
+2. **Rename `map` in Customization Methods**: The variable name `map` used for `PropertyMapper` instances is a bit generic. A more descriptive name like `propertyMapper` would be clearer.
+
+3. **Rename `properties` in Each Customization Method**: In each customization method (like `customizeClientBuilder`), the local variable `properties` shadows the class field `properties`. It should be renamed for clarity, for example, to `clientProperties` in `customizeClientBuilder`.
+
+4. **Rename `authentication` in `customizeAuthentication`**: The parameter `authentication` could be more descriptive. Renaming it to `authenticationConsumer` would clarify its purpose as a consumer for authentication details.
+
+5. **Rename `params` in `customizeAuthentication`**: The variable `params` which holds authentication parameters can be renamed to `authParams` for better clarity.
+
+6. **Rename `authParamString` in `customizeAuthentication`**: Similarly, `authParamString` can be renamed to `authParamsJson` to indicate that it's a JSON representation of authentication parameters.
+
+7. **Rename `consumerBuilder` in `customizeConsumerBuilderSubscription`**: The parameter `consumerBuilder` in `customizeConsumerBuilderSubscription` can be renamed to `subscriptionConsumerBuilder` to reflect its specific role.
+
+8. **Rename `duration` in `timeoutProperty`**: In the `timeoutProperty` method, the parameter `duration` can be more descriptively named as `timeoutDuration`.
+
+### Refactored Code with Renamed Parameters:
+
+```java
+// ... [Remaining package and import statements]
+
+final class PulsarPropertiesMapper {
+
+    private final PulsarProperties pulsarProperties;
+
+    PulsarPropertiesMapper(PulsarProperties pulsarProperties) {
+        this.pulsarProperties = pulsarProperties;
+    }
+
+    // ... [Other methods remain the same with parameter name changes]
+
+    void customizeClientBuilder(ClientBuilder clientBuilder, PulsarConnectionDetails connectionDetails) {
+        PulsarProperties.Client clientProperties = this.pulsarProperties.getClient();
+        PropertyMapper propertyMapper = PropertyMapper.get().alwaysApplyingWhenNonNull();
+        // ... [Rest of the method with renamed variables]
+    }
+
+    // ... [Other customization methods with similar parameter name changes]
+
+    private void customizeAuthentication(AuthenticationConsumer authenticationConsumer,
+                                         PulsarProperties.Authentication authProperties) {
+        // ... [Method implementation with renamed variables]
+    }
+
+    // ... [Other methods and inner classes]
+
+    private Consumer<Duration> timeoutProperty(BiConsumer<Integer, TimeUnit> timeoutSetter) {
+        return (timeoutDuration) -> timeoutSetter.accept((int) timeoutDuration.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    // ... [Remaining inner classes and methods]
+
+}
+```
+
+### Summary of Refactoring:
+- Renamed parameters and local variables for increased clarity and to reduce ambiguity.
+- Kept the functionality and logic of the original code unchanged.
+
+These changes should make the code easier to read and understand, especially for those who are not familiar with the specific domain of Pulsar or this particular codebase.

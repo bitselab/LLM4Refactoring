@@ -1,0 +1,49 @@
+Rename attribute refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename attribute refactoring pattern is to rename attributes to align with the naming convention in other attributes. Here is an example of the rename attribute refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public class PoolingOptions {
+    private static final int DEFAULT_NEW_CONNECTION_THRESHOLD = 100;
+    private static final int DEFAULT_CORE_POOL_LOCAL = 2;
+    private static final int DEFAULT_CORE_POOL_REMOTE = 1;
+    private static final int DEFAULT_MAX_POOL_LOCAL = 8;
+    private static final int DEFAULT_MAX_POOL_REMOTE = 2;
+    private static final int DEFAULT_MAX_REQUESTS_PER_HOST_LOCAL = 1024;
+    private static final int DEFAULT_MAX_REQUESTS_PER_CONNECTION_REMOTE = 256;
+    private static final int DEFAULT_IDLE_TIMEOUT_SECONDS = 120;
+    private static final int DEFAULT_POOL_TIMEOUT_MILLIS = 5000;
+    private static final int DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 30;
+}
+```
+The source code after refactoring is:
+```
+public class PoolingOptions {
+    private static final int DEFAULT_NEW_CONNECTION_THRESHOLD = 100;
+    private static final int DEFAULT_CORE_POOL_LOCAL = 2;
+    private static final int DEFAULT_CORE_POOL_REMOTE = 1;
+    private static final int DEFAULT_MAX_POOL_LOCAL = 8;
+    private static final int DEFAULT_MAX_POOL_REMOTE = 2;
+    private static final int DEFAULT_MAX_REQUESTS_PER_CONNECTION_LOCAL = 1024;
+    private static final int DEFAULT_MAX_REQUESTS_PER_CONNECTION_REMOTE = 256;
+    private static final int DEFAULT_IDLE_TIMEOUT_SECONDS = 120;
+    private static final int DEFAULT_POOL_TIMEOUT_MILLIS = 5000;
+    private static final int DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 30;
+}
+```
+In this example, the developer renamed the attribute "DEFAULT_MAX_REQUESTS_PER_HOST_LOCAL" to "DEFAULT_MAX_REQUESTS_PER_CONNECTION_LOCAL".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename attribute refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public class WebSocketCoreClient extends ContainerLifeCycle
+{
+    public static final String WEBSOCKET_CORECLIENT_ATTRIBUTE = WebSocketCoreClient.class.getName();
+
+    private static final Logger LOG = LoggerFactory.getLogger(WebSocketCoreClient.class);
+    private final HttpClient httpClient;
+    private final WebSocketComponents components;
+    private ClassLoader classLoader;
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

@@ -1,0 +1,80 @@
+Here's the refactored code with the extracted variable:
+
+```java
+package org.eclipse.jetty.client;
+
+import org.eclipse.jetty.client.api.Connection;
+import org.eclipse.jetty.client.api.Result;
+import org.eclipse.jetty.io.CyclicTimeouts;
+import org.eclipse.jetty.util.thread.AutoLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public abstract class HttpChannel implements CyclicTimeouts.Expirable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(HttpChannel.class);
+
+    private final AutoLock _lock = new AutoLock();
+    private final HttpDestination _destination;
+    private HttpExchange _exchange;
+
+    protected HttpChannel(HttpDestination destination) {
+        _destination = destination;
+    }
+
+    public void destroy() {
+    }
+
+    public HttpDestination getHttpDestination() {
+        return _destination;
+    }
+
+    /**
+     * Associates the given {@code exchange} to this channel in order to be sent over the network.
+     * <p>
+     * If the association is successful, the exchange can be sent. Otherwise, the channel must be
+     * disposed because whoever terminated the exchange did not do it - it did not have the channel yet.
+     *
+     * @param exchange the exchange to associate
+     * @return true if the association was successful, false otherwise
+     */
+    public boolean associate(HttpExchange exchange) {
+        boolean result = false;
+        boolean abort = true;
+        try (AutoLock ignored = _lock.lock()) {
+            if (_exchange == null) {
+                abort = false;
+                result = exchange.associate(this);
+                if (result) {
+                    _exchange = exchange;
+                }
+            }
+        }
+
+        if (abort) {
+            exchange.getRequest().abort(new UnsupportedOperationException("Pipelined requests not supported"));
+        } else {
+            HttpRequest request = exchange.getRequest(); // Extracted variable
+            request.setConnection(getConnection());
+            if (LOG.isDebugEnabled())
+                LOG.debug("{} associated {} to {}", exchange, result, this);
+        }
+
+        return result;
+    }
+
+    // ... rest of the code
+
+}
+```
+
+**Explanation of the changes:**
+
+1. **Extract variable:** The expression `exchange.getRequest()` was repeated twice within the `if` block. It has been encapsulated in a new variable named `request`.
+2. **Replace with variable:** The original occurrences of `exchange.getRequest()` have been replaced with the new variable `request`.
+
+**Benefits of this refactoring:**
+
+- **Improved readability:** The code is easier to read and understand because the purpose of the expression is now clearer.
+- **Reduced redundancy:** Eliminating duplicate code makes the code more concise and less prone to errors.
+- **Enhanced maintainability:** Changes to the logic of getting the request object only need to be made in one place, making maintenance easier.

@@ -1,0 +1,59 @@
+The parameter `notRollbackable` in the method `testContainerRollback` could be renamed to improve readability and convey the intent more clearly. A good practice in naming boolean parameters is to use names that indicate the true/false state in a way that reads naturally. In this case, the name `notRollbackable` is a bit awkward because of the negation "not", which can lead to double negatives and make the code harder to understand.
+
+A better name might be `isRollbackAllowed`. This name clearly states that when the parameter is true, rollback is allowed, and when it is false, rollback is not allowed. Here is the refactored method with the renamed parameter:
+
+```java
+private void testContainer(NMClientImpl client, int i, Container container,
+                           ContainerLaunchContext clc, List<Integer> exitCode)
+        throws YarnException, IOException {
+    testGetContainerStatus(container, i, ContainerState.RUNNING, "",
+            exitCode);
+    waitForContainerRunningTransitionCount(container, 1);
+    testIncreaseContainerResource(container);
+    testRestartContainer(container);
+    testGetContainerStatus(container, i, ContainerState.RUNNING,
+            "will be Restarted", exitCode);
+    waitForContainerRunningTransitionCount(container, 2);
+    if (i % 2 == 0) {
+        testReInitializeContainer(container, clc, false);
+        testGetContainerStatus(container, i, ContainerState.RUNNING,
+                "will be Re-initialized", exitCode);
+        waitForContainerRunningTransitionCount(container, 3);
+        testContainerRollback(container, true);
+        testGetContainerStatus(container, i, ContainerState.RUNNING,
+                "will be Rolled-back", exitCode);
+        waitForContainerRunningTransitionCount(container, 4);
+        testContainerCommit(container, false);
+        testReInitializeContainer(container, clc, false);
+        testGetContainerStatus(container, i, ContainerState.RUNNING,
+                "will be Re-initialized", exitCode);
+        waitForContainerRunningTransitionCount(container, 5);
+        testContainerCommit(container, true);
+    } else {
+        testReInitializeContainer(container, clc, true);
+        testGetContainerStatus(container, i, ContainerState.RUNNING,
+                "will be Re-initialized", exitCode);
+        waitForContainerRunningTransitionCount(container, 3);
+        testContainerRollback(container, false);
+        testContainerCommit(container, false);
+    }
+    client.stopContainer(container.getId(), container.getNodeId());
+    testGetContainerStatus(container, i, ContainerState.COMPLETE,
+            "killed by the ApplicationMaster", exitCode);
+}
+
+private void testContainerRollback(Container container, boolean isRollbackAllowed)
+        throws IOException, Yarn Exception {
+    if (!isRollbackAllowed) {
+        nmClient.rollbackLastReInitialization(container.getId());
+    } else {
+        assertYarnException(
+                () -> nmClient.rollbackLastReInitialization(container.getId()),
+                "Nothing to rollback to");
+    }
+}
+```
+
+In the refactored code, I've used the negation of `isRollbackAllowed` in the `if` statement. This makes the code more readable: "if rollback is not allowed, then perform the rollback operation; otherwise, assert that there is nothing to rollback to". It's generally easier to understand a direct condition rather than a negated one, especially when dealing with boolean logic. 
+
+This renaming makes the code clearer and more in line with common coding practices, where the purpose of a boolean parameter is directly indicated by its name without the need for negation.

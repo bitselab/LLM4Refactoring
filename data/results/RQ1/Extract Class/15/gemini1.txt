@@ -1,0 +1,85 @@
+## Refactoring Opportunities in TransactionAutoConfiguration
+
+The provided `TransactionAutoConfiguration` class offers several opportunities for refactoring to improve code readability and maintainability. Here's a breakdown of the suggestions:
+
+1. **Extract Configuration Classes:** 
+The nested configuration classes `TransactionTemplateConfiguration` and `EnableTransactionManagementConfiguration` can be extracted as separate classes extending `TransactionAutoConfiguration`. This improves modularity and organization.
+
+2. **Combine Conditional Annotations:**
+The `@ConditionalOnMissingBean` and `@ConditionalOnSingleCandidate` annotations can be combined in some cases. For example, in the `transactionalOperator` bean definition, both conditions ensure a single `ReactiveTransactionManager` exists. These can be merged into `@ConditionalOnSingleCandidate(ReactiveTransactionManager.class)`.
+
+3. **Simplify Nested Configuration:**
+The `EnableTransactionManagementConfiguration` class has nested configurations for `JdkDynamicAutoProxyConfiguration` and `CglibAutoProxyConfiguration` based on a property check. This can be simplified using a single configuration class with a `@Bean` method that conditionally returns the appropriate proxy bean based on the property value.
+
+## Refactored Code
+
+```java
+package org.springframework.boot.autoconfigure.transaction;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.ReactiveTransactionManager;
+import org.springframework.transaction.TransactionManager;
+import org.springframework.transaction.annotation.AbstractTransactionManagementConfiguration;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.reactive.TransactionalOperator;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
+
+@AutoConfiguration
+@ConditionalOnClass(PlatformTransactionManager.class)
+@EnableConfigurationProperties(TransactionProperties.class)
+public class TransactionAutoConfiguration {
+
+  @Bean
+  @ConditionalOnMissingBean
+  TransactionManagerCustomizers platformTransactionManagerCustomizers(
+      ObjectProvider<PlatformTransactionManagerCustomizer<?>> customizers) {
+    return new TransactionManagerCustomizers(customizers.orderedStream().toList());
+  }
+
+  @Bean
+  @ConditionalOnSingleCandidate(ReactiveTransactionManager.class)
+  public TransactionalOperator transactionalOperator(ReactiveTransactionManager transactionManager) {
+    return TransactionalOperator.create(transactionManager);
+  }
+
+  @Configuration
+  @ConditionalOnSingleCandidate(PlatformTransactionManager.class)
+  public static class TransactionTemplateConfiguration extends TransactionAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean(TransactionOperations.class)
+    public TransactionTemplate transactionTemplate(PlatformTransactionManager transactionManager) {
+      return new TransactionTemplate(transactionManager);
+    }
+  }
+
+  @Configuration
+  @ConditionalOnBean(TransactionManager.class)
+  @ConditionalOnMissingBean(AbstractTransactionManagementConfiguration.class)
+  public static class EnableTransactionManagementConfiguration extends TransactionAutoConfiguration {
+
+    @Bean
+    @EnableTransactionManagement(proxyTargetClass = determineProxyTargetClass())
+    public static Object proxyTransactionManagementConfiguration() {
+      return null; // Empty bean to trigger auto-proxy behavior
+    }
+
+    private boolean determineProxyTargetClass() {
+      return !"false".equals(System.getProperty("spring.aop.proxy-target-class"));
+    }
+  }
+}
+```
+
+These changes improve code organization and readability by separating configuration logic and simplifying conditional checks. The nested configurations are refactored to leverage conditional logic within the `@EnableTransactionManagement` annotation and a bean creation method.

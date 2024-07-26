@@ -1,0 +1,53 @@
+## Refactoring Opportunities in CommonUtil.java
+
+There are a few rename method refactoring opportunities in the provided code snippet:
+
+1. **`matchesFileExtension`**: This method name doesn't clearly convey its purpose. It checks if a file's extension matches a list of provided extensions. A better name could be `hasMatchingExtension`.
+
+2. **`lengthMinusTrailingWhitespace`**: This method calculates the length of a string excluding trailing whitespace. A more descriptive name could be `trimLength` or `lengthWithoutTrailingWhitespace`.
+
+3. **`isPatternValid`**: This method checks if a string is a valid regular expression pattern. A clearer name could be `isValidRegex` or `isWellFormedRegex`.
+
+Here's the refactored code with the suggested changes:
+
+```java
+public final class CommonUtil {
+
+  // ... other methods
+
+  /**
+   * Returns whether the file extension matches one of the provided extensions.
+   *
+   * @param file the file to be checked.
+   * @param fileExtensions files extensions, empty property in config makes it matches to all.
+   * @return whether there is a match.
+   */
+  public static boolean hasMatchingExtension(File file, String... fileExtensions) {
+    // ... existing implementation
+  }
+
+  /**
+   * Returns the length of a string ignoring all trailing whitespace.
+   *
+   * @param line the string to process
+   * @return the length of the string ignoring all trailing whitespace
+   */
+  public static int trimLength(String line) {
+    // ... existing implementation
+  }
+
+  /**
+   * Validates whether passed string is a valid regular expression or not.
+   *
+   * @param pattern string to validate
+   * @return true if the pattern is valid false otherwise
+   */
+  public static boolean isValidRegex(String pattern) {
+    // ... existing implementation
+  }
+
+  // ... other methods
+}
+```
+
+These changes improve code readability and maintainability by making the method names more self-explanatory.

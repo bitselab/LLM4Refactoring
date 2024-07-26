@@ -1,0 +1,152 @@
+Examining the provided Java code, there are several opportunities to refactor the parameter names to improve consistency with their types or expected functionality. Here's a closer look at a few refactorings that align with the pattern of improving parameter names for clarity and consistency:
+
+1. In methods like `assertFailingWithMessage` and `assertMissingCloseMethod`, the parameters are named generically (`testEvent`, `testClass`, `msg`, `methodName`). These names could be more descriptive based on the method's intent and the expected type.
+2. In the `AutoCloseSpy` constructor, the parameter `prefix` is somewhat ambiguous and could benefit from a more descriptive name.
+
+Let's apply these refactorings:
+
+### Refactoring Details
+
+- **assertFailingWithMessage**: Rename `testEvent` to `events` to clarify that it refers to multiple events being tested.
+- **assertMissingCloseMethod**: Rename `testClass` to `closeableClass` to clarify that it refers to a class expected to have a closeable resource.
+- **AutoCloseSpy Constructor**: Rename `prefix` to `resourceIdentifier` to provide a clearer understanding of its purpose in identifying the resource being closed.
+
+### Refactored Code
+
+Here is how the refactored code would look after applying these changes:
+
+```java
+package org.junit.jupiter.engine.extension;
+
+import static java.lang.StackWalker.Option.RETAIN_CLASS_REFERENCE;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
+import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_METHOD;
+import static org.junit.platform.testkit.engine.EventConditions.finishedWithFailure;
+import static org.junit.platform.testkit.engine.TestExecutionResultConditions.message;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.AutoClose;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.fixtures.TrackLogRecords;
+import org.junit.jupiter.engine.AbstractJupiterTestEngineTests;
+import org.junit.platform.commons.logging.LogRecordListener;
+import org.junit.platform.testkit.engine.Events;
+
+class AutoCloseTests extends AbstractJupiterTestEngineTests {
+
+    private static final List<String> recorder = new ArrayList<>();
+
+    @BeforeEach
+    @AfterEach
+    void resetTracking() {
+        InstancePerClassTestCase.closed = false;
+        recorder.clear();
+    }
+
+    @Test
+    void blankCloseMethodName() {
+        Class<?> testClass = BlankCloseMethodNameTestCase.class;
+        String msg = String.format("@AutoClose on field %s.field must specify a method name.",
+                testClass.getCanonicalName());
+        Events tests = executeTestsForClass(testClass).testEvents();
+        assertFailingWithMessage(tests, msg);
+    }
+
+    @Test
+    void primitiveTypeCannotBeClosed() {
+        Class<?> testClass = PrimitiveFieldTestCase.class;
+        String msg = String.format("@AutoClose is not supported on primitive field %s.x.",
+                testClass.getCanonicalName());
+        Events tests = executeTestsForClass(testClass).testEvents();
+        assertFailingWithMessage(tests, msg);
+    }
+
+    @Test
+    void arrayCannotBeClosed() {
+        Class<?> testClass = ArrayFieldTestCase.class;
+        String msg = String.format("@AutoClose is not supported on array field %s.x.", testClass.getCanonicalName());
+        Events tests = executeTestsForClass(testClass).testEvents();
+        assertFailingWithMessage(tests, msg);
+    }
+
+    @Test
+    void nullCannotBeClosed(@TrackLogRecords LogRecordListener listener) {
+        Class<?> testClass = NullCloseableFieldTestCase.class;
+        String msg = String.format("Cannot @AutoClose field %s.field because it is null.",
+                testClass.getCanonicalName());
+        Events tests = executeTestsForClass(testClass).testEvents();
+        tests.assertStatistics(stats -> stats.succeeded(1).failed(0));
+        assertThat(listener.stream(Level.WARNING)).map(LogRecord::getMessage).anyMatch(msg::equals);
+    }
+
+    @Test
+    void noCloseMethod() {
+        assertMissingCloseMethod(NoCloseMethodTestCase.class, "close");
+    }
+
+    @Test
+    void noShutdownMethod() {
+        assertMissingCloseMethod(NoShutdownMethodTestCase.class, "shutdown");
+    }
+
+    private static void assertFailingWithMessage(Events events, String msg) {
+        events//
+                .assertStatistics(stats -> stats.failed(1))//
+                .assertThatEvents().haveExactly(1, finishedWithFailure(message(msg)));
+    }
+
+    private void assertMissingCloseMethod(Class<?> closeableClass, String methodName) {
+        String msg = String.format("Cannot @AutoClose field %s.field because %s does not define method %s().",
+                closeableClass.getCanonicalName(), String.class.getName(), methodName);
+        Events tests = executeTestsForClass(closeableClass).testEvents();
+        assertFailingWithMessage(tests, msg);
+    }
+
+    // Rest of the code remains unchanged...
+    static class AutoCloseSpy implements AutoCloseable, Runnable {
+
+        private final String resourceIdentifier;
+        private String invokedMethod = null;
+
+        AutoCloseSpy(String resourceIdentifier) {
+            Class<?> callerClass = StackWalker.getInstance(RETAIN_CLASS_REFERENCE).getCallerClass();
+            this.resourceIdentifier = callerClass.getSimpleName() + "." + resourceIdentifier + ".";
+        }
+
+        @Override
+        public void run() {
+            recordInvocation("run()");
+        }
+
+        @Override
+        public void close() {
+            recordInvocation("close()");
+        }
+
+        private void recordInvocation(String methodName) {
+            if (this.invokedMethod != null) {
+                throw new IllegalStateException("Already closed via " + this.invokedMethod);
+            }
+            this.invokedMethod = methodName;
+            recorder.add(this.resourceIdentifier + this.invokedMethod);
+        }
+    }
+
+    // Continue with the rest of the unchanged classes and methods...
+}
+```
+
+This refactoring focuses on clarifying the roles and expected data types of the parameters, making the code easier to understand and maintain.

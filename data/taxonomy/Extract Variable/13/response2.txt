@@ -1,0 +1,21 @@
+In the provided code snippet, an extract variable refactoring can be applied to improve clarity and avoid repetition. The repeated expression `this.prefix + this.invokedMethod` is used twice, making it a good candidate for extraction to a new variable.
+
+Here's the refactored code:
+
+```java
+private void recordInvocation(String methodName) {
+    if (this.invokedMethod != null) {
+        throw new IllegalStateException("Already closed via " + this.invokedMethod);
+    }
+    this.invokedMethod = methodName;
+    String fullMethod = this.prefix + this.invokedMethod;  // Extracted variable
+    recorder.add(fullMethod);
+    if (this.fail) {
+        throw new RuntimeException(fullMethod);
+    }
+}
+```
+
+In this refactoring:
+- I introduced a new variable `fullMethod` to hold the value of `this.prefix + this.invokedMethod`.
+- This change reduces the need to concatenate the strings multiple times, potentially improving performance slightly and definitely improving the readability of the code.

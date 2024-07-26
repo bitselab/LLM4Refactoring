@@ -1,0 +1,114 @@
+In reviewing the provided `DefaultArgumentConverter` class from the JUnit package for potential extract class refactoring opportunities, the goal is to identify tightly coupled code blocks that could benefit from being decomposed into separate classes. This increases modularity and clarity of the code, allowing for easier maintenance and enhancement.
+
+### Analysis of the `DefaultArgumentConverter` Class
+The `DefaultArgumentConverter` class is responsible for converting various types of inputs into corresponding Java data types. The conversion functionality is somewhat modular already, but it is heavily centralized around the method that handles different types of conversion based on the input type and the target type.
+
+### Possible Refactoring Opportunity
+The primary candidate for extraction in this class is the list of converters encapsulated by `stringToObjectConverters`. This list and its initialization process are tightly coupled with the conversion logic but are conceptually distinct enough to warrant a separate class. This encapsulation would centralize the management of converters and make the `DefaultArgumentConverter` class simpler and focused only on the conversion process logic.
+
+### Refactoring Proposal: Extract `ConverterRegistry` Class
+Extracting the converters into a `ConverterRegistry` class would help encapsulate all details about what converters are available and how they are initialized. This makes the `DefaultArgumentConverter` class cleaner and focused solely on utilizing these converters to perform data type transformations.
+
+### Refactored Code
+```java
+package org.junit.jupiter.params.converter;
+
+import static org.apiguardian.api.API.Status.INTERNAL;
+import java.util.List;
+import org.apiguardian.api.API;
+import org.junit.jupiter.api.extension.ParameterContext;
+import org.junit.platform.commons.support.conversion.ConversionException;
+import org.junit.platform.commons.util.ReflectionUtils;
+
+/**
+ * {@code ConverterRegistry} is responsible for holding and managing string to object converters.
+ */
+class ConverterRegistry {
+    private static final List<StringToObjectConverter> stringToObjectConverters = unmodifiableList(asList(
+        new StringToBooleanConverter(),
+        new StringToCharacterConverter(),
+        new StringToNumberConverter(),
+        new StringToClassConverter(),
+        new StringToEnumConverter(),
+        new StringToJavaTimeConverter(),
+        new StringToCommonJavaTypesConverter(),
+        new FallbackStringToObjectConverter()
+    ));
+
+    public static Optional<StringToObjectConverter> getConverter(Class<?> targetType) {
+        return stringToObjectConverters.stream().filter(
+            candidate -> candidate.canConvert(targetType)).findFirst();
+    }
+}
+
+/**
+ * {@code DefaultArgumentConverter} is the default implementation of the {@link ArgumentConverter} API.
+ *
+ * @since 5.0
+ * @see org.junit.jupiter.params.converter.ArgumentConverter
+ */
+@API(status = INTERNAL, since = "5.0")
+public class DefaultArgumentConverter implements ArgumentConverter {
+
+    public static final DefaultArgumentConverter INSTANCE = new DefaultArgumentConverter();
+
+    private DefaultArgumentConverter() {
+        // nothing to initialize
+    }
+
+    @Override
+    public final Object convert(Object source, ParameterContext context) {
+        Class<?> targetType = context.getParameter().getType();
+        return convert(source, targetType, context);
+    }
+
+    public final Object convert(Object source, Class<?> targetType, ParameterContext context) {
+        if (source == null) {
+            if (targetType.isPrimitive()) {
+                throw new ArgumentConversionException(
+                        "Cannot convert null to primitive value of type " + targetType.getTypeName());
+            }
+            return null;
+        }
+
+        if (ReflectionUtils.isAssignableTo(source, targetType)) {
+            return source;
+        }
+
+        if (source instanceof String) {
+            Class<?> targetTypeToUse = toWrapperType(targetType);
+            Optional<StringToObjectConverter> converter = ConverterRegistry.getConverter(targetTypeToUse);
+            if (converter.isPresent()) {
+                Class<?> declaringClass = context.getDeclaringExecutable().getDeclaringClass();
+                ClassLoader classLoader = ClassLoaderUtils.getClassLoader(declaringClass);
+                try {
+                    return converter.get().convert((String) source, targetTypeToUse, classLoader);
+                }
+                catch (Exception ex) {
+                    if (ex instanceof ArgumentConversionException) {
+                        throw (ArgumentConversionException) ex;
+                    }
+                    throw new ArgumentConversionException(
+                            "Failed to convert String \"" + source + "\" to type " + targetType.getTypeName(), ex);
+                }
+            }
+        }
+
+        throw new ArgumentConversionException(
+                String.format("No built-in converter for source type %s and target type %s",
+                        source.getClass().getTypeName(), targetType.getTypeName()));
+    }
+
+    private static Class<?> toWrapperType(Class<?> targetType) {
+        Class<?> wrapperType = getWrapperType(targetType);
+        return wrapperType != null ? wrapperType : targetType;
+    }
+
+    private static Class<?> getWrapperType(Class<?> targetType) {
+        // Logic to determine wrapper type based on primitive type
+        // (omitted here for brevity)
+    }
+}
+```
+
+This refactoring isolates the conversion registry into its own class, thereby simplifying the `DefaultArgumentConverter` by abstracting the initialization and selection logic for converters. This aligns with best practices in object-oriented design by promoting single responsibility and separation of concerns.

@@ -1,0 +1,46 @@
+## Refactoring the `mutationTarget` Parameter
+
+You're absolutely right! The parameter `mutationTarget` in the `createStatementDetailsMap` method could benefit from a more descriptive name. Here's how to refactor it:
+
+**1. Analyze Parameter Usage:**
+
+- This parameter is used within the method to potentially provide a `GeneratedValuesMutationDelegate` object.
+- It's used when creating `PreparedStatementDetails` for tables related to identifier generation.
+
+**2. Choose a Descriptive Name:**
+
+Here are some options that better reflect the parameter's purpose:
+
+- `generatedValuesDelegate`: This explicitly states its role in handling generated values.
+- `idGenDelegate`: This is a shorter and more specific option for identifier generation.
+
+**3. Refactoring:**
+
+Use your IDE's refactoring tools to safely rename the parameter throughout the method:
+
+```java
+private static SortedMap<String, PreparedStatementDetails> createStatementDetailsMap(
+  List<PreparableMutationOperation> jdbcMutations,
+  MutationType mutationType,
+  GeneratedValuesMutationDelegate generatedValuesDelegate, // Renamed parameter
+  SharedSessionContractImplementor session) {
+  // ... rest of the method
+}
+```
+
+**4. Testing:**
+
+- Recompile the code to ensure no errors arise.
+- Execute thorough unit tests to verify all functionalities remain intact.
+
+**Choosing the Best Name:**
+
+- If identifier generation is a common scenario, `idGenDelegate` might be preferable.
+- If the purpose is broader and may involve other types of generated values, `generatedValuesDelegate` offers more clarity.
+
+**Additional Considerations:**
+
+- Maintain consistency with existing naming conventions in the codebase.
+- Ensure the new name aligns with the broader context of the method.
+
+By following these steps, you can improve the readability and maintainability of the code.

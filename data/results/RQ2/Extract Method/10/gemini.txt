@@ -1,0 +1,63 @@
+ **Here's the refactored code with the extracted method:**
+
+```java
+package org.springframework.boot.loader.zip;
+
+// ... other imports
+
+// ... other code
+
+class ManagedFileChannel {
+
+    // ... other code
+
+    int read(ByteBuffer dst, long position) throws IOException {
+        synchronized (this.lock) {
+            if (position < this.bufferPosition || position >= this.bufferPosition + this.bufferSize) {
+                readWithRetry(position);
+            }
+            if (this.bufferSize <= 0) {
+                return this.bufferSize;
+            }
+            int offset = (int) (position - this.bufferPosition);
+            int length = Math.min(this.bufferSize - offset, dst.remaining());
+            dst.put(dst.position(), this.buffer, offset, length);
+            dst.position(dst.position() + length);
+            return length;
+        }
+    }
+
+    private void readWithRetry(long position) throws IOException {
+        for (int i = 0; i < 10; i++) {
+            boolean interrupted = (i != 0) ? Thread.interrupted() : false;
+            try {
+                this.buffer.clear();
+                this.bufferSize = this.fileChannel.read(this.buffer, position);
+                this.bufferPosition = position;
+                return;
+            } catch (ClosedByInterruptException ex) {
+                repairFileChannel();
+            } finally {
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        throw new ClosedByInterruptException();
+    }
+
+    // ... other code
+}
+```
+
+**Key aspects of the refactoring:**
+
+- **Extracted method:** The code responsible for reading from the file channel with retry logic has been extracted into a separate method named `readWithRetry`.
+- **Encapsulation:** The encapsulated code handles potential `ClosedByInterruptException` and repairs the file channel if necessary, improving readability and maintainability.
+- **Readability:** The `read` method now focuses on its core logic, delegating the retry handling to the `readWithRetry` method, making it easier to understand.
+
+**Additional considerations for refactoring:**
+
+- **Meaningful name:** The extracted method name `readWithRetry` clearly conveys its purpose, aiding comprehension.
+- **Comments:** Adding comments to explain the rationale behind the refactoring and the purpose of the extracted method can further improve clarity.
+- **Other refactoring opportunities:** Depending on the context and specific goals, you might consider additional refactoring techniques to enhance code structure and maintainability.

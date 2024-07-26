@@ -1,0 +1,152 @@
+Rename parameter refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename parameter refactoring pattern is to rename parameters whose semantics are inappropriate in the context. Here is an example of the rename parameter refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public List<MethodMetadata> parseAndValidatateMetadata(Class<?> declaring) {
+    checkState(declaring.getTypeParameters().length == 0, "Parameterized types unsupported: %s",
+            declaring.getSimpleName());
+    checkState(declaring.getInterfaces().length <= 1, "Only single inheritance supported: %s",
+            declaring.getSimpleName());
+    if (declaring.getInterfaces().length == 1) {
+        checkState(declaring.getInterfaces()[0].getInterfaces().length == 0,
+                "Only single-level inheritance supported: %s",
+                declaring.getSimpleName());
+    }
+    Map<String, MethodMetadata> result = new LinkedHashMap<String, MethodMetadata>();
+    for (Method method : declaring.getMethods()) {
+        if (method.getDeclaringClass() == Object.class) {
+            continue;
+        }
+        MethodMetadata metadata = parseAndValidateMetadata(declaring, method);
+        checkState(!result.containsKey(metadata.configKey()), "Overrides unsupported: %s",
+                metadata.configKey());
+        result.put(metadata.configKey(), metadata);
+    }
+    return new ArrayList<MethodMetadata>(result.values());
+}
+```
+The source code after refactoring is:
+```
+public List<MethodMetadata> parseAndValidatateMetadata(Class<?> targetType) {
+    checkState(targetType.getTypeParameters().length == 0, "Parameterized types unsupported: %s",
+            targetType.getSimpleName());
+    checkState(targetType.getInterfaces().length <= 1, "Only single inheritance supported: %s",
+            targetType.getSimpleName());
+    if (targetType.getInterfaces().length == 1) {
+        checkState(targetType.getInterfaces()[0].getInterfaces().length == 0,
+                "Only single-level inheritance supported: %s",
+                targetType.getSimpleName());
+    }
+    Map<String, MethodMetadata> result = new LinkedHashMap<String, MethodMetadata>();
+    for (Method method : targetType.getMethods()) {
+        if (method.getDeclaringClass() == Object.class) {
+            continue;
+        }
+        MethodMetadata metadata = parseAndValidateMetadata(targetType, method);
+        checkState(!result.containsKey(metadata.configKey()), "Overrides unsupported: %s",
+                metadata.configKey());
+        result.put(metadata.configKey(), metadata);
+    }
+    return new ArrayList<MethodMetadata>(result.values());
+}
+```
+In this example, the developer renamed the parameter "declaring" to "targetType".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename parameter refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+package com.puppycrawl.tools.checkstyle;
+
+import java.util.Locale;
+
+import com.puppycrawl.tools.checkstyle.api.AuditEvent;
+import com.puppycrawl.tools.checkstyle.api.SeverityLevel;
+
+/**
+ * Represents the default formatter for log message.
+ * Default log message format is:
+ * [SEVERITY LEVEL] filePath:lineNo:columnNo: message. [CheckName]
+ * When the module id of the message has been set, the format is:
+ * [SEVERITY LEVEL] filePath:lineNo:columnNo: message. [ModuleId]
+ */
+public class AuditEventDefaultFormatter implements AuditEventFormatter {
+
+    /** Length of all separators. */
+    private static final int LENGTH_OF_ALL_SEPARATORS = 10;
+
+    /** Suffix of module names like XXXXCheck. */
+    private static final String SUFFIX = "Check";
+
+    @Override
+    public String format(AuditEvent event) {
+        final String fileName = event.getFileName();
+        final String message = event.getMessage();
+
+        final SeverityLevel severityLevel = event.getSeverityLevel();
+        final String severityLevelName;
+        if (severityLevel == SeverityLevel.WARNING) {
+            // We change the name of severity level intentionally
+            // to shorten the length of the log message.
+            severityLevelName = "WARN";
+        }
+        else {
+            severityLevelName = severityLevel.getName().toUpperCase(Locale.US);
+        }
+
+        final StringBuilder sb = initStringBuilderWithOptimalBuffer(event, severityLevelName);
+
+        sb.append('[').append(severityLevelName).append("] ")
+                .append(fileName).append(':').append(event.getLine());
+        if (event.getColumn() > 0) {
+            sb.append(':').append(event.getColumn());
+        }
+        sb.append(": ").append(message).append(" [");
+        if (event.getModuleId() == null) {
+            final String checkShortName = getCheckShortName(event);
+            sb.append(checkShortName);
+        }
+        else {
+            sb.append(event.getModuleId());
+        }
+        sb.append(']');
+
+        return sb.toString();
+    }
+
+    /**
+     * Returns the StringBuilder that should avoid StringBuffer.expandCapacity.
+     * bufferLength = fileNameLength + messageLength + lengthOfAllSeparators +
+     * + severityNameLength + checkNameLength.
+     * Method is excluded from pitest validation.
+     *
+     * @param event audit event.
+     * @param severityLevelNameLength severity level name.
+     * @return optimal StringBuilder.
+     */
+    private static StringBuilder initStringBuilderWithOptimalBuffer(AuditEvent event,
+                                                                    String severityLevelNameLength) {
+        final int bufLen = LENGTH_OF_ALL_SEPARATORS + event.getFileName().length()
+                + event.getMessage().length() + severityLevelNameLength.length()
+                + getCheckShortName(event).length();
+        return new StringBuilder(bufLen);
+    }
+
+    /**
+     * Returns check name without 'Check' suffix.
+     *
+     * @param event audit event.
+     * @return check name without 'Check' suffix.
+     */
+    private static String getCheckShortName(AuditEvent event) {
+        final String checkFullName = event.getSourceName();
+        String checkShortName = checkFullName.substring(checkFullName.lastIndexOf('.') + 1);
+        if (checkShortName.endsWith(SUFFIX)) {
+            final int endIndex = checkShortName.length() - SUFFIX.length();
+            checkShortName = checkShortName.substring(0, endIndex);
+        }
+        return checkShortName;
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

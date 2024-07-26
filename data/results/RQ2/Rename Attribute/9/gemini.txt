@@ -1,0 +1,20 @@
+Absolutely, you can definitely rename the attribute using refactorings to improve readability. Here's the refactored code with a more descriptive attribute name:
+
+```java
+final class EntityIndexingServiceImpl implements EntityIndexingServiceEx {
+  // ... other code ...
+
+  private static final class WorkspaceEntitiesRootsChangedRescanningInfo implements RootsChangeRescanningInfo {
+    @NotNull
+    private final List<EntityPointer<WorkspaceEntity>> affectedEntities; // Renamed attribute
+
+    private WorkspaceEntitiesRootsChangedRescanningInfo(@NotNull List<EntityPointer<WorkspaceEntity>> entities) {
+      this.affectedEntities = entities;
+    }
+  }
+
+  // ... other code ...
+}
+```
+
+The original attribute name `references` was not very descriptive of the attribute's purpose. The renamed attribute name `affectedEntities` clarifies that the list contains entities that have undergone root changes. This improves code readability and maintainability. 

@@ -1,0 +1,71 @@
+Reviewing the provided code snippet from the `TestTermsHashPerField` class in the `org.apache.lucene.index` package, we can identify opportunities for the Extract Class refactoring. This approach is beneficial for reducing the complexity of a class by moving some of its responsibilities into a new class. Let's analyze potential refactorings:
+
+1. **Posting Management**: The inner `Posting` class, along with the logic to manage postings (found in the `testAddAndUpdateRandom` method), can be extracted into a separate class. This class would handle the creation, management, and updating of postings.
+
+2. **Reader Validation**: The `assertDocAndFreq` method is a candidate to be moved to a new class, potentially named `DocFreqValidator`, which would encapsulate the logic for validating document frequencies.
+
+3. **Random Data Generation**: The functionality for generating random data in the `testWriteBytes` and `testAllocKnownSizeSlice` methods can be extracted into a utility class, which could be named `RandomDataGenerator`.
+
+Here's an example of how the refactoring might look for the first point:
+
+### Original Code Inside `TestTermsHashPerField`:
+
+```java
+// Inside testAddAndUpdateRandom
+class Posting {
+    int termId = -1;
+    final TreeMap<Integer, Integer> docAndFreq = new TreeMap<>();
+}
+Map<BytesRef, Posting> postingMap = new HashMap<>();
+// Logic for populating and using postingMap...
+```
+
+### Refactored Code:
+
+#### New Class: PostingManager.java
+
+```java
+package org.apache.lucene.index;
+
+import org.apache.lucene.util.BytesRef;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
+
+public class PostingManager {
+    private Map<BytesRef, Posting> postingMap = new HashMap<>();
+
+    private class Posting {
+        int termId = -1;
+        final TreeMap<Integer, Integer> docAndFreq = new TreeMap<>();
+    }
+
+    public void createOrUpdatePosting(BytesRef ref, int doc, int termOrd) {
+        Posting posting = postingMap.computeIfAbsent(ref, k -> new Posting());
+        if (posting.termId == -1) {
+            posting.termId = termOrd;
+        }
+        posting.docAndFreq.putIfAbsent(doc, 0);
+        posting.docAndFreq.compute(doc, (key, oldVal) -> oldVal + 1);
+    }
+
+    public Map<BytesRef, Posting> getPostings() {
+        return postingMap;
+    }
+}
+```
+
+#### Updated `TestTermsHashPerField`:
+
+```java
+// Use PostingManager in testAddAndUpdateRandom method
+PostingManager postingManager = new PostingManager();
+// ... rest of the code
+```
+
+In the refactored example, the responsibilities related to posting management are moved to a separate `PostingManager` class, simplifying the `TestTermsHashPerField` class and making the code more maintainable.
+
+The same approach can be applied to the other two points identified, creating separate classes for reader validation and random data generation. 
+
+Please note, to complete this refactoring, you would need to make corresponding adjustments in the `TestTermsHashPerField` class to integrate with these new classes. Also, thorough testing is necessary to ensure that the refactoring does not introduce any regressions.

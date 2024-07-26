@@ -1,0 +1,118 @@
+Upon examining the provided code snippet, it appears that there are indeed opportunities for extract method refactorings that can improve readability and potentially reusability of the code. One area that stands out for refactoring is the repeated pattern used to determine if a file type is forbidden based on its MIME type. The method checks are duplicated across different contexts (file paths, input streams, and byte arrays), making it a candidate for extraction to reduce redundancy and centralize the logic.
+
+Here's the proposed refactoring strategy:
+1. Extract the common logic used to determine if the MIME type of a content is forbidden into a separate method. This will allow us to simplify the checks across methods that determine if a file type is forbidden based on its MIME type.
+2. Update the existing methods to use the new method for checking the forbidden MIME types.
+
+Here is the refactored code incorporating these changes:
+
+```java
+package org.apache.solr.util;
+
+import com.j256.simplemagic.ContentInfo;
+import com.j256.simplemagic.ContentInfoUtil;
+import com.j256.simplemagic.ContentType;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+import org.apache.solr.common.SolrException;
+
+/** Utility class to guess the mime type of file based on its magic number. */
+public class FileTypeMagicUtil implements ContentInfoUtil.ErrorCallBack {
+    private final ContentInfoUtil util;
+    private static final Set<String> SKIP_FOLDERS = new HashSet<>(Arrays.asList(".", ".."));
+    private static final Set<String> forbiddenTypes = new HashSet<>(Arrays.asList(System.getProperty("solr.configset.upload.mimetypes.forbidden", "application/x-java-applet,application/zip,application/x-tar,text/x-shellscript").split(",")));
+
+    public static FileTypeMagicUtil INSTANCE = new FileTypeMagicUtil();
+
+    FileTypeMagicUtil() {
+        try {
+            util = new ContentInfoUtil("/magic/executables", this);
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Error parsing magic file", e);
+        }
+    }
+
+    public static void assertConfigSetFolderLegal(Path confPath) throws IOException {
+        Files.walkFileTree(confPath, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                if (isFileForbiddenInConfigset(file)) {
+                    throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, String.format(Locale.ROOT, "Not uploading file %s to configset, as it matched the MAGIC signature of a forbidden mime type %s", file, FileTypeMagicUtil.INSTANCE.guessMimeType(file)));
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                if (SKIP_FOLDERS.contains(dir.getFileName().toString()))
+                    return FileVisitResult.SKIP_SUBTREE;
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
+    public String guessMimeType(Path file) {
+        return guessMimeTypeUtil(() -> util.findMatch(file.toFile()));
+    }
+
+    String guessMimeType(InputStream stream) {
+        return guessMimeTypeUtil(() -> util.findMatch(stream));
+    }
+
+    public String guessMimeType(byte[] bytes) {
+        return guessMimeTypeUtil(() -> util.findMatch(bytes));
+    }
+
+    private String guessMimeTypeUtil(MimeTypeFinder finder) {
+        try {
+            ContentInfo contentInfo = finder.find();
+            if (contentInfo == null) {
+                return ContentType.OTHER.getMimeType();
+            } else {
+                return contentInfo.getContentType().getMimeType();
+            }
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+        }
+    }
+
+    public static boolean isFileForbiddenInConfigset(Path file) {
+        return isFileForbidden(FileTypeMagicUtil.INSTANCE.guessMimeType(file));
+    }
+
+    static boolean isFileForbiddenInConfigset(InputStream fileStream) {
+        return isFileForbidden(FileTypeMagicUtil.INSTANCE.guessMimeType(fileStream));
+    }
+
+    public static boolean isFileForbiddenInConfigset(byte[] bytes) {
+        return bytes == null || bytes.length == 0 ? false : isFileForbidden(FileTypeMagicUtil.INSTANCE.guessMimeType(bytes));
+    }
+
+    private static boolean isFileForbidden(String mimeType) {
+        return forbiddenTypes.contains(mimeType);
+    }
+
+    @FunctionalInterface
+    interface MimeTypeFinder {
+        ContentInfo find() throws IOException;
+    }
+
+    @Override
+    public void error(String line, String details, Exception e) {
+        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, String.format(Locale.ROOT, "%s: %s", line, details), e);
+    }
+}
+```
+
+### Key Changes:
+- Extracted MIME type checking logic into a new private method `isFileForbidden`, which simplifies the implementation of the `isFileForbiddenInConfigset` methods.
+- Introduced a functional interface `MimeTypeFinder` and a helper method `guessMimeTypeUtil` to handle the common exception handling for MIME type guessing, reducing code duplication. This improves the readability and maintainability of the methods that guess MIME types.

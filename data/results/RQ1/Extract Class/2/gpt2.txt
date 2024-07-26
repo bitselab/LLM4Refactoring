@@ -1,0 +1,80 @@
+In the provided code snippet, an "Extract Class" refactoring can be beneficial to improve readability and maintainability. The `BrokenInputStreamTest` class contains multiple responsibilities: it defines custom exceptions, provides parameters for tests, and includes various test cases. These responsibilities can be separated into different classes. Here’s how we can refactor the code:
+
+1. **Extract CustomException Class**: The `CustomeException` class should be extracted to its own file. This improves clarity and separates concerns.
+
+2. **Extract Parameters Provider**: The `parameters()` method can be extracted into a separate class, like `TestParametersProvider`. This class will solely be responsible for providing parameters to the tests.
+
+3. **Refactor BrokenInputStreamTest**: After extracting the `CustomeException` and `parameters()` method, `BrokenInputStreamTest` will be more focused on testing the `BrokenInputStream` functionality.
+
+Here's the refactored code:
+
+**CustomException.java:**
+```java
+package org.apache.commons.io.input;
+
+public class CustomException extends Exception {
+    private static final long serialVersionUID = 1L;
+}
+```
+
+**TestParametersProvider.java:**
+```java
+package org.apache.commons.io.input;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.file.FileSystemNotFoundException;
+import java.util.stream.Stream;
+
+public class TestParametersProvider {
+    public static Stream<Class<? extends Throwable>> parameters() {
+        return Stream.of(
+                IOException.class,
+                FileNotFoundException.class,
+                FileSystemNotFoundException.class,
+                RuntimeException.class,
+                IllegalArgumentException.class,
+                IllegalStateException.class,
+                Error.class,
+                ExceptionInInitializerError.class,
+                CustomException.class
+        );
+    }
+}
+```
+
+**BrokenInputStreamTest.java:**
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.io.InputStream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+public class BrokenInputStreamTest {
+
+    private static BrokenInputStream createBrokenInputStream(final Throwable exception) {
+        return (exception instanceof IOException) ? new BrokenInputStream((IOException) exception) : new BrokenInputStream(exception);
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.input.TestParametersProvider#parameters")
+    public void testAvailable(final Class<Exception> clazz) throws Exception {
+        // Test implementation...
+    }
+
+    // Other test methods...
+
+    @Test
+    public void testTryWithResources() {
+        // Test implementation...
+    }
+}
+```
+
+These changes make each class more focused and easier to maintain. The `BrokenInputStreamTest` class now concentrates on testing, while `CustomException` and `TestParametersProvider` handle their respective concerns.

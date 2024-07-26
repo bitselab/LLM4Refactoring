@@ -1,0 +1,15 @@
+In the given code snippet, the parameters generally have clear names that align well with their expected types and usages, reflecting their purposes accurately. However, there might be a slight improvement for clarity in one of the parameters:
+
+- The parameter `Pruning enableSkipping` might be better renamed to simply `Pruning pruning`. This change makes the parameter name more directly reflective of its type, although `enableSkipping` might be intended to describe the function of the `Pruning` object in this context (i.e., whether it enables skipping some operations).
+
+Here's the refactored code with the suggested change:
+
+```java
+public DoubleValuesSourceComparator(int numHits, String field, Double missingValue, boolean reversed,
+                                    Pruning pruning, DoubleMultiValuesToSingleValuesSource source) {
+    super(numHits, field, missingValue, reversed, pruning);
+    this.source = source;
+}
+```
+
+This renaming makes the parameter name more generic and focused on the type rather than its use case, which might or might not be preferable depending on additional context about how `Pruning` is used within the codebase. If `enableSkipping` precisely describes the role of the `Pruning` object, it might be better to retain the original name.

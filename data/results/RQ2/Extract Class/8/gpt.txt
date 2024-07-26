@@ -1,0 +1,34 @@
+In the provided code snippet, the `IndexedEntity` class within the `customBridge_dimensionFromAnnotationTypeInBridge` test method is a candidate for the Extract Class refactoring. This class is specifically tailored for testing the custom bridge with a dimension from an annotation type in a bridge. Extracting this class would improve readability and maintainability, especially if similar structures are used in multiple test methods.
+
+Here's how the refactored code might look:
+
+1. **Extract `IndexedEntity` Class:** Create a separate class outside of the test method. This class can then be reused in other tests if needed.
+2. **Refactor the Test Method:** Modify the test method to use the new external class.
+
+Refactored Code:
+
+```java
+// External class extracted from the test method
+class IndexedEntityWithCustomBridge {
+    @DocumentId
+    Integer id;
+
+    @VectorField(dimension = 3, valueBinder = @ValueBinderRef(type = ListTypeBridgeDimensionFromAnnotation.ExplicitFieldTypeBinder.class))
+    List<Float> floats;
+}
+
+class VectorFieldIT {
+    // ... [Other code remains unchanged] ...
+
+    @Test
+    void customBridge_dimensionFromAnnotationTypeInBridge() {
+        backendMock.expectSchema(INDEX_NAME, b -> b.field("floats", float[].class, f -> f.dimension(3)));
+        setupHelper.start().expectCustomBeans().setup(IndexedEntityWithCustomBridge.class);
+        backendMock.verifyExpectationsMet();
+    }
+
+    // ... [Rest of the class remains unchanged] ...
+}
+```
+
+In this refactoring, the `IndexedEntityWithCustomBridge` class is defined outside the test method. This new class encapsulates the specific configuration for testing the custom bridge with a dimension from an annotation type in a bridge. It improves the structure of the code by separating concerns and potentially allows for reuse of the `IndexedEntityWithCustomBridge` class in other test scenarios.

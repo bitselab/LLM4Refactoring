@@ -1,0 +1,113 @@
+After reviewing the provided code snippet, several refactoring opportunities can be identified to improve its readability, maintainability, and overall design. Here are the changes I suggest:
+
+1. **Use Lazy Initialization for `triggeredCircuitBreakers`:**
+   The method `checkTripped()` initializes `triggeredCircuitBreakers` to `null` and then checks if it is `null` every time before adding a new element. It's more efficient to initialize it lazily.
+
+2. **Use Java 8 Streams:**
+   Methods like `checkTripped()` and `checkAnyTripped()` can be refactored to use Java 8 streams for cleaner and more concise code.
+
+3. **Remove Redundant Initializations:**
+   The `memThreshold` and `cpuThreshold` fields are initialized with a default value of 100 but are meant to be configurable. The initial values can be removed if they are always set during initialization.
+
+4. **Improve Error Message Construction:**
+   The method `toErrorMessage()` can be refactored to use Java 8 String joining for cleaner code.
+
+5. **Consolidate Duplicate Code:**
+   The `getDebugInfo()` and `getErrorMessage()` methods have similar structures and can be refactored to reduce duplication.
+
+6. **Remove Deprecated Code:**
+   Since this class is marked as deprecated, consider removing it or replacing its usage in the codebase with the recommended alternatives.
+
+7. **Refactor Setter Methods:**
+   The `setMemEnabled`, `setCpuEnabled`, and their threshold counterparts can be refactored for better error handling and to avoid duplicate code.
+
+Here's the refactored code snippet:
+
+```java
+package org.apache.solr.util.circuitbreaker;
+
+import java.lang.invoke.MethodHandles;
+import org.apache.solr.common.util.NamedList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.util.stream.Collectors;
+
+@Deprecated(since = "9.4")
+public class CircuitBreakerManager extends CircuitBreaker {
+    // ... [Unchanged fields and constructor]
+
+    public List<CircuitBreaker> checkTripped() {
+        return circuitBreakerList.stream()
+                                 .filter(CircuitBreaker::isTripped)
+                                 .collect(Collectors.toList());
+    }
+
+    public boolean checkAnyTripped() {
+        return circuitBreakerList.stream().anyMatch(CircuitBreaker::isTripped);
+    }
+
+    public static String toErrorMessage(List<CircuitBreaker> circuitBreakerList) {
+        return circuitBreakerList.stream()
+                                 .map(CircuitBreaker::getErrorMessage)
+                                 .collect(Collectors.joining("\n"));
+    }
+
+    // ... [Unchanged isEnabled and getRegisteredCircuitBreakers methods]
+
+    @Override
+    public String getDebugInfo() {
+        return getCircuitBreakerInfo(CircuitBreaker::getDebugInfo);
+    }
+
+    @Override
+    public String getErrorMessage() {
+        return getCircuitBreakerInfo(CircuitBreaker::getErrorMessage);
+    }
+
+    private String getCircuitBreakerInfo(Function<CircuitBreaker, String> infoFunction) {
+        StringBuilder sb = new StringBuilder();
+        if (memEnabled) {
+            sb.append(infoFunction.apply(memCB));
+        }
+        if (cpuEnabled) {
+            if (memEnabled) sb.append("\n");
+            sb.append(infoFunction.apply(cpuCB));
+        }
+        return sb.toString();
+    }
+
+    // ... [Unchanged init method]
+
+    // Refactored setter methods
+    public void setMemEnabled(String enabled) {
+        this.memEnabled = parseBoolean(enabled);
+    }
+
+    public void setMemThreshold(String threshold) {
+        this.memThreshold = parseInt(threshold);
+    }
+
+    public void setCpuEnabled(String enabled) {
+        this.cpuEnabled = parseBoolean(enabled);
+    }
+
+    public void setCpuThreshold(String threshold) {
+        this.cpuThreshold = parseInt(threshold);
+    }
+
+    private boolean parseBoolean(String value) {
+        return Boolean.parseBoolean(value);
+    }
+
+    private int parseInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            log.error("Invalid number format: " + value, e);
+            return 0;
+        }
+    }
+}
+```
+
+These changes improve the code's readability and efficiency, and align it with modern Java practices.

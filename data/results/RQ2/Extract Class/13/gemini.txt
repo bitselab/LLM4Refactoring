@@ -1,0 +1,80 @@
+ **Here's the refactored code incorporating extract class refactorings:**
+
+**New class: StringConversionUtils**
+
+```java
+package org.junit.jupiter.params.converter;
+
+import java.util.List;
+
+public class StringConversionUtils {
+
+    private static final List<StringToObjectConverter> STRING_TO_OBJECT_CONVERTERS = unmodifiableList(asList(
+            new StringToBooleanConverter(),
+            new StringToCharacterConverter(),
+            new StringToNumberConverter(),
+            new StringToClassConverter(),
+            new StringToEnumConverter(),
+            new StringToJavaTimeConverter(),
+            new StringToCommonJavaTypesConverter(),
+            new FallbackStringToObjectConverter()
+    ));
+
+    public static Class<?> toWrapperType(Class<?> targetType) {
+        Class<?> wrapperType = getWrapperType(targetType);
+        return wrapperType != null ? wrapperType : targetType;
+    }
+
+    public static Optional<StringToObjectConverter> findConverterForTargetType(Class<?> targetType) {
+        Class<?> targetTypeToUse = toWrapperType(targetType);
+        return STRING_TO_OBJECT_CONVERTERS.stream()
+                .filter(converter -> converter.canConvert(targetTypeToUse))
+                .findFirst();
+    }
+
+}
+```
+
+**Refactored DefaultArgumentConverter class:**
+
+```java
+package org.junit.jupiter.params.converter;
+
+// ... other imports
+
+public class DefaultArgumentConverter implements ArgumentConverter {
+
+    public static final DefaultArgumentConverter INSTANCE = new DefaultArgumentConverter();
+
+    // ... other methods
+
+    @Override
+    public final Object convert(Object source, ParameterContext context) {
+        Class<?> targetType = context.getParameter().getType();
+        return convert(source, targetType, context);
+    }
+
+    public final Object convert(Object source, Class<?> targetType, ParameterContext context) {
+        // ... other logic
+
+        if (source instanceof String) {
+            Class<?> targetTypeToUse = StringConversionUtils.toWrapperType(targetType);
+            Optional<StringToObjectConverter> converter = StringConversionUtils.findConverterForTargetType(targetTypeToUse);
+            if (converter.isPresent()) {
+                // ... conversion logic using converter
+            }
+        }
+
+        // ... other logic
+    }
+
+}
+```
+
+**Key improvements:**
+
+- **Encapsulation:** String conversion logic is encapsulated in a dedicated class, promoting better organization and testability.
+- **Cohesion:** Methods relating to string conversion are grouped together, enhancing readability and maintainability.
+- **Reduced complexity:** The `DefaultArgumentConverter` class becomes more focused on its core responsibility of argument conversion.
+- **Single Responsibility Principle:** Each class now has a distinct responsibility, following a fundamental design principle.
+- **Potential for Reuse:** The `StringConversionUtils` class can be easily reused in other parts of the codebase if needed.

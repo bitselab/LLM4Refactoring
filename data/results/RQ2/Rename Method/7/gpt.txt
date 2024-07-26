@@ -1,0 +1,35 @@
+In the provided code snippet, the method `performInsert` can benefit from a rename method refactoring. The current name `performInsert` is somewhat generic and does not fully convey the method's purpose and functionality. A more descriptive name would enhance readability and maintainability of the code.
+
+A suggested new name for `performInsert` could be `executeInsertAndLogDetails`. This name better describes the method's operations: it performs an insert operation and also logs the details of the SQL statement being executed.
+
+Here is the refactored code with the renamed method:
+
+```java
+package org.hibernate.id.insert;
+
+// ... [import statements]
+
+public abstract class AbstractReturningDelegate extends AbstractGeneratedValuesMutationDelegate
+        implements InsertGeneratedIdentifierDelegate {
+
+    // ... [other methods and constructors]
+
+    @Override
+    public GeneratedValues executeInsertAndLogDetails(
+            PreparedStatementDetails statementDetails,
+            JdbcValueBindings valueBindings,
+            Object entity,
+            SharedSessionContractImplementor session) {
+        session.getJdbcServices().getSqlStatementLogger().logStatement( statementDetails.getSqlString() );
+        valueBindings.beforeStatement( statementDetails );
+        return executeAndExtractReturning( statementDetails.getSqlString(), statementDetails.getStatement(), session );
+    }
+
+    // ... [rest of the class]
+
+}
+```
+
+In this refactor:
+- The method `performInsert` has been renamed to `executeInsertAndLogDetails`.
+- The new name provides a clearer understanding of the method's actions, indicating that it not only performs an insert operation but also logs the SQL statement details.

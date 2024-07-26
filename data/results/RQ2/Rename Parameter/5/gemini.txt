@@ -1,0 +1,15 @@
+You're absolutely right. The parameter name "joinHintNeedRemove" is not very clear in the context of removing query hints from outer query blocks. Here's the refactored code with a better parameter name:
+
+```java
+public ClearOuterQueryHintShuttle(RelHint outerQueryHintToRemove) {
+  this.queryHintNeedRemove = outerQueryHintToRemove;
+  this.currentInheritPath = new ArrayDeque<>();
+  this.currentInheritPath.addAll(outerQueryHintToRemove.inheritPath);
+}
+```
+
+Changes made:
+
+* Renamed the parameter `joinHintNeedRemove` to `outerQueryHintToRemove`. This clarifies that the parameter refers to a query hint specifically needing removal from the outer query block.
+
+This refactoring improves code readability without affecting the functionality.

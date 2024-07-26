@@ -1,0 +1,45 @@
+You're absolutely right. The parameter name "values" in the `MapValueResolver` class is not very descriptive. Here's how we can refactor the code to improve readability:
+
+**Original Code:**
+
+```java
+private static class MapValueResolver implements DataBinder.ValueResolver {
+
+  private final Map<String, Object> values;
+
+  private MapValueResolver(Map<String, Object> values) {
+    this.map = values;
+  }
+
+  // ... rest of the class
+}
+```
+
+**Refactored Code:**
+
+```java
+private static class MapValueResolver implements DataBinder.ValueResolver {
+
+  private final Map<String, Object> mappedValues;
+
+  private MapValueResolver(Map<String, Object> mappedValues) {
+    this.mappedValues = mappedValues;
+  }
+
+  // ... rest of the class
+}
+```
+
+The changes made are:
+
+1. **Renamed parameter "values" to "mappedValues":** This new name clarifies that the `Map` holds key-value pairs used for resolving values.
+2. **Updated field name:** The field name is also changed to maintain consistency with the parameter name.
+
+This refactoring improves code readability by making the purpose of the `Map` more explicit. 
+
+**Additional Considerations:**
+
+* You could consider using a more generic name like `data` if the `Map` can hold different types of data, not just key-value pairs. However, in this specific context, "mappedValues" seems appropriate.
+* It's always a good practice to update any references to the old parameter name throughout the codebase to ensure consistency.
+
+By following these simple steps, you can enhance code readability and maintainability for yourself and your teammates.

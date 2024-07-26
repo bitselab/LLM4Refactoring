@@ -1,0 +1,41 @@
+In the provided code snippet, the `computeNumberOfSubpartitions` method is identified as a candidate for inline method refactoring. This method is relatively simple, and inlining it could make the code more direct and readable. The method's logic can be moved to the place where it is called, which appears to be in `getNumberOfSubpartitions`.
+
+### Refactored Code
+
+```java
+package org.apache.flink.runtime.executiongraph;
+
+// Import statements remain unchanged
+
+public class IntermediateResultPartition {
+
+    // Class members remain unchanged
+
+    public IntermediateResultPartition(
+        // Constructor remains unchanged
+    )
+
+    // Other methods remain unchanged
+
+    public int getNumberOfSubpartitions() {
+        if (!getProducer().getExecutionGraphAccessor().isDynamic()) {
+            List<ConsumerVertexGroup> consumerVertexGroups = getConsumerVertexGroups();
+            checkState(!consumerVertexGroups.isEmpty());
+            // The produced data is partitioned among a number of subpartitions, one for each
+            // consuming sub task. All vertex groups must have the same number of consumers
+            // for non-dynamic graph.
+            return consumerVertexGroups.get(0).size();
+        } else {
+            return numberOfSubpartitionsForDynamicGraph;
+        }
+    }
+
+    // Rest of the class remains unchanged
+}
+```
+
+### Changes Made
+1. **Inlined Method**: The logic from `computeNumberOfSubpartitions` has been moved directly into `getNumberOfSubpartitions`. This change eliminates the need for the separate `computeNumberOfSubpartitions` method, simplifying the code structure.
+2. **Removed Method**: The `computeNumberOfSubpartitions` method has been removed as its logic is now included in `getNumberOfSubpartitions`.
+
+In addition to these changes, it is always good to review the context in which these methods are used to ensure that inlining aligns with the overall design and usage patterns within the codebase. This refactoring improves readability by reducing indirection and making the code more straightforward.

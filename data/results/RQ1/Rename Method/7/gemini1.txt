@@ -1,0 +1,77 @@
+ **Here are some refactoring opportunities I identified in the code snippet:**
+
+1. **Remove Deprecated Constructor:**
+   - The constructor `AbstractReturningDelegate(PostInsertIdentityPersister persister)` is marked as deprecated and intended for removal. It's recommended to remove it to streamline the class and avoid confusion.
+
+2. **Extract Duplicated Code:**
+   - The `executeAndExtract(sql, preparedStatement, session)` method is deprecated and partially duplicated within `performInsertReturning`. Extract the shared logic into a separate, non-deprecated method to reduce code duplication and maintainability.
+
+3. **Combine Overlapping Methods:**
+   - The `performInsertReturning` and `performInsert` methods share similar structure and responsibilities. Consider merging them into a single method with a parameter indicating whether to log the SQL statement or not.
+
+4. **Consider Template Method Pattern:**
+   - The `executeAndExtractReturning` method is abstract, and its implementation likely varies across concrete subclasses. This suggests a template method pattern:
+     - Move the common steps of SQL execution and statement release into a non-abstract `executeAndExtractReturningTemplate` method within the abstract class.
+     - Refactor `executeAndExtractReturning` to call this template method and provide a hook for subclasses to implement database-specific logic for extracting generated values.
+
+5. **Address Overly Generic Exception Handling:**
+   - The `performInsertReturning` method catches a general `SQLException` and rethrows a converted exception with a detailed message. However, it might be beneficial to catch more specific exceptions for targeted error handling and potential recovery strategies.
+
+**Here's the refactored code incorporating these suggestions:**
+
+```java
+package org.hibernate.id.insert;
+
+// ... imports
+
+public abstract class AbstractReturningDelegate extends AbstractGeneratedValuesMutationDelegate
+        implements InsertGeneratedIdentifierDelegate {
+
+    public AbstractReturningDelegate(
+            EntityPersister persister,
+            EventType timing,
+            boolean supportsArbitraryValues,
+            boolean supportsRowId) {
+        super(persister, timing, supportsArbitraryValues, supportsRowId);
+    }
+
+    @Override
+    public GeneratedValues performInsert(
+            PreparedStatementDetails statementDetails,
+            JdbcValueBindings valueBindings,
+            Object entity,
+            SharedSessionContractImplementor session) {
+        return executeAndExtractReturning(statementDetails.getSqlString(), true,
+                statementDetails.getStatement(), session);
+    }
+
+    @Override
+    public final GeneratedValues performInsertReturning(String sql, SharedSessionContractImplementor session, Binder binder) {
+        return executeAndExtractReturning(sql, false, prepareStatement(sql, session), session);
+    }
+
+    protected GeneratedValues executeAndExtractReturningTemplate(String sql, boolean logStatement,
+            PreparedStatement preparedStatement, SharedSessionContractImplementor session) {
+        try {
+            if (logStatement) {
+                session.getJdbcServices().getSqlStatementLogger().logStatement(sql);
+            }
+            if (binder != null) {
+                binder.bindValues(preparedStatement);
+            }
+            return executeAndExtractReturning(sql, preparedStatement, session);
+        } catch (SQLException sqle) {
+            throw convertSQLException(sqle, "could not insert: " + MessageHelper.infoString(persister), sql);
+        } finally {
+            releaseStatement(preparedStatement, session);
+        }
+    }
+
+    protected abstract GeneratedValues executeAndExtractReturning(
+            String sql,
+            PreparedStatement preparedStatement,
+            SharedSessionContractImplementor session);
+
+    // ... other methods
+}
+```

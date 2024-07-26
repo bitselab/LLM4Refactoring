@@ -1,0 +1,60 @@
+The provided code is quite extensive and covers a range of functionalities. Given its size and complexity, there are several areas where refactoring could be beneficial to improve readability, maintainability, and possibly performance. I will address some of these areas and provide refactored code snippets where applicable.
+
+1. **Extract Method Refactoring**: The `classifyFiles` method in `CustomizableRootsBuilder` is quite long and handles multiple responsibilities. It can be broken down into smaller methods, each handling a specific task.
+
+2. **Use of Collections**: The use of `new ArrayList<>()` and `new HashSet<>()` can be optimized by using `Collections.emptyList()` and `Collections.emptySet()` in scenarios where an empty collection is returned. This avoids unnecessary object creation.
+
+3. **Remove Redundant Code**: There are redundant `continue` statements at the end of each `if` block in the `classifyFiles` method, which can be removed as they are unnecessary.
+
+4. **Simplify Conditional Statements**: In some places, conditional checks can be simplified for better readability.
+
+5. **Consistent Null Checks**: The code inconsistently uses assertions (`LOG.assertTrue`) and explicit null checks. It's better to be consistent in this approach.
+
+Due to the length of the code, I'll refactor a segment of it as an example:
+
+### Original Code Segment
+```java
+if (fileSet == null) {
+    filesFromIndexableSetContributors.add(file);
+    continue;
+}
+
+EntityPointer<?> entityPointer = WorkspaceFileSetRecognizer.INSTANCE.getEntityPointer(fileSet);
+
+if (fileSet.getKind() == WorkspaceFileKind.CONTENT || fileSet.getKind() == WorkspaceFileKind.TEST_CONTENT) {
+    LOG.assertTrue(entityPointer != null, "Content element's fileSet without entity reference, " + fileSet);
+    // ... more code ...
+    continue;
+}
+
+// ... other conditions ...
+```
+
+### Refactored Code Segment
+```java
+if (fileSet == null) {
+    filesFromIndexableSetContributors.add(file);
+} else {
+    EntityPointer<?> entityPointer = WorkspaceFileSetRecognizer.INSTANCE.getEntityPointer(fileSet);
+    processFileSet(fileSet, entityPointer, file, fileUrlManager, project);
+}
+
+// ...
+
+private void processFileSet(WorkspaceFileSet fileSet, EntityPointer<?> entityPointer, VirtualFile file, VirtualFileUrlManager fileUrlManager, Project project) {
+    if (fileSet.getKind() == WorkspaceFileKind.CONTENT || fileSet.getKind() == WorkspaceFileKind.TEST_CONTENT) {
+        handleContentFileSet(entityPointer, fileSet, file, fileUrlManager);
+    } else {
+        // ... other conditions ...
+    }
+}
+
+private void handleContentFileSet(EntityPointer<?> entityPointer, WorkspaceFileSet fileSet, VirtualFile file, VirtualFileUrlManager fileUrlManager) {
+    LOG.assertTrue(entityPointer != null, "Content element's fileSet without entity reference, " + fileSet);
+    // ... existing logic for CONTENT or TEST_CONTENT ...
+}
+```
+
+This refactoring breaks down the `classifyFiles` method into smaller, more manageable pieces and removes unnecessary `continue` statements.
+
+Given the complexity and size of the code, a thorough review and testing are recommended after any refactoring.

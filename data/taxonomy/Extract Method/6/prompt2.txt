@@ -1,0 +1,372 @@
+Extract method refactorings are frequently empployed to remove duplicate code snippets to improve readability and reusability.
+##################################################
+An extract method refactoring pattern is to extract repeated statements as a new method within the class. Here is an example of the extract method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+class ClientThread extends Thread
+{
+    public void run()
+    {
+        try
+        {
+            _db.init();
+        }
+        catch (DBException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+        try
+        {
+            _workloadstate=_workload.initThread(_props,_threadid,_threadcount);
+        }
+        catch (WorkloadException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+        //spread the thread operations out so they don't all hit the DB at the same time
+        try
+        {
+            //GH issue 4 - throws exception if _target>1 because random.nextInt argument must be >0
+            //and the sleep() doesn't make sense for granularities < 1 ms anyway
+            if ( (_target>0) && (_target<=1.0) )
+            {
+                sleep(Utils.random().nextInt((int)(1.0/_target)));
+            }
+        }
+        catch (InterruptedException e)
+        {
+            // do nothing.
+        }
+
+        try
+        {
+            if (_dotransactions)
+            {
+                long st=System.currentTimeMillis();
+                while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested())
+                {
+                    if (!_workload.doTransaction(_db,_workloadstate))
+                    {
+                        break;
+                    }
+
+                    _opsdone++;
+
+                    if (_target>0)
+                    {
+                        while (System.currentTimeMillis()-currTimeMillis<((double)_opsdone)/_target)
+                        {
+                            try
+                            {
+                                sleep(1);
+                            }
+                            catch (InterruptedException e)
+                            {
+                                // do nothing.
+                            }
+
+                        }
+                    }
+                }
+            }
+            else
+            {
+                long st=System.currentTimeMillis();
+                while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested())
+                {
+                    if (!_workload.doInsert(_db,_workloadstate))
+                    {
+                        break;
+                    }
+
+                    _opsdone++;
+
+                    if (_target>0)
+                    {
+                        while (System.currentTimeMillis()-currTimeMillis<((double)_opsdone)/_target)
+                        {
+                            try
+                            {
+                                sleep(1);
+                            }
+                            catch (InterruptedException e)
+                            {
+                                // do nothing.
+                            }
+
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            System.exit(0);
+        }
+        try
+        {
+            _db.cleanup();
+        }
+        catch (DBException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+    }
+
+}
+```
+The source code after refactoring is:
+```
+class ClientThread extends Thread
+{
+    public void run()
+    {
+        try
+        {
+            _db.init();
+        }
+        catch (DBException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+        try
+        {
+            _workloadstate=_workload.initThread(_props,_threadid,_threadcount);
+        }
+        catch (WorkloadException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+        //spread the thread operations out so they don't all hit the DB at the same time
+        try
+        {
+            //GH issue 4 - throws exception if _target>1 because random.nextInt argument must be >0
+            //and the sleep() doesn't make sense for granularities < 1 ms anyway
+            if ( (_target>0) && (_target<=1.0) )
+            {
+                sleep(Utils.random().nextInt((int)(1.0/_target)));
+            }
+        }
+        catch (InterruptedException e)
+        {
+            // do nothing.
+        }
+
+        try
+        {
+            if (_dotransactions)
+            {
+                long st=System.currentTimeMillis();
+                while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested())
+                {
+                    if (!_workload.doTransaction(_db,_workloadstate))
+                    {
+                        break;
+                    }
+
+                    _opsdone++;
+
+                    throttle(st);
+                }
+            }
+            else
+            {
+                long st=System.currentTimeMillis();
+                while (((_opcount == 0) || (_opsdone < _opcount)) && !_workload.isStopRequested())
+                {
+                    if (!_workload.doInsert(_db,_workloadstate))
+                    {
+                        break;
+                    }
+
+                    _opsdone++;
+
+                    throttle(st);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            System.exit(0);
+        }
+        try
+        {
+            _db.cleanup();
+        }
+        catch (DBException e)
+        {
+            e.printStackTrace();
+            e.printStackTrace(System.out);
+            return;
+        }
+    }
+
+    private void throttle(long currTimeMillis) {
+        if (_target>0)
+        {
+            while (System.currentTimeMillis()-currTimeMillis<((double)_opsdone)/_target)
+            {
+                try
+                {
+                    sleep(1);
+                }
+                catch (InterruptedException e)
+                {
+                    // do nothing.
+                }
+
+            }
+        }
+    }
+}
+```
+In this example, the developer extracted the following statements:
+```
+if (_target>0)
+{
+    while (System.currentTimeMillis()-currTimeMillis<((double)_opsdone)/_target)
+    {
+        try
+        {
+            sleep(1);
+        }
+        catch (InterruptedException e)
+        {
+            // do nothing.
+        }
+
+    }
+}
+```
+as new method "throttle".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public class ITestAbfsInputStreamReadFooter extends ITestAbfsInputStream {
+
+    private void testSeekAndReadWithConf(boolean optimizeFooterRead,
+                                         SeekTo seekTo) throws Exception {
+        // Running the test for file sizes ranging from 256 KB to 4 MB with
+        // Footer Read Buffer size ranging from 256 KB to 1 MB
+        // This will cover files less than footer read buffer size,
+        // Files between footer read buffer and read buffer size
+        // Files bigger than read buffer size
+        int fileIdx = 0;
+        for (int i = 0; i <= 4; i++) {
+            for (int j = 0; j <= 2; j++) {
+                int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+                int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+                final AzureBlobFileSystem fs = getFileSystem(
+                        optimizeFooterRead, fileSize);
+                String fileName = methodName.getMethodName() + fileIdx++;
+                byte[] fileContent = getRandomBytesArray(fileSize);
+                Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+                seekReadAndTest(fs, testFilePath, seekPos(seekTo, fileSize), HUNDRED,
+                        fileContent, footerReadBufferSize);
+            }
+        }
+    }
+
+    @Test
+    public void testPartialReadWithNoData() throws Exception {
+        int fileIdx = 0;
+        for (int i = 0; i <= 4; i++) {
+            for (int j = 0; j <= 2; j++) {
+                int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+                int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+                final AzureBlobFileSystem fs = getFileSystem(
+                        true, fileSize, footerReadBufferSize);
+                String fileName = methodName.getMethodName() + fileIdx++;
+                byte[] fileContent = getRandomBytesArray(fileSize);
+                Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+                testPartialReadWithNoData(fs, testFilePath,
+                        fileSize - AbfsInputStream.FOOTER_SIZE, AbfsInputStream.FOOTER_SIZE,
+                        fileContent, footerReadBufferSize);
+            }
+        }
+    }
+
+    @Test
+    public void testPartialReadWithNoData() throws Exception {
+        int fileIdx = 0;
+        for (int i = 0; i <= 4; i++) {
+            for (int j = 0; j <= 2; j++) {
+                int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+                int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+                final AzureBlobFileSystem fs = getFileSystem(
+                        true, fileSize, footerReadBufferSize);
+                String fileName = methodName.getMethodName() + fileIdx++;
+                byte[] fileContent = getRandomBytesArray(fileSize);
+                Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+                testPartialReadWithNoData(fs, testFilePath,
+                        fileSize - AbfsInputStream.FOOTER_SIZE, AbfsInputStream.FOOTER_SIZE,
+                        fileContent, footerReadBufferSize);
+            }
+        }
+    }
+
+    @Test
+    public void testFooterReadBufferSizeConfiguration() throws Exception {
+        Configuration config = new Configuration(this.getRawConfiguration());
+        config.unset(AZURE_FOOTER_READ_BUFFER_SIZE);
+        try (AzureBlobFileSystem fs = (AzureBlobFileSystem) FileSystem.newInstance(config)){
+            int fileIdx = 0;
+            int fileSize = ONE_KB
+            String fileName = methodName.getMethodName() + fileIdx;
+            byte[] fileContent = getRandomBytesArray(fileSize);
+            Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+            final int footerReadBufferSizeConfig = 4 * ONE_KB;
+            final int footerReadBufferSizeBuilder = 5 * ONE_KB;
+
+            // Verify that default value is used if nothing is set explicitly
+            FSDataInputStream iStream = fs.open(testFilePath);
+            verifyConfigValueInStream(iStream, DEFAULT_FOOTER_READ_BUFFER_SIZE);
+
+            // Verify that value set in config is used if builder is not used
+            getAbfsStore(fs).getAbfsConfiguration()
+                    .setFooterReadBufferSize(footerReadBufferSizeConfig);
+            iStream = fs.open(testFilePath);
+            verifyConfigValueInStream(iStream, footerReadBufferSizeConfig);
+
+            // Verify that when builder is used value set in parameters is used
+            getAbfsStore(fs).getAbfsConfiguration().unset(AZURE_FOOTER_READ_BUFFER_SIZE);
+            FutureDataInputStreamBuilder builder = fs.openFile(testFilePath);
+            builder.opt(AZURE_FOOTER_READ_BUFFER_SIZE,
+                    footerReadBufferSizeBuilder);
+            iStream = builder.build().get();
+            verifyConfigValueInStream(iStream, footerReadBufferSizeBuilder);
+
+            // Verify that when builder is used value set in parameters is used
+            // even if config is set
+            getAbfsStore(fs).getAbfsConfiguration()
+                    .setFooterReadBufferSize(footerReadBufferSizeConfig);
+            iStream = builder.build().get();
+            verifyConfigValueInStream(iStream, footerReadBufferSizeBuilder);
+
+            // Verify that when the builder is used and parameter in builder is not set,
+            // the value set in configuration is used
+            getAbfsStore(fs).getAbfsConfiguration()
+                    .setFooterReadBufferSize(footerReadBufferSizeConfig);
+            builder = fs.openFile(testFilePath);
+            iStream = builder.build().get();
+            verifyConfigValueInStream(iStream, footerReadBufferSizeConfig);
+        }
+    }
+    
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

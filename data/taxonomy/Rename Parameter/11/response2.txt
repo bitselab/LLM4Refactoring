@@ -1,0 +1,51 @@
+The provided code snippet for `formatTick` appears well-organized and specific in its naming, but there are still some opportunities for minor refactoring to enhance clarity and maintainability:
+
+1. **Enhanced Comment Clarity:** The comment about caching and volatile fields could be clarified for better understanding.
+2. **Variable Renaming for Clarity:** The method parameters and local variables like `_tzFormat1` and `_tzFormat2` could be renamed to be more descriptive about what they represent.
+3. **Extracting Repeated Logic:** The logic for checking if a tick matches the current second is repeated for `tick1` and `tick2`. This could be extracted into a separate method to reduce duplication and enhance readability.
+
+Here is how the refactored code might look:
+
+```java
+protected Tick formatTick(long currentTimeMillis)
+{
+    long seconds = currentTimeMillis / 1000;
+
+    // Enhance comment clarity:
+    // Two ticks are cached to minimize recalculations and reduce jitter when times are monotonically increasing.
+    // Ticks are stored in a volatile field, which carries a small risk of benign recalculations due to concurrent modifications.
+    TickHolder holder = _tickHolder;
+    Tick cachedTick = getCachedTickIfAvailable(holder, seconds);
+    if (cachedTick != null) {
+        return cachedTick;
+    }
+
+    String formattedPrefix = formatTime(currentTimeMillis, _timeZoneFormatPrimary);
+    String formattedSuffix = formatTime(currentTimeMillis, _timeZoneFormatSecondary);
+    Tick newTick = new Tick(seconds, formattedPrefix, formattedSuffix);
+    _tickHolder = new TickHolder(newTick, holder == null ? null : holder.tick1);
+    return newTick;
+}
+
+private Tick getCachedTickIfAvailable(TickHolder holder, long seconds) {
+    if (holder != null) {
+        if (holder.tick1 != null && holder.tick1.getSeconds() == seconds)
+            return holder.tick1;
+        if (holder.tick2 != null && holder.tick2.getSeconds() == seconds)
+            return holder.tick2;
+    }
+    return null;
+}
+
+private String formatTime(long timeMillis, String timeZoneFormat) {
+    return doFormat(timeMillis, timeZoneFormat);
+}
+```
+
+Changes made:
+- Renamed `now` to `currentTimeMillis` to better indicate it represents time in milliseconds.
+- Renamed `_tzFormat1` and `_tzFormat2` to `_timeZoneFormatPrimary` and `_timeZoneFormatSecondary` for better clarity.
+- Extracted repeated tick-check logic into `getCachedTickIfAvailable` method.
+- Extracted time formatting into `formatTime` method for better modularity and clarity.
+
+These changes aim to make the code easier to understand and maintain, aligning with common refactoring goals.

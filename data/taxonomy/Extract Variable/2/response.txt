@@ -1,0 +1,132 @@
+Analyzing the provided code snippet from `BoundedInputStreamTest`, we can identify potential refactoring opportunities based on the "extract variable" pattern. Here’s a closer look at the code to decide whether any repeated expressions can be extracted as new variables:
+
+### Observations
+1. The expressions `helloWorld.length`, `hello.length`, and `bounded.getMaxLength()` are repeated multiple times across the test methods.
+2. These expressions are integral to the control flow and conditions within loops and assertions.
+
+### Refactoring Opportunities
+The repeated expressions `helloWorld.length` and `hello.length` appear frequently. Extracting these into variables at the beginning of each test case where they are used could improve clarity and possibly the efficiency (though minimal, as method calls like `.length` are typically very fast in Java).
+
+### Proposed Refactoring Changes:
+- Extract `helloWorld.length` into a variable like `helloWorldLength` at the beginning of each test method where it's used multiple times.
+- Similarly, extract `hello.length` into a variable like `helloLength`.
+
+Let's apply these changes to your code:
+
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.apache.commons.io.IOUtils;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests for {@link BoundedInputStream}.
+ */
+public class BoundedInputStreamTest {
+
+    private void compare(final String msg, final byte[] expected, final byte[] actual) {
+        assertEquals(expected.length, actual.length, msg + " length");
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], actual[i], msg + " byte[" + i + "]");
+        }
+    }
+
+    @Test
+    public void testOnMaxLength() throws Exception {
+        BoundedInputStream bounded;
+        final byte[] helloWorld = "Hello World".getBytes();
+        final int helloWorldLength = helloWorld.length;  // Extracted variable
+        final byte[] hello = "Hello".getBytes();
+        final int helloLength = hello.length;            // Extracted variable
+        final AtomicBoolean boolRef = new AtomicBoolean();
+
+        // limit = length
+        bounded = new BoundedInputStream(new ByteArrayInputStream(helloWorld), helloWorldLength) {
+            @Override
+            protected void onMaxLength(final long max, final long readCount) {
+                boolRef.set(true);
+            }
+        };
+        assertEquals(helloWorldLength, bounded.getMaxLength());
+        assertEquals(0, bounded.getCount());
+        assertEquals(bounded.getMaxLength(), bounded.getRemaining());
+        assertFalse(boolRef.get());
+        int readCount = 0;
+        for (int i = 0; i < helloWorldLength; i++) {
+            assertEquals(helloWorld[i], bounded.read(), "limit = length byte[" + i + "]");
+            readCount++;
+            assertEquals(helloWorldLength, bounded.getMaxLength());
+            assertEquals(readCount, bounded.getCount());
+            assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+        }
+        assertEquals(-1, bounded.read(), "limit = length end");
+        assertEquals(helloWorldLength, bounded.getMaxLength());
+        assertEquals(readCount, bounded.getCount());
+        assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+        assertTrue(boolRef.get());
+
+        // limit > length
+        boolRef.set(false);
+        bounded = new BoundedInputStream(new ByteArrayInputStream(helloWorld), helloWorldLength + 1) {
+            @Override
+            protected void onMaxLength(final long max, final long readCount) {
+                boolRef.set(true);
+            }
+        };
+        assertEquals(helloWorldLength + 1, bounded.getMaxLength());
+        assertEquals(0, bounded.getCount());
+        assertEquals(bounded.getMaxLength(), bounded.getRemaining());
+        assertFalse(boolRef.get());
+        readCount = 0;
+        for (int i = 0; i < helloWorldLength; i++) {
+            assertEquals(helloWorld[i], bounded.read(), "limit > length byte[" + i + "]");
+            readCount++;
+            assertEquals(helloWorldLength + 1, bounded.getMaxLength());
+            assertEquals(readCount, bounded.getCount());
+            assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+        }
+        assertEquals(-1, bounded.read(), "limit > length end");
+        assertEquals(helloWorldLength + 1, bounded.getMaxLength());
+        assertEquals(readCount, bounded.getCount());
+        assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+        assertFalse(boolRef.get());
+
+        // limit < length
+        boolRef.set(false);
+        bounded = new BoundedInputStream(new ByteArrayInputStream(helloWorld), helloLength) {
+            @Override
+            protected void onMaxLength(final long max, final long readCount) {
+                boolRef.set(true);
+            }
+        };
+        assertEquals(helloLength, bounded.getMaxLength());
+        assertEquals(0, bounded.getCount());
+        assertEquals(bounded.getMaxLength(), bounded.getRemaining());
+        assertFalse(boolRef.get());
+        readCount = 0;
+        for (int i = 0; i < helloLength; i++) {
+            assertEquals(hello[i], bounded.read(), "limit < length byte[" + i + "]");
+            readCount++;
+            assertEquals(helloLength, bounded.getMaxLength());
+            assertEquals(readCount, bounded.getCount());
+            assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+        }
+        assertEquals(-1, bounded.read(), "limit < length end");
+        assertEquals(helloLength, bounded.getMaxLength());
+        assertEquals(readCount, bounded.getCount());
+        assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+        assertTrue(boolRef.get());
+    }
+
+    // Other tests can be similarly refactored...
+}
+```
+
+This refactoring centralizes the definition of the array lengths and uses them throughout, which makes the code cleaner and possibly easier to maintain.

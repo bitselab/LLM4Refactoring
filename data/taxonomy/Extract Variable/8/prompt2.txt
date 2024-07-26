@@ -1,0 +1,51 @@
+Extract variable refactorings are frequently employed to remove repeated expressions to improve readability and reusability.
+##################################################
+An extract variable refactoring pattern is to extract repeated expressions as a new variable within the same method. Here is an example of the extract variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private Map<String, User> getIssueUsersByLogin(Issue issue) {
+    Map<String, User> usersByLogin = Maps.newHashMap();
+    if (issue.assignee() != null) {
+        usersByLogin.put(issue.assignee(), userIndex.getByLogin(issue.assignee()));
+    }
+    String reporter = issue.reporter();
+    if (reporter != null) {
+        usersByLogin.put(reporter, userIndex.getByLogin(reporter));
+    }
+    return usersByLogin;
+}
+```
+The source code after refactoring is:
+```
+private Map<String, User> getIssueUsersByLogin(Issue issue) {
+    Map<String, User> usersByLogin = Maps.newHashMap();
+    String assignee = issue.assignee();
+    if (assignee != null) {
+        usersByLogin.put(assignee, userIndex.getByLogin(assignee));
+    }
+    String reporter = issue.reporter();
+    if (reporter != null) {
+        usersByLogin.put(reporter, userIndex.getByLogin(reporter));
+    }
+    return usersByLogin;
+}
+```
+In this example, the developer extracted the expression "issue.assignee()" as new variable "assignee".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+private Builder(LuceneSearchIndexScope<?> scope, LuceneSearchIndexValueFieldContext<F> field) {
+    super( scope, field );
+
+    LuceneFieldCodec<F> codec = field.type().codec();
+    if ( codec instanceof LuceneVectorFieldCodec ) {
+        vectorElementsType = ((LuceneVectorFieldCodec<F>) codec).vectorElementsType();
+        indexedVectorsDimension = ((LuceneVectorFieldCodec<F>) codec).getConfiguredDimensions();
+    }
+    else {
+        // shouldn't really happen as if someone tries this it should fail on `queryElementFactory` lookup.
+        throw new AssertionFailure( "Attempting to use a knn predicate on a non-vector field." );
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

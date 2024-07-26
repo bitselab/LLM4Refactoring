@@ -1,0 +1,93 @@
+The provided code snippet from the `CommitGraphWriter` class is well-structured, with significant use of constants and appropriate segmentation into methods. However, there are a few opportunities for extract variable refactorings to enhance readability and reduce redundancy.
+
+### Refactoring Opportunities:
+1. **Repeated Access to Constants**:
+   - In several methods, constants like `hashsz`, `CHUNK_ID_OID_FANOUT`, etc., are accessed multiple times. Extracting these into local variables at the beginning of methods could improve clarity.
+
+2. **Magic Numbers**:
+   - There are instances of magic numbers, like buffer sizes and offsets (e.g., `byte[4]`, `byte[8]`). While not directly related to repeated expressions, introducing named constants or variables for these could improve maintainability and readability.
+
+Here's the refactored version of a few methods demonstrating these changes:
+
+### Refactored Code:
+```java
+package org.eclipse.jgit.internal.storage.commitgraph;
+
+// Imports remain unchanged
+
+public class CommitGraphWriter {
+    // Class fields and other methods remain unchanged
+
+    private void writeHeader(CancellableDigestOutputStream out, int numChunks)
+            throws IOException {
+        int headerLength = 8;
+        byte[] headerBuffer = new byte[headerLength];
+        NB.encodeInt32(headerBuffer, 0, COMMIT_GRAPH_MAGIC);
+        byte[] buff = {
+            (byte) COMMIT_GRAPH_VERSION_GENERATED,
+            (byte) OID_HASH_VERSION,
+            (byte) numChunks,
+            (byte) 0
+        };
+        System.arraycopy(buff, 0, headerBuffer, 4, 4);
+        out.write(headerBuffer, 0, headerLength);
+        out.flush();
+    }
+
+    private void writeChunkLookup(CancellableDigestOutputStream out,
+                                  List<ChunkHeader> chunks) throws IOException {
+        int numChunks = chunks.size();
+        long chunkOffset = 8 + (numChunks + 1L) * CHUNK_LOOKUP_WIDTH;
+        byte[] buffer = new byte[CHUNK_LOOKUP_WIDTH];
+        for (ChunkHeader chunk : chunks) {
+            NB.encodeInt32(buffer, 0, chunk.id);
+            NB.encodeInt64(buffer, 4, chunkOffset);
+            out.write(buffer);
+            chunkOffset += chunk.size;
+        }
+        NB.encodeInt32(buffer, 0, 0);
+        NB.encodeInt64(buffer, 4, chunkOffset);
+        out.write(buffer);
+    }
+
+    private void writeChunks(CancellableDigestOutputStream out,
+                             List<ChunkHeader> chunks) throws IOException {
+        for (ChunkHeader chunk : chunks) {
+            switch (chunk.id) {
+                case CHUNK_ID_OID_FANOUT:
+                    writeFanoutTable(out);
+                    break;
+                case CHUNK_ID_OID_LOOKUP:
+                    writeOidLookUp(out);
+                    break;
+                case CHUNK_ID_COMMIT_DATA:
+                    writeCommitData(out);
+                    break;
+                case CHUNK_ID_EXTRA_EDGE_LIST:
+                    writeExtraEdges(out);
+                    break;
+                case CHUNK_ID_BLOOM_FILTER_INDEX:
+                case CHUNK_ID_BLOOM_FILTER_DATA:
+                    if (!chunk.data.isPresent()) {
+                        throw new IllegalStateException(
+                                "Data for this chunk must be precomputed");
+                    }
+                    chunk.data.get().writeTo(out);
+                    break;
+                default:
+                    throw new IllegalStateException(
+                            "Don't know how to write chunk " + chunk.id);
+            }
+        }
+    }
+
+    // Other methods remain unchanged
+}
+```
+
+### Explanation:
+- In `writeHeader`, a local variable `headerLength` was introduced to replace the repeated magic number `8`.
+- In `writeChunkLookup`, the repeated `CHUNK_LOOKUP_WIDTH` and size calculations for the `buffer` have been kept as they enhance readability without introducing a new variable.
+- In the `writeChunks` method, the handling of chunks remains unchanged since the switch-case pattern efficiently handles the different types of chunks without unnecessary duplication.
+
+This refactoring focuses on extracting commonly used values within methods, improving readability while avoiding over-engineering.

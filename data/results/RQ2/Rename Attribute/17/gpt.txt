@@ -1,0 +1,85 @@
+In the provided code snippet, the attribute `TERSE_NAME` is a candidate for renaming to improve readability and clarity. The name `TERSE_NAME` is not very descriptive of its purpose or usage within the context of the `PlainTextLanguage` class. A more descriptive name would help developers understand the role of this constant more quickly.
+
+Here's the refactored code with the renamed attribute:
+
+```java
+package net.sourceforge.pmd.lang;
+
+import net.sourceforge.pmd.annotation.Experimental;
+import net.sourceforge.pmd.cpd.AnyTokenizer;
+import net.sourceforge.pmd.cpd.CpdCapableLanguage;
+import net.sourceforge.pmd.cpd.Tokenizer;
+import net.sourceforge.pmd.lang.ast.AstInfo;
+import net.sourceforge.pmd.lang.ast.Parser;
+import net.sourceforge.pmd.lang.ast.Parser.ParserTask;
+import net.sourceforge.pmd.lang.ast.RootNode;
+import net.sourceforge.pmd.lang.ast.impl.AbstractNode;
+import net.sourceforge.pmd.lang.document.TextRegion;
+import net.sourceforge.pmd.lang.impl.SimpleLanguageModuleBase;
+
+@Experimental
+public final class PlainTextLanguage extends SimpleLanguageModuleBase implements CpdCapableLanguage {
+    private static final String LANGUAGE_ID = "text"; // Renamed TERSE_NAME to LANGUAGE_ID for better clarity
+
+    private static final PlainTextLanguage INSTANCE = new PlainTextLanguage();
+
+    private PlainTextLanguage() {
+        super(LanguageMetadata.withId(LANGUAGE_ID).name("Plain text")
+                        .extensions("plain-text-file-goo-extension")
+                        .addDefaultVersion("default"),
+                new TextLvh());
+    }
+
+    public static PlainTextLanguage getInstance() {
+        return INSTANCE;
+    }
+
+    @Override
+    public Tokenizer createCpdTokenizer(LanguagePropertyBundle bundle) {
+        return new AnyTokenizer();
+    }
+
+    private static final class TextLvh implements LanguageVersionHandler {
+        @Override
+        public Parser getParser() {
+            return PlainTextFile::new;
+        }
+    }
+
+    public static class PlainTextFile extends AbstractNode<PlainTextFile, PlainTextFile> implements RootNode {
+
+        private final AstInfo<PlainTextFile> astInfo;
+
+        PlainTextFile(ParserTask task) {
+            this.astInfo = new AstInfo<>(task, this);
+        }
+
+        @Override
+        public TextRegion getTextRegion() {
+            return getTextDocument().getEntireRegion();
+        }
+
+        @Override
+        public String getXPathNodeName() {
+            return "TextFile";
+        }
+
+        @Override
+        public String getImage() {
+            return null;
+        }
+
+        @Override
+        public String toString() {
+            return "Plain text file (" + getEndLine() + " lines)";
+        }
+
+        @Override
+        public AstInfo<? extends RootNode> getAstInfo() {
+            return astInfo;
+        }
+    }
+}
+```
+
+In this refactored version, `TERSE_NAME` has been renamed to `LANGUAGE_ID`, which more accurately describes its purpose as an identifier for the language. This change enhances the readability of the code and makes it more intuitive for other developers who might work with it.

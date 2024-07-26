@@ -1,0 +1,97 @@
+Upon reviewing the provided code, I identified several opportunities for extract variable refactoring. These opportunities are primarily related to the repeated expressions involving `helloWorld.length`, `hello.length`, and `bounded.getMaxLength()`.
+
+Here is the refactored code:
+
+```java
+@Test
+public void testOnMaxLength() throws Exception {
+    BoundedInputStream bounded;
+    final byte[] helloWorld = "Hello World".getBytes();
+    final byte[] hello = "Hello".getBytes();
+    final AtomicBoolean boolRef = new AtomicBoolean();
+
+    // limit = length
+    int helloWorldLength = helloWorld.length;
+    bounded = new BoundedInputStream(new ByteArrayInputStream(helloWorld), helloWorldLength) {
+        @Override
+        protected void onMaxLength(final long max, final long readCount) {
+            boolRef.set(true);
+        }
+    };
+    assertEquals(helloWorldLength, bounded.getMaxLength());
+    assertEquals(0, bounded.getCount());
+    assertEquals(bounded.getMaxLength(), bounded.getRemaining());
+    assertFalse(boolRef.get());
+    int readCount = 0;
+    for (int i = 0; i < helloWorldLength; i++) {
+        assertEquals(helloWorld[i], bounded.read(), "limit = length byte[" + i + "]");
+        readCount++;
+        int maxLength = bounded.getMaxLength();
+        assertEquals(helloWorldLength, maxLength);
+        assertEquals(readCount, bounded.getCount());
+        assertEquals(maxLength - readCount, bounded.getRemaining());
+    }
+    assertEquals(-1, bounded.read(), "limit = length end");
+    assertEquals(helloWorldLength, bounded.getMaxLength());
+    assertEquals(readCount, bounded.getCount());
+    assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+    assertTrue(boolRef.get());
+
+    // limit > length
+    boolRef.set(false);
+    bounded = new BoundedInputStream(new ByteArrayInputStream(helloWorld), helloWorldLength + 1) {
+        @Override
+        protected void onMaxLength(final long max, final long readCount) {
+            boolRef.set(true);
+        }
+    };
+    assertEquals(helloWorldLength + 1, bounded.getMaxLength());
+    assertEquals(0, bounded.getCount());
+    assertEquals(bounded.getMaxLength(), bounded.getRemaining());
+    assertFalse(boolRef.get());
+    readCount = 0;
+    for (int i = 0; i < helloWorldLength; i++) {
+        assertEquals(helloWorld[i], bounded.read(), "limit > length byte[" + i + "]");
+        readCount++;
+        int maxLength = bounded.getMaxLength();
+        assertEquals(helloWorldLength + 1, maxLength);
+        assertEquals(readCount, bounded.getCount());
+        assertEquals(maxLength - readCount, bounded.getRemaining());
+    }
+    assertEquals(-1, bounded.read(), "limit > length end");
+    assertEquals(helloWorldLength + 1, bounded.getMaxLength());
+    assertEquals(readCount, bounded.getCount());
+    assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+    assertFalse(boolRef.get());
+
+    // limit < length
+    boolRef.set(false);
+    int helloLength = hello.length;
+    bounded = new BoundedInputStream(new ByteArrayInputStream(helloWorld), helloLength) {
+        @Override
+        protected void onMaxLength(final long max, final long readCount) {
+            boolRef.set(true);
+        }
+    };
+    assertEquals(helloLength, bounded.getMaxLength());
+    assertEquals(0, bounded.getCount());
+    assertEquals(bounded.getMaxLength(), bounded.getRemaining());
+    assertFalse(boolRef.get());
+    readCount = 0;
+    for (int i = 0; i < helloLength; i++) {
+        assertEquals(hello[i], bounded.read(), "limit < length byte[" + i + "]");
+        readCount++;
+        int maxLength = bounded.getMaxLength();
+        assertEquals(helloLength, maxLength);
+        assertEquals(readCount, bounded.getCount());
+        assertEquals(maxLength - readCount, bounded.getRemaining());
+    }
+    assertEquals(-1, bounded.read(), "limit < length end");
+    assertEquals(helloLength, bounded.getMaxLength());
+    assertEquals(readCount, bounded.getCount());
+    assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+    assertTrue(boolRef.get());
+}
+```
+
+In the refactored code, the expressions `helloWorld.length`, `hello.length`, and `bounded.getMaxLength()` are extracted into variables `helloWorldLength`, `helloLength`, and `maxLength` respectively to enhance readability and maintainability.

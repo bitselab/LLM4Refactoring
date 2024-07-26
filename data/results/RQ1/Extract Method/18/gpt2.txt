@@ -1,0 +1,86 @@
+Analyzing the provided code snippet, there are clear opportunities for "Extract Method" refactoring to improve code readability, maintainability, and reduce code duplication. Specifically, the methods `guessMimeType(Path file)`, `guessMimeType(InputStream stream)`, and `guessMimeType(byte[] bytes)` have similar structures and actions. The common logic in these methods can be extracted into a private method to reduce duplication.
+
+Here's the refactored code:
+
+```java
+package org.apache.solr.util;
+
+import com.j256.simplemagic.ContentInfo;
+import com.j256.simplemagic.ContentInfoUtil;
+import com.j256.simplemagic.ContentType;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+import org.apache.solr.common.SolrException;
+
+/** Utility class to guess the mime type of file based on its magic number. */
+public class FileTypeMagicUtil implements ContentInfoUtil.ErrorCallBack {
+    private final ContentInfoUtil util;
+    private static final Set<String> SKIP_FOLDERS = new HashSet<>(Arrays.asList(".", ".."));
+    private static final Set<String> forbiddenTypes = new HashSet<>(
+        Arrays.asList(
+            System.getProperty(
+                "solr.configset.upload.mimetypes.forbidden",
+                "application/x-java-applet,application/zip,application/x-tar,text/x-shellscript")
+            .split(",")));
+
+    public static FileTypeMagicUtil INSTANCE = new FileTypeMagicUtil();
+
+    FileTypeMagicUtil() {
+        try {
+            util = new ContentInfoUtil("/magic/executables", this);
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Error parsing magic file", e);
+        }
+    }
+
+    // ... Other methods ...
+
+    public String guessMimeType(Path file) {
+        return guessMimeTypeCommon(() -> util.findMatch(file.toFile()));
+    }
+
+    String guessMimeType(InputStream stream) {
+        return guessMimeTypeCommon(() -> util.findMatch(stream));
+    }
+
+    public String guessMimeType(byte[] bytes) {
+        return guessMimeTypeCommon(() -> util.findMatch(bytes));
+    }
+
+    private String guessMimeTypeCommon(Supplier<ContentInfo> contentInfoSupplier) {
+        try {
+            ContentInfo contentInfo = contentInfoSupplier.get();
+            if (contentInfo == null) {
+                return ContentType.OTHER.getMimeType();
+            } else {
+                return contentInfo.getContentType().getMimeType();
+            }
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+        }
+    }
+
+    // ... Other methods ...
+
+    @FunctionalInterface
+    private interface Supplier<T> {
+        T get() throws IOException;
+    }
+}
+```
+
+In this refactoring:
+
+1. A private method `guessMimeTypeCommon` is introduced. This method takes a `Supplier<ContentInfo>` functional interface as an argument. This interface is used to defer the execution of the method that actually fetches the `ContentInfo`.
+
+2. Each of the `guessMimeType` methods now calls `guessMimeTypeCommon`, passing a lambda expression that provides the specific way of obtaining the `ContentInfo` (either from a `Path`, `InputStream`, or byte array).
+
+3. A functional interface `Supplier<T>` is defined to allow throwing `IOException`. This is necessary because the standard Java `Supplier<T>` interface does not allow for checked exceptions.
+
+This refactoring reduces duplication and improves the clarity of the code, making it easier to maintain and modify in the future.

@@ -1,0 +1,12 @@
+The method name `capitalizeJoinHints` suggests that the function is specifically capitalizing join hints in a relational node (`RelNode`). However, upon reviewing the code, it becomes clear that the method does not specifically deal with join hints or their capitalization. Instead, it accepts a `CapitalizeQueryHintsShuttle`, which implies that it might be working on a broader range of query hints rather than just join hints.
+
+Given this, a more accurate name that aligns with the method's body would be `capitalizeQueryHints`, since the `CapitalizeQueryHintsShuttle` might be capitalizing all kinds of hints within the query, not just those related to joins. This name more accurately reflects the operation being performed by the method—accepting a shuttle that processes (potentially capitalizes) various query hints, not just join-specific ones.
+
+Refactored code:
+```java
+public static RelNode capitalizeQueryHints(RelNode root) {
+    return root.accept(new CapitalizeQueryHintsShuttle());
+}
+```
+
+This change improves the readability and accuracy of the method identifier, aligning it better with what the method actually does, which is processing (potentially all) query hints rather than just capitalizing join hints.

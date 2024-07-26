@@ -1,0 +1,75 @@
+Inline variable refactorings are frequently rmployed to eliminate unnecessary variables to improve readability.
+##################################################
+##################################################
+An inline variable refactoring pattern is to remove variables that are used only once within the method. Here is an example of the inline variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public int getNumEntries() throws IOException {
+    if (m_closed) {
+        open(false);
+    }
+    if (m_fc.size() > SEGMENT_HEADER_BYTES) {
+        final int numEntries = m_buf.b().getInt(COUNT_OFFSET);
+        return numEntries;
+    } else {
+        return 0;
+    }
+}
+```
+The source code after refactoring is:
+```
+public int getNumEntries() throws IOException {
+    if (m_closed) {
+        open(false);
+    }
+    if (m_fc.size() > SEGMENT_HEADER_BYTES) {
+        return m_buf.b().getInt(COUNT_OFFSET);
+    } else {
+        return 0;
+    }
+}
+```
+In this example, the developer removed the unnecessary variable "numEntries".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential inline variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public static @NotNull String createBriefReport(@NotNull LineData lineData,
+                                                List<ConditionCoverageExpression> conditions,
+                                                List<SwitchCoverageExpression> switches) {
+    StringBuilder buf = new StringBuilder();
+    String defaultResult = CoverageBundle.message("hits.title", lineData.getHits());
+    buf.append(defaultResult).append("\n");
+    int idx = 0;
+    int hits = 0;
+
+    if (lineData.getJumps() != null) {
+        for (JumpData jumpData : lineData.getJumps()) {
+            if (idx >= conditions.size()) {
+                LOG.info("Cannot map coverage report data with PSI: there are more branches in report then in PSI");
+                return createDefaultHitsMessage(lineData);
+            }
+            ConditionCoverageExpression expression = conditions.get(idx++);
+            addJumpDataInfo(buf, jumpData, expression);
+            hits += jumpData.getTrueHits() + jumpData.getFalseHits();
+        }
+    }
+
+    if (lineData.getSwitches() != null) {
+        for (SwitchData switchData : lineData.getSwitches()) {
+            if (idx >= switches.size()) {
+                LOG.info("Cannot map coverage report data with PSI: there are more switches in report then in PSI");
+                return createDefaultHitsMessage(lineData);
+            }
+            SwitchCoverageExpression expression = switches.get(idx++);
+            addSwitchDataInfo(buf, switchData, expression, lineData.getStatus());
+            hits += IntStream.of(switchData.getHits()).sum() + switchData.getDefaultHits();
+        }
+    }
+    if (lineData.getHits() > hits && hits > 0) {
+        buf.append(JavaCoverageBundle.message("report.unknown.outcome", lineData.getHits() - hits));
+    }
+
+    return buf.toString();
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

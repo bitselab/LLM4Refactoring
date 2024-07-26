@@ -1,0 +1,28 @@
+The original code snippet for `MetadataDataStreamsService` involves the following attributes:
+```java
+public class MetadataDataStreamsService {
+    private final ClusterService clusterService;
+    private final IndicesService indicesService;
+    private final MasterServiceTaskQueue<UpdateLifecycleTask> taskQueue;
+    private final MasterServiceTaskQueue<SetRolloverOnWriteTask> setRolloverOnWriteTaskQueue;
+}
+```
+
+Analyzing this snippet:
+- The identifiers `clusterService` and `indicesService` are clear and straightforward, following good naming conventions for service-type components.
+- The identifiers for `taskQueue` and `setRolloverOnWriteTaskQueue` are both related to `MasterServiceTaskQueue`, but they serve different purposes and handle different types of tasks.
+
+Refactoring Suggestions:
+- Renaming `taskQueue` to `updateLifecycleTaskQueue` would make the purpose of this attribute clearer and align the naming convention with `setRolloverOnWriteTaskQueue`. This follows the pattern of being specific about the type of tasks handled by each queue, enhancing code readability and maintainability.
+
+Here is the refactored code:
+```java
+public class MetadataDataStreamsService {
+    private final ClusterService clusterService;
+    private final IndicesService indicesService;
+    private final MasterServiceTaskQueue<UpdateLifecycleTask> updateLifecycleTaskQueue;
+    private final MasterServiceTaskQueue<SetRolloverOnWriteTask> setRolloverOnWriteTaskQueue;
+}
+```
+
+This change increases consistency across attribute names and clarifies the distinct roles of the two task queues.

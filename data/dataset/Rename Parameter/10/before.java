@@ -1,0 +1,122 @@
+package com.github.javaparser.printer;
+
+import com.github.javaparser.ast.expr.Expression;
+import org.junit.jupiter.api.Test;
+
+import static com.github.javaparser.StaticJavaParser.parseExpression;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringWriter;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import static org.junit.jupiter.api.Assertions.fail;
+import org.junit.jupiter.api.BeforeAll;
+import org.w3c.dom.Document;
+import org.xml.sax.SAXException;
+
+class XmlPrinterTest {
+
+    // Used for building XML documents
+    private static DocumentBuilderFactory documentBuilderFactory;
+    private static DocumentBuilder documentBuilder;
+
+    @BeforeAll
+    public static void setupDocumentBuilder() {
+        try {
+            documentBuilderFactory = DocumentBuilderFactory.newInstance();
+            documentBuilderFactory.setNamespaceAware(true);
+            documentBuilderFactory.setCoalescing(true);
+            documentBuilderFactory.setIgnoringElementContentWhitespace(true);
+            documentBuilderFactory.setIgnoringComments(true);
+            documentBuilder = documentBuilderFactory.newDocumentBuilder();
+        } catch (ParserConfigurationException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    // Used for serializing XML documents (Necessary only when doing error reporting)
+    private static TransformerFactory transformerFactory;
+    private static Transformer transformer;
+
+    @BeforeAll
+    public static void setupTransformerFactory() {
+        try {
+            transformerFactory = TransformerFactory.newInstance();
+            transformer = transformerFactory.newTransformer();
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        } catch (TransformerConfigurationException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    public Document getDocument(String xml) throws SAXException, IOException {
+        InputStream inputStream = new ByteArrayInputStream(xml.getBytes());
+        Document result = documentBuilder.parse(inputStream);
+        result.normalizeDocument();
+        return result;
+    }
+
+    public String getXML(Document document) throws TransformerException {
+        StringWriter result = new StringWriter(); // Closing a StringWriter is not needed
+        transformer.transform(new DOMSource(document), new StreamResult(result));
+        return result.toString();
+    }
+
+    public void assertXMLEquals(String xml1, String actual) throws SAXException, IOException {
+        final Document expectedDocument = getDocument(xml1);
+        final Document actualDocument = getDocument(actual);
+
+        if (!expectedDocument.isEqualNode(actualDocument)) {
+            try {
+                fail(String.format("-- expected:\n%s-- actual:\n%s",
+                        getXML(expectedDocument), getXML(actualDocument)));
+            } catch(TransformerException ex) {
+                fail(String.format(""
+                                + "expected: <%s>, but it was <%s>\n"
+                                + "Additionally, a TransformerException was raised when trying to report XML document contents",
+                        xml1, actual), ex);
+            }
+        }
+    }
+
+    @Test
+    void testWithType() throws SAXException, IOException {
+        Expression expression = parseExpression("1+1");
+        XmlPrinter xmlOutput = new XmlPrinter(true);
+
+        String output = xmlOutput.output(expression);
+
+        assertXMLEquals("<root type='BinaryExpr' operator='PLUS'><left type='IntegerLiteralExpr' value='1'></left><right type='IntegerLiteralExpr' value='1'></right></root>", output);
+    }
+
+    @Test
+    void testWithoutType() throws SAXException, IOException {
+        Expression expression = parseExpression("1+1");
+
+        XmlPrinter xmlOutput = new XmlPrinter(false);
+
+        String output = xmlOutput.output(expression);
+
+        assertXMLEquals("<root operator='PLUS'><left value='1'></left><right value='1'></right></root>", output);
+    }
+
+    @Test
+    void testList() throws SAXException, IOException {
+        Expression expression = parseExpression("a(1,2)");
+
+        XmlPrinter xmlOutput = new XmlPrinter(true);
+
+        String output = xmlOutput.output(expression);
+
+        assertXMLEquals("<root type='MethodCallExpr'><name type='SimpleName' identifier='a'></name><arguments><argument type='IntegerLiteralExpr' value='1'></argument><argument type='IntegerLiteralExpr' value='2'></argument></arguments></root>", output);
+    }
+}

@@ -1,0 +1,48 @@
+Here are some refactoring opportunities for the provided code snippet:
+
+1. Refactor `getHintedOptions` method:
+
+  - The method currently uses streams for a relatively simple task. While not necessarily wrong, a more concise approach using a loop can improve readability for this specific case.
+
+  Refactored code:
+
+  ```java
+  public static Map<String, String> getHintedOptions(List<RelHint> tableHints) {
+      for (RelHint hint : tableHints) {
+          if (hint.hintName.equalsIgnoreCase(HINT_NAME_OPTIONS)) {
+              return hint.kvOptions;
+          }
+      }
+      return Collections.emptyMap();
+  }
+  ```
+
+2. Refactor `getTableAlias` method:
+
+  - The logic for handling empty `aliasNames` and checking for `LogicalTableScan` can be improved for readability.
+
+  Refactored code:
+
+  ```java
+  public static Optional<String> getTableAlias(RelNode node) {
+      if (node instanceof Hintable) {
+          Hintable aliasNode = (Hintable) node;
+          List<String> aliasNames = aliasNode.getHints().stream()
+                  .filter(h -> h.hintName.equalsIgnoreCase(FlinkHints.HINT_ALIAS))
+                  .flatMap(h -> h.listOptions.stream())
+                  .collect(Collectors.toList());
+          if (!aliasNames.isEmpty()) {
+              return Optional.of(aliasNames.get(0));
+          } else if (canTransposeToTableScan(node)) {
+              return getTableAlias(node.getInput(0));
+          }
+      }
+      return Optional.empty();
+  }
+  ```
+
+3. Consider renaming `stringifyHints` method:
+
+  - The name `stringifyHints` doesn't clearly indicate the output format (string with commas). A more descriptive name could be `getHintsAsString`.
+
+These refactorings focus on improving code readability and potentially reducing minor complexities. 

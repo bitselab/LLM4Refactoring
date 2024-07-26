@@ -1,0 +1,17 @@
+The parameter `testEvent` in the `assertFailingWithMessage` method is a good candidate for renaming to improve readability and clarity. The name `testEvent` is somewhat generic and does not clearly convey the nature of the parameter. A more descriptive name could be `executionEvents` or `testExecutionEvents`, which better represents that it is a collection or stream of events related to the execution of a test.
+
+Here is the refactored version of the method with the renamed parameter:
+
+```java
+private static void assertFailingWithMessage(Events testExecutionEvents, String errorMessage) {
+    testExecutionEvents
+            .assertStatistics(stats -> stats.failed(1))
+            .assertThatEvents().haveExactly(1, finishedWithFailure(message(errorMessage)));
+}
+```
+
+In this refactored method:
+- `testEvent` is renamed to `testExecutionEvents` to more accurately describe that it contains the events from the test execution.
+- Additionally, `msg` is renamed to `errorMessage` for better readability, indicating that this string is an error message.
+
+This refactoring improves the readability of the code by making the purpose of the parameters more explicit.

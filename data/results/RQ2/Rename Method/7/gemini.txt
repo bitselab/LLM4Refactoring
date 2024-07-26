@@ -1,0 +1,77 @@
+ **Here's the refactored code with a more descriptive method name:**
+
+```java
+package org.hibernate.id.insert;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+import org.hibernate.engine.jdbc.mutation.JdbcValueBindings;
+import org.hibernate.engine.jdbc.mutation.group.PreparedStatementDetails;
+import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.EventType;
+import org.hibernate.generator.values.AbstractGeneratedValuesMutationDelegate;
+import org.hibernate.generator.values.GeneratedValues;
+import org.hibernate.id.PostInsertIdentityPersister;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.pretty.MessageHelper;
+
+/**
+ * Abstract {@link org.hibernate.generator.values.GeneratedValuesMutationDelegate} implementation where
+ * the underlying strategy causes the generated identifier to be returned as
+ * an effect of performing the insert statement. Thus, there is no need for
+ * an additional sql statement to determine the generated identifier.
+ *
+ * @author Steve Ebersole
+ */
+public abstract class AbstractReturningDelegate extends AbstractGeneratedValuesMutationDelegate
+        implements InsertGeneratedIdentifierDelegate {
+    /**
+     * @deprecated Use {@link #AbstractReturningDelegate(EntityPersister, EventType, boolean, boolean)} instead.
+     */
+    @Deprecated( forRemoval = true, since = "6.5" )
+    public AbstractReturningDelegate(PostInsertIdentityPersister persister) {
+        super( persister, EventType.INSERT );
+    }
+
+    public AbstractReturningDelegate(
+            EntityPersister persister,
+            EventType timing,
+            boolean supportsArbitraryValues,
+            boolean supportsRowId) {
+        super( persister, timing, supportsArbitraryValues, supportsRowId );
+    }
+
+    @Override
+    public GeneratedValues executeInsertAndExtractReturningValues(
+            PreparedStatementDetails statementDetails,
+            JdbcValueBindings valueBindings,
+            Object entity,
+            SharedSessionContractImplementor session) {
+        session.getJdbcServices().getSqlStatementLogger().logStatement( statementDetails.getSqlString() );
+        valueBindings.beforeStatement( statementDetails );
+        return executeAndExtractReturning( statementDetails.getSqlString(), statementDetails.getStatement(), session );
+    }
+
+    // ... (rest of the code remains unchanged)
+}
+```
+
+**Explanation of the refactoring:**
+
+- **Original method name:** `performInsert()`
+- **Refactored method name:** `executeInsertAndExtractReturningValues()`
+
+**Improvements:**
+
+- **Clarity:** The new name clearly conveys the method's specific actions:
+    - Executing an insert statement
+    - Extracting any generated values (returned by the database as a result of the insert)
+- **Accuracy:** The original name, `performInsert()`, was more generic and could have applied to various insert-related operations. The new name is more precise.
+- **Readability:** The new name uses a common naming convention for methods that execute actions and return results, improving code readability and maintainability.
+
+**Additional notes:**
+
+- This refactoring is a relatively minor change, but it can have a positive impact on code understanding and maintainability.
+- It's worth considering descriptive method names when writing new code or refactoring existing code.

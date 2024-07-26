@@ -1,0 +1,56 @@
+The provided code snippet can benefit from an "Extract Method" refactoring to remove the duplicate code in both `getGenericType(Field field)` and `getGenericType(Parameter parameter)` methods. By extracting the common code into a new method, we can improve readability and maintainability. Here's the refactored code:
+
+```java
+package org.mockito.internal.util.reflection;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+
+public class GenericMaster {
+
+    /**
+     * Finds the generic type (parametrized type) of the field. If the field is not generic it returns Object.class.
+     *
+     * @param field the field to inspect
+     */
+    public Class<?> getGenericType(Field field) {
+        return extractGenericType(field.getGenericType());
+    }
+
+    /**
+     * Resolves the type (parametrized type) of the parameter. If the parameter is not generic it returns Object.class.
+     *
+     * @param parameter the parameter to inspect
+     */
+    public Class<?> getGenericType(Parameter parameter) {
+        return extractGenericType(parameter.getType());
+    }
+
+    /**
+     * Extracts the generic type from the provided Type.
+     *
+     * @param type the Type to inspect
+     * @return the extracted generic class, or Object.class if not parametrized
+     */
+    private Class<?> extractGenericType(Type type) {
+        if (type instanceof ParameterizedType) {
+            Type actual = ((ParameterizedType) type).getActualTypeArguments()[0];
+            if (actual instanceof Class) {
+                return (Class<?>) actual;
+            } else if (actual instanceof ParameterizedType) {
+                // in case of nested generics, we don't go deep
+                return (Class<?>) ((ParameterizedType) actual).getRawType();
+            }
+        }
+        return Object.class;
+    }
+}
+```
+
+Key Changes:
+1. **Extract Method**: The logic for extracting the generic type is now in a private method `extractGenericType(Type type)`. This method handles the common logic that was previously duplicated.
+2. **Update Public Methods**: Both `getGenericType` methods are now simplified to call `extractGenericType`, passing the relevant type (`Field` or `Parameter`).
+
+This refactoring adheres to the DRY (Don't Repeat Yourself) principle and makes the code easier to understand and maintain.

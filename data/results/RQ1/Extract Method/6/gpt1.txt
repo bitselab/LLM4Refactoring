@@ -1,0 +1,44 @@
+In the provided code snippet, a clear opportunity for refactoring is observed in the repetitive pattern of file creation for tests. This pattern appears in several methods and involves creating a file name, generating file content, and creating a file with that content in the Azure Blob FileSystem. Extracting this repeated pattern into a separate method will improve the readability and maintainability of the code.
+
+The repeated code snippet is:
+```java
+String fileName = methodName.getMethodName() + fileIdx;
+byte[] fileContent = getRandomBytesArray(fileSize);
+Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+```
+
+Here's how the refactored code would look:
+
+Refactored Method:
+```java
+private Path createTestFile(AzureBlobFileSystem fs, String methodName, int fileIdx, int fileSize) throws IOException {
+    String fileName = methodName + fileIdx;
+    byte[] fileContent = getRandomBytesArray(fileSize);
+    return createFileWithContent(fs, fileName, fileContent);
+}
+```
+
+Refactoring in Context:
+I'll refactor one of the methods (`testNumBackendCalls`) to demonstrate how this new method can be used.
+
+```java
+private void testNumBackendCalls(boolean optimizeFooterRead) throws Exception {
+    int fileIdx = 0;
+    for (int i = 0; i <= 4; i++) {
+        for (int j = 0; j <= 2; j++) {
+            int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+            int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+            final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+            Path testFilePath = createTestFile(fs, methodName.getMethodName(), fileIdx++, fileSize);
+            // Rest of the method logic...
+        }
+    }
+}
+```
+
+In this refactoring:
+- The repetitive file creation code is encapsulated into the `createTestFile` method.
+- This method is used in place of the repeated snippet in the `testNumBackendCalls` method.
+- The same refactoring should be applied to all other methods where the repetitive code snippet appears.
+
+For a complete refactoring, replace all instances of the original snippet with calls to `createTestFile` in each method where the snippet is used. This change will make the code more maintainable and adhere to the DRY (Don't Repeat Yourself) principle.

@@ -1,0 +1,51 @@
+After reviewing the provided code, I've identified some opportunities for inline variable refactoring to improve readability. Inline variable refactoring is about replacing a variable with its initialization expression directly where the variable is used, provided it makes the code clearer. This is particularly useful when a variable is used only in a single place.
+
+Here are the changes:
+
+1. In the `configuration` method within `DatabaseContainer`, the variable `url` is used only once in each branch of the `if` statement. It can be inlined directly into the `if` condition.
+
+2. In the `Configuration` class, methods `withDialect`, `withDriver`, `withUrl`, `withUser`, `withPass`, and `withIsolation` each use a parameter only once. These parameters can be inlined directly in the conditional statement.
+
+Refactored Code:
+
+```java
+// ... [rest of the imports and code]
+
+public final class DatabaseContainer {
+    // ... [existing class members]
+
+    public static Configuration configuration() {
+        // Inline variable 'url' directly in the if condition
+        if (System.getProperty("jdbc.url") != null && !System.getProperty("jdbc.url").trim().isEmpty()) {
+            // ... [rest of the code in the if block]
+        } else {
+            // ... [rest of the code in the else block]
+        }
+    }
+
+    // ... [rest of the DatabaseContainer class]
+}
+
+// ... [rest of the SupportedDatabase enum]
+
+public static class Configuration {
+    // ... [existing fields and constructors]
+
+    // Refactor methods to inline variables
+    private Configuration withDialect(String dialect) {
+        return (dialect == null) ? this : new Configuration(dialect, driver, url, user, pass, isolation);
+    }
+
+    private Configuration withDriver(String driver) {
+        return (driver == null) ? this : new Configuration(dialect, driver, url, user, pass, isolation);
+    }
+
+    // ... [similar changes for withUrl, withUser, withPass, and withIsolation]
+
+    // ... [rest of the Configuration class]
+}
+
+// ... [rest of the file]
+```
+
+These refactoring steps make the code more concise without losing readability. Each inlined expression is simple and doesn't add complexity to the code, making it a good candidate for inline variable refactoring.

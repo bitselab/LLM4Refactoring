@@ -1,0 +1,219 @@
+Extract class refactorings are frequently employed to decompose complex classes to improve readability.
+##################################################
+An extract class refactoring pattern is to extract a few attributes and/or methods as a new class to decompose this class. Here is an example of the extract class refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public class ScanTargetPattern {
+    private File _directory;
+    private List<String> _includes = Collections.emptyList();
+    private List<String> _excludes = Collections.emptyList();
+
+    /**
+     * @return the _directory
+     */
+    public File getDirectory() {
+        return _directory;
+    }
+
+    /**
+     * @param directory the directory to set
+     */
+    public void setDirectory(File directory) {
+        this._directory = directory;
+    }
+
+    public void setIncludes(List<String> includes) {
+        _includes= includes;
+    }
+
+    public void setExcludes(List<String> excludes) {
+        _excludes = excludes;
+    }
+
+    public List<String> getIncludes() {
+        return _includes;
+    }
+
+    public List<String> getExcludes() {
+        return _excludes;
+    }
+
+}
+```
+The source code after refactoring is:
+```
+public class ScanPattern {
+    private List<String> _includes = Collections.emptyList();
+    private List<String> _excludes = Collections.emptyList();
+
+    public void setIncludes(List<String> includes) {
+        _includes = includes;
+    }
+
+    public void setExcludes(List<String> excludes) {
+        _excludes = excludes;
+    }
+
+    public List<String> getIncludes() {
+        return _includes;
+    }
+
+    public List<String> getExcludes() {
+        return _excludes;
+    }
+}
+
+public class ScanTargetPattern {
+    private File _directory;
+    private ScanPattern _pattern;
+
+    /**
+     * @return the _directory
+     */
+    public File getDirectory() {
+        return _directory;
+    }
+
+    /**
+     * @param directory the directory to set
+     */
+    public void setDirectory(File directory) {
+        this._directory = directory;
+    }
+
+    public void setIncludes(List<String> includes) {
+        if (_pattern == null)
+            _pattern = new ScanPattern();
+        _pattern.setIncludes(includes);
+    }
+
+    public void setExcludes(List<String> excludes) {
+        if (_pattern == null)
+            _pattern = new ScanPattern();
+        _pattern.setExcludes(excludes);
+    }
+
+    public List<String> getIncludes() {
+        return (_pattern == null ? Collections.emptyList() : _pattern.getIncludes());
+    }
+
+    public List<String> getExcludes() {
+        return (_pattern == null ? Collections.emptyList() : _pattern.getExcludes());
+    }
+
+}
+```
+In this example, the developer extracted the following attributes and methods:
+```
+private List<String> _includes = Collections.emptyList();
+private List<String> _excludes = Collections.emptyList();
+
+public void setIncludes(List<String> includes) {
+    _includes = includes;
+}
+
+public void setExcludes(List<String> excludes) {
+    _excludes = excludes;
+}
+
+public List<String> getIncludes() {
+    return _includes;
+}
+
+public List<String> getExcludes() {
+    return _excludes;
+}
+```
+as new class "ScanPattern".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract class refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+package org.apache.flink.runtime.metrics.groups;
+
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.OperatorIOMetricGroup;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
+import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
+import org.apache.flink.runtime.metrics.MetricNames;
+
+/** Special {@link org.apache.flink.metrics.MetricGroup} representing an Operator. */
+@Internal
+public class InternalSinkWriterMetricGroup extends ProxyMetricGroup<MetricGroup>
+        implements SinkWriterMetricGroup {
+
+    private final Counter numRecordsOutErrors;
+    private final Counter numRecordsSendErrors;
+    private final Counter numRecordsWritten;
+    private final Counter numBytesWritten;
+    private final OperatorIOMetricGroup operatorIOMetricGroup;
+
+    @VisibleForTesting
+    InternalSinkWriterMetricGroup(
+            MetricGroup parentMetricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        super(parentMetricGroup);
+        numRecordsOutErrors = parentMetricGroup.counter(MetricNames.NUM_RECORDS_OUT_ERRORS);
+        numRecordsSendErrors =
+                parentMetricGroup.counter(MetricNames.NUM_RECORDS_SEND_ERRORS, numRecordsOutErrors);
+        numRecordsWritten =
+                parentMetricGroup.counter(
+                        MetricNames.NUM_RECORDS_SEND,
+                        operatorIOMetricGroup.getNumRecordsOutCounter());
+        numBytesWritten =
+                parentMetricGroup.counter(
+                        MetricNames.NUM_BYTES_SEND, operatorIOMetricGroup.getNumBytesOutCounter());
+        this.operatorIOMetricGroup = operatorIOMetricGroup;
+    }
+
+    public static InternalSinkWriterMetricGroup wrap(OperatorMetricGroup operatorMetricGroup) {
+        return new InternalSinkWriterMetricGroup(
+                operatorMetricGroup, operatorMetricGroup.getIOMetricGroup());
+    }
+    
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup mockWriterMetricGroup(MetricGroup metricGroup) {
+        return new InternalSinkWriterMetricGroup(
+                metricGroup, UnregisteredMetricsGroup.createOperatorIOMetricGroup());
+    }
+
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup mockWriterMetricGroup(
+            MetricGroup metricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        return new InternalSinkWriterMetricGroup(metricGroup, operatorIOMetricGroup);
+    }
+
+    @Override
+    public OperatorIOMetricGroup getIOMetricGroup() {
+        return operatorIOMetricGroup;
+    }
+
+    @Override
+    public Counter getNumRecordsOutErrorsCounter() {
+        return numRecordsOutErrors;
+    }
+
+    @Override
+    public Counter getNumRecordsSendErrorsCounter() {
+        return numRecordsSendErrors;
+    }
+
+    @Override
+    public Counter getNumRecordsSendCounter() {
+        return numRecordsWritten;
+    }
+
+    @Override
+    public Counter getNumBytesSendCounter() {
+        return numBytesWritten;
+    }
+
+    @Override
+    public void setCurrentSendTimeGauge(Gauge<Long> currentSendTimeGauge) {
+        parentMetricGroup.gauge(MetricNames.CURRENT_SEND_TIME, currentSendTimeGauge);
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

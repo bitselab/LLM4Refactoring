@@ -1,0 +1,28 @@
+In the provided code snippet, the method `findLibraryNodes` performs multiple operations: it finds library files, retrieves a module descriptor from the first file, and populates nodes into a map based on package exports. While the method is named to suggest it is finding multiple library nodes, it primarily focuses on finding a single node based on the descriptor of the first library file. This is slightly misleading as the method name implies a broader scope than what is actually implemented.
+
+To align the method name more closely with its functionality, a rename method refactoring can be considered. A more descriptive name would be `findNodeForLibraryDescriptor` or simply `findNodeFromDescriptor`, as these names better convey that the method locates and returns a single node based on the descriptor of a library.
+
+Here is the refactored code with the renamed method:
+
+```java
+@Nullable
+private static ModuleNode findNodeFromDescriptor(@NotNull Map<String, Set<ModuleNode>> packagesDeclaredInModules,
+                                                 @NotNull Map<PsiJavaModule, ModuleNode> nodesByDescriptor,
+                                                 @NotNull Project project,
+                                                 @NotNull Library library) {
+    final VirtualFile[] libraryFiles = library.getFiles(OrderRootType.CLASSES);
+    if (libraryFiles.length == 0) return null;
+
+    final PsiJavaModule descriptor = ReadAction.compute(() -> JavaModuleGraphUtil.findDescriptorByFile(libraryFiles[0], project));
+    if (descriptor == null) return null;
+
+    final ModuleNode node = nodesByDescriptor.computeIfAbsent(descriptor, d -> new ModuleNode(d));
+    for (PsiPackageAccessibilityStatement export : descriptor.getExports()) {
+        final String packageName = export.getPackageName();
+        if (packageName != null) packagesDeclaredInModules.computeIfAbsent(packageName, l -> new HashSet<>()).add(node);
+    }
+    return node;
+}
+```
+
+This change should help to clarify the method's purpose and functionality to other developers, improving readability and maintainability of the code.

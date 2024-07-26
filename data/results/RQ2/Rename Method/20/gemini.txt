@@ -1,0 +1,56 @@
+Absolutely, here's the refactored code with a more descriptive method name:
+
+```java
+package org.springframework.core.annotation;
+
+// ... rest of the class code remains the same ...
+
+private List<Annotation[][]> findInheritedParameterAnnotations() {
+  List<Annotation[][]> parameterAnnotations = this.inheritedParameterAnnotations;
+  if (parameterAnnotations == null) {
+    parameterAnnotations = new ArrayList<>();
+    Class<?> clazz = this.method.getDeclaringClass();
+    while (clazz != null) {
+      for (Class<?> ifc : clazz.getInterfaces()) {
+        for (Method candidate : ifc.getMethods()) {
+          if (isOverrideFor(candidate)) {
+            parameterAnnotations.add(candidate.getParameterAnnotations());
+          }
+        }
+      }
+      clazz = clazz.getSuperclass();
+      if (clazz == Object.class) {
+        clazz = null;
+      }
+      if (clazz != null) {
+        for (Method candidate : clazz.getMethods()) {
+          if (isOverrideFor(candidate)) {
+            parameterAnnotations.add(candidate.getParameterAnnotations());
+          }
+        }
+      }
+    }
+    this.inheritedParameterAnnotations = parameterAnnotations;
+  }
+  return parameterAnnotations;
+}
+
+// ... other methods remain the same ...
+```
+
+**Explanation of the change:**
+
+- **Original method name:** `getInterfaceParameterAnnotations`
+- **Refactored method name:** `findInheritedParameterAnnotations`
+
+**Improvements:**
+
+- **Clarity:** The new name clearly conveys the purpose of the method, which is to find annotations from inherited interfaces.
+- **Accuracy:** It reflects the fact that the method searches for annotations across all inherited interfaces, not just the direct interface.
+- **Readability:** It improves readability by using a more descriptive and intuitive name.
+
+**Benefits of this refactoring:**
+
+- **Enhanced code comprehension:** Clearer method names make it easier to grasp the overall logic and flow of the code.
+- **Improved maintainability:** Descriptive names make the code easier to maintain and modify in the future.
+- **Better code collaboration:** Clearer method names facilitate communication and understanding among developers.

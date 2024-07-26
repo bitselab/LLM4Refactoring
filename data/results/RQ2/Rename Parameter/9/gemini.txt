@@ -1,0 +1,41 @@
+Absolutely! The parameter `entityReference` in the `addModuleRoot` method could benefit from a more descriptive name. Here's how to refactor it:
+
+**1. Analyze Parameter Usage:**
+
+- This parameter holds an `EntityPointer` object.
+- It uniquely identifies a Workspace Entity associated with a module root.
+
+**2. Choose a Descriptive Name:**
+
+Here are some options that better reflect the parameter's purpose:
+
+- `workspaceEntityPointer`: This explicitly mentions the entity type and its reference pointer.
+- `moduleEntityPointer`: This is more specific, indicating the entity relates to a module root.
+
+**3. Refactoring:**
+
+Use your IDE's refactoring tools to safely rename the parameter throughout the method:
+
+```java
+private void addModuleRoot(Module module, EntityPointer<WorkspaceEntity> workspaceEntityPointer, VirtualFileUrl url) {
+  filesFromModulesContent.add(new ModuleRootData<>(workspaceEntityPointer, ((ModuleBridge) module).getModuleEntityId(), url));
+  pointers.add(workspaceEntityPointer);
+}
+```
+
+**4. Testing:**
+
+- Recompile the code to ensure no errors arise.
+- Execute unit tests to verify all functionalities remain intact.
+
+**Choosing the Best Name:**
+
+- If dealing with various entity types in the codebase, `workspaceEntityPointer` might be more appropriate.
+- When the context is clear and focuses on modules, `moduleEntityPointer` could be preferred.
+
+**Additional Considerations:**
+
+- Maintain consistency with existing naming conventions for entity pointers.
+- Ensure the new name aligns with the broader context of workspace entity management.
+
+By following these steps, you can improve the code's readability and maintainability for developers familiar with the Workspace Model concepts.

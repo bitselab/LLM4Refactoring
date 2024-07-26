@@ -1,0 +1,89 @@
+## Refactoring Opportunities in CloudHttp2SolrClient Code
+
+The provided code for `CloudHttp2SolrClient` presents several opportunities for refactoring:
+
+**1. Constructor with Optional Parameters:**
+
+- The constructor has numerous optional parameters. Refactor by using the Builder pattern to improve readability and simplify object creation.
+
+**2. Temporary Flag:**
+
+- The `clientIsInternal` flag is used for conditional resource management. Consider alternatives that make object lifecycles more explicit, potentially removing this flag.
+
+**3. Internal State Duplication:**
+
+- The `myClient` field seems to duplicate functionality provided by `lbClient`. Reassess their roles and consider removing redundancy.
+
+**4. Deprecated Method:**
+
+- The `setParallelCacheRefreshes` method is deprecated and replaced by `withParallelCacheRefreshes`. Remove the deprecated method to avoid confusion.
+
+**5. Naming Conventions:**
+
+- Some fields and variables could benefit from more descriptive names (e.g., `locks` could be renamed to `cacheRefreshLocks`).
+
+**6. Comments and Documentation:**
+
+- While the code has some comments, more detailed documentation would aid understanding and maintainability.
+
+**Refactored Code (using Builder Pattern):**
+
+```java
+public class CloudHttp2SolrClient extends CloudSolrClient {
+
+  private final ClusterStateProvider stateProvider;
+  private final LBHttp2SolrClient lbClient;
+
+  private CloudHttp2SolrClient(Builder builder) {
+    super(builder.shardLeadersOnly, builder.parallelUpdates, builder.directUpdatesToLeadersOnly);
+    this.stateProvider = builder.stateProvider;
+    this.lbClient = new LBHttp2SolrClient.Builder(builder.buildHttp2Client()).build();
+    // ... other initialization logic using builder properties
+  }
+
+  // ... other methods
+
+  public static class Builder {
+    private Collection<String> zkHosts = new ArrayList<>();
+    private List<String> solrUrls = new ArrayList<>();
+    private String zkChroot;
+    private Http2SolrClient httpClient;
+    private boolean shardLeadersOnly = true;
+    private boolean directUpdatesToLeadersOnly = false;
+    private boolean parallelUpdates = true;
+    private ClusterStateProvider stateProvider;
+    private Http2SolrClient.Builder internalClientBuilder;
+    private RequestWriter requestWriter;
+    private ResponseParser responseParser;
+    private long retryExpiryTimeNano = TimeUnit.NANOSECONDS.convert(3, TimeUnit.SECONDS);
+    private String defaultCollection;
+    private long timeToLiveSeconds = 60;
+    private int parallelCacheRefreshesLocks = 3;
+    private int zkConnectTimeout = SolrZkClientTimeout.DEFAULT_ZK_CONNECT_TIMEOUT;
+    private int zkClientTimeout = SolrZkClientTimeout.DEFAULT_ZK_CLIENT_TIMEOUT;
+    private boolean canUseZkACLs = true;
+
+    // ... builder methods with setters for various configuration options
+
+    private Http2SolrClient buildHttp2Client() {
+      if (httpClient != null) {
+        return httpClient;
+      } else if (internalClientBuilder != null) {
+        return internalClientBuilder.build();
+      } else {
+        // Use default Http2SolrClient configuration
+        return new Http2SolrClient.Builder().build();
+      }
+    }
+
+    public CloudHttp2SolrClient build() {
+      // ... validation logic
+      return new CloudHttp2SolrClient(this);
+    }
+  }
+}
+```
+
+This refactored code uses the Builder pattern to create `CloudHttp2SolrClient` instances with optional parameters. Additionally, comments are added to explain the purpose of the builder methods.
+
+**Note:** This is a simplified example focusing on the Builder pattern application. Further refactoring opportunities mentioned earlier can be addressed based on your specific needs.

@@ -1,0 +1,18 @@
+In the provided code snippet, the parameters `WebSocket webSocket` and `WebSocket server` could be more clearly named to reflect their roles more explicitly. Since the functions operate on a client-server model, renaming these parameters to `clientWebSocket` and `serverWebSocket` respectively would enhance readability and context understanding. This adheres to the refactoring pattern of renaming parameters whose semantics are inappropriate or unclear in the context.
+
+Here's the refactored code with the parameter names updated:
+
+```java
+private void closeWebSockets(WebSocket clientWebSocket, WebSocket serverWebSocket) {
+    serverWebSocket.close(1001, "");
+    clientListener.assertClosing(1001, "");
+    clientWebSocket.close(1000, "");
+    serverListener.assertClosing(1000, "");
+    clientListener.assertClosed(1001, "");
+    serverListener.assertClosed(1000, "");
+    clientListener.assertExhausted();
+    serverListener.assertExhausted();
+}
+```
+
+In this refactoring, `webSocket` has been renamed to `clientWebSocket` and `server` to `serverWebSocket`. This makes it clear that one represents the client's WebSocket connection and the other the server's WebSocket connection, thereby improving the clarity of the code and aligning with the pattern of renaming for better semantic appropriateness.

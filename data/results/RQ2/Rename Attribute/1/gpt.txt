@@ -1,0 +1,39 @@
+To improve the readability and clarity of the code, the attribute `customImportOrderRules` can be renamed. A more descriptive name would be beneficial. This variable appears to be intended for specifying the format of custom import order rules, but its current name is somewhat generic and doesn't clearly convey its purpose.
+
+A proposed new name for the variable could be `customImportOrderFormat`. This name indicates that the variable holds a format or a pattern for custom import orders. Here's the refactored code with the renamed variable:
+
+```java
+package com.puppycrawl.tools.checkstyle.checks.imports;
+
+// ... [remaining imports and class annotations]
+
+public class CustomImportOrderCheck extends AbstractCheck {
+
+    // ... [other class members]
+
+    /** Specify format of order declaration customizing by user. */
+    private static final String customImportOrderFormat = ""; // Renamed variable
+
+    // ... [other class members and methods]
+
+    /**
+     * Setter to specify format of order declaration customizing by user.
+     *
+     * @param inputCustomImportOrder
+     *        user value.
+     */
+    public final void setCustomImportOrderRules(final String inputCustomImportOrder) {
+        if (!customImportOrderFormat.equals(inputCustomImportOrder)) { // Updated variable reference
+            for (String currentState : GROUP_SEPARATOR_PATTERN.split(inputCustomImportOrder)) {
+                addRulesToList(currentState);
+            }
+            customOrderRules.add(NON_GROUP_RULE_GROUP);
+        }
+    }
+
+    // ... [remaining methods]
+
+}
+```
+
+In this refactoring, only the variable `customImportOrderRules` has been renamed to `customImportOrderFormat`. The rest of the code remains unchanged to ensure that the functionality is not affected. This refactoring specifically targets improving code readability and maintainability.

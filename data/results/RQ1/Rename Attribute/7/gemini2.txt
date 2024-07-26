@@ -1,0 +1,74 @@
+There are several opportunities for refactoring the provided code snippet using rename attribute refactorings to improve readability:
+
+**Refactored Code:**
+
+```java
+public class UniqueKeySelectionDelegate extends AbstractSelectingDelegate {
+
+  private final String[] uniqueKeyPropertyNames;
+  private final Type[] uniqueKeyTypes;
+  private final String identifierSelectString;
+
+  public UniqueKeySelectionDelegate(
+      EntityPersister entityPersister,
+      String[] uniqueKeyPropertyNames,
+      EventType timing) {
+    super(entityPersister, timing, true, true);
+
+    this.uniqueKeyPropertyNames = uniqueKeyPropertyNames;
+
+    this.uniqueKeyTypes = new Type[uniqueKeyPropertyNames.length];
+    for (int i = 0; i < uniqueKeyPropertyNames.length; i++) {
+      this.uniqueKeyTypes[i] = entityPersister.getPropertyType(uniqueKeyPropertyNames[i]);
+    }
+
+    final EntityRowIdMapping rowIdMapping = entityPersister.getRowIdMapping();
+    if (!entityPersister.isIdentifierAssignedByInsert()
+        || entityPersister.getInsertGeneratedProperties().size() > 1
+        || rowIdMapping != null) {
+      final List<GeneratedValueBasicResultBuilder> resultBuilders = jdbcValuesMappingProducer.getResultBuilders();
+      final List<String> columnNames = new ArrayList<>(resultBuilders.size());
+      for (GeneratedValueBasicResultBuilder resultBuilder : resultBuilders) {
+        columnNames.add(getActualGeneratedModelPart(resultBuilder.getModelPart()).getSelectionExpression());
+      }
+      this.identifierSelectString = entityPersister.getSelectByUniqueKeyString(
+          uniqueKeyPropertyNames,
+          columnNames.toArray(new String[0])
+      );
+    } else {
+      this.identifierSelectString = entityPersister.getSelectByUniqueKeyString(uniqueKeyPropertyNames);
+    }
+  }
+
+  protected String getSelectSql() {
+    return identifierSelectString;
+  }
+
+  @Override
+  public TableMutationBuilder<?> createTableMutationBuilder(
+      Expectation expectation,
+      SessionFactoryImplementor factory) {
+    return new TableInsertBuilderStandard(persister, persister.getIdentifierTableMapping(), factory);
+  }
+
+  protected void bindParameters(Object entity, PreparedStatement ps, SharedSessionContractImplementor session)
+      throws SQLException {
+    int index = 1;
+    for (int i = 0; i < uniqueKeyPropertyNames.length; i++) {
+      uniqueKeyTypes[i].nullSafeSet(ps, entityPersister.getPropertyValue(entity, uniqueKeyPropertyNames[i]), index, session);
+      index += uniqueKeyTypes[i].getColumnSpan(session.getFactory());
+    }
+  }
+}
+```
+
+**Refactoring Changes:**
+
+1. **Class Name:** Renamed `UniqueKeySelectingDelegate` to `UniqueKeySelectionDelegate` for better clarity and conciseness.
+2. **Variable Names:**
+    * `idSelectString` -> `identifierSelectString`: Clarifies the purpose of the variable as holding the selection string for the identifier.
+    * `persister` -> `entityPersister`:  Improves readability by explicitly stating the type of persister.
+3. **Method Names:**
+    * `getSelectSQL` -> `getSelectSql`: Uses lowercase "sql" for consistency with Java conventions.
+
+These refactorings improve code readability by using more descriptive names for classes, variables, and methods. They make the code easier to understand and maintain.

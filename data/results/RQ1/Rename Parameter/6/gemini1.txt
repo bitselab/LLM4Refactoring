@@ -1,0 +1,57 @@
+## Refactoring Opportunities in the Provided Code
+
+There are several refactoring opportunities in the provided code. Here's a breakdown of some potential improvements:
+
+1. **Extract Helper Methods:** 
+  - The test methods `testGetContainerStatus`, `waitForContainerRunningTransitionCount`, `assertYarnException`, and `sleep` can be extracted into separate helper methods to improve code readability and maintainability.
+
+2. **Reduce Code Duplication:** 
+  - The repetitive container verification logic in `testContainer` can be consolidated into a separate method to avoid redundancy.
+
+3. **Simplify Container Launch Context Creation:**
+  - The container launch context creation logic can be simplified by using a dedicated library for container launch context configuration.
+
+4. **Improve Exception Handling:** 
+  - The exception handling in `testGetContainerStatus` can be more specific by catching `TimeoutException` instead of a generic `InterruptedException`.
+
+5. **Consider Mocking Frameworks:**
+  - For unit testing container interactions, consider using a mocking framework to isolate the NMClient behavior instead of relying on a full-fledged MiniYARNCluster setup.
+
+## Refactored Code (Example)
+
+Here's an example of refactoring the `testGetContainerStatus` method to demonstrate some of the suggestions:
+
+```java
+private void testGetContainerStatus(Container container, int index,
+                                    ContainerState state, String diagnostics,
+                                    List<Integer> exitStatuses)
+        throws YarnException, IOException {
+    while (true) {
+        sleep(250);
+        ContainerStatus status = nmClient.getContainerStatus(
+                container.getId(), container.getNodeId());
+
+        // Timeout handling can be made more specific
+        if (!status.getState().equals(state) && !isTimedOut()) {
+            continue;
+        }
+
+        assertEquals(container.getId(), status.getContainerId());
+        assertTrue(index + ": " + status.getDiagnostics(),
+                status.getDiagnostics().contains(diagnostics));
+        assertTrue("Exit Statuses are supposed to be in: " + exitStatuses +
+                ", but the actual exit status code is: " +
+                status.getExitStatus(),
+                exitStatuses.contains(status.getExitStatus()));
+        break;
+    }
+}
+
+private boolean isTimedOut() {
+    // Implement timeout logic based on your test requirements
+    // (e.g., using a timer or a specific waiting period)
+    return false;
+}
+```
+
+These are just a few examples, and the specific refactoring techniques can be further customized based on your coding standards and project requirements.

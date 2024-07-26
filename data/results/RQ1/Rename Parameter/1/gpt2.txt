@@ -1,0 +1,108 @@
+In the provided code snippet, there are opportunities for renaming parameters to improve readability and clarity. Here are the changes I suggest:
+
+1. **Rename `severityLevelNameLength` in `initStringBuilderWithOptimalBuffer`**: The name `severityLevelNameLength` is misleading because it implies that the parameter is a length (integer), while it is actually a `String`. A more appropriate name would be `severityLevelName`.
+
+2. **Rename `event` in various methods**: The parameter name `event` can be more descriptive. Renaming it to `auditEvent` would provide a clearer context about the type of event being processed.
+
+3. **Rename `sb` in `format`**: The variable name `sb` is too generic and does not convey its purpose. Renaming it to `formattedMessageBuilder` or a similar descriptive name would enhance readability.
+
+Let's apply these rename refactorings to the code.
+
+Here is the refactored code with renamed parameters for improved readability:
+
+```java
+package com.puppycrawl.tools.checkstyle;
+
+import java.util.Locale;
+
+import com.puppycrawl.tools.checkstyle.api.AuditEvent;
+import com.puppycrawl.tools.checkstyle.api.SeverityLevel;
+
+/**
+ * Represents the default formatter for log message.
+ * Default log message format is:
+ * [SEVERITY LEVEL] filePath:lineNo:columnNo: message. [CheckName]
+ * When the module id of the message has been set, the format is:
+ * [SEVERITY LEVEL] filePath:lineNo:columnNo: message. [ModuleId]
+ */
+public class AuditEventDefaultFormatter implements AuditEventFormatter {
+
+    /** Length of all separators. */
+    private static final int LENGTH_OF_ALL_SEPARATORS = 10;
+
+    /** Suffix of module names like XXXXCheck. */
+    private static final String SUFFIX = "Check";
+
+    @Override
+    public String format(AuditEvent auditEvent) {
+        final String fileName = auditEvent.getFileName();
+        final String message = auditEvent.getMessage();
+
+        final SeverityLevel severityLevel = auditEvent.getSeverityLevel();
+        final String severityLevelName;
+        if (severityLevel == SeverityLevel.WARNING) {
+            // We change the name of severity level intentionally
+            // to shorten the length of the log message.
+            severityLevelName = "WARN";
+        }
+        else {
+            severityLevelName = severityLevel.getName().toUpperCase(Locale.US);
+        }
+
+        final StringBuilder formattedMessageBuilder = initStringBuilderWithOptimalBuffer(auditEvent, severityLevelName);
+
+        formattedMessageBuilder.append('[').append(severityLevelName).append("] ")
+                .append(fileName).append(':').append(auditEvent.getLine());
+        if (auditEvent.getColumn() > 0) {
+            formattedMessageBuilder.append(':').append(auditEvent.getColumn());
+        }
+        formattedMessageBuilder.append(": ").append(message).append(" [");
+        if (auditEvent.getModuleId() == null) {
+            final String checkShortName = getCheckShortName(auditEvent);
+            formattedMessageBuilder.append(checkShortName);
+        }
+        else {
+            formattedMessageBuilder.append(auditEvent.getModuleId());
+        }
+        formattedMessageBuilder.append(']');
+
+        return formattedMessageBuilder.toString();
+    }
+
+    /**
+     * Returns the StringBuilder that should avoid StringBuffer.expandCapacity.
+     * bufferLength = fileNameLength + messageLength + lengthOfAllSeparators +
+     * + severityNameLength + checkNameLength.
+     * Method is excluded from pitest validation.
+     *
+     * @param auditEvent audit event.
+     * @param severityLevelName severity level name.
+     * @return optimal StringBuilder.
+     */
+    private static StringBuilder initStringBuilderWithOptimalBuffer(AuditEvent auditEvent,
+                                                                    String severityLevelName) {
+        final int bufLen = LENGTH_OF_ALL_SEPARATORS + auditEvent.getFileName().length()
+                + auditEvent.getMessage().length() + severityLevelName.length()
+                + getCheckShortName(auditEvent).length();
+        return new StringBuilder(bufLen);
+    }
+
+    /**
+     * Returns check name without 'Check' suffix.
+     *
+     * @param auditEvent audit event.
+     * @return check name without 'Check' suffix.
+     */
+    private static String getCheckShortName(AuditEvent auditEvent) {
+        final String checkFullName = auditEvent.getSourceName();
+        String checkShortName = checkFullName.substring(checkFullName.lastIndexOf('.') + 1);
+        if (checkShortName.endsWith(SUFFIX)) {
+            final int endIndex = checkShortName.length() - SUFFIX.length();
+            checkShortName = checkShortName.substring(0, endIndex);
+        }
+        return checkShortName;
+    }
+}
+```
+
+These renamings make the code more understandable by clearly indicating the purpose and context of each variable and parameter.

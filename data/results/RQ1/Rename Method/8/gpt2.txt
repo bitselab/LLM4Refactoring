@@ -1,0 +1,35 @@
+Reviewing the provided code snippet for potential rename method refactoring opportunities, I've identified a few methods where the names could be improved for better readability and clarity:
+
+1. **`cleanupData`**: This method name is somewhat generic. A more descriptive name like `clearDataIfConfigured` would better convey the method's purpose, which includes a conditional check based on configuration.
+
+2. **`tearDownSessionFactory`**: The name is clear but it could be more aligned with the rest of the code. A name like `closeSessionFactory` might be more consistent with the Java naming conventions for closing resources.
+
+3. **`clearAllData`**: This method name is appropriate but could be more specific. Renaming it to `clearDatabaseAndIndexData` would provide more insight into what data is being cleared.
+
+4. **`clearDatabase` (overloaded methods)**: The name is fine, but it might be better to have distinct names for each overload to reflect their different behaviors. The method without the `tenantId` parameter could be named `clearDatabaseForAllTenants`, and the one with the `tenantId` parameter could be `clearDatabaseForTenant`.
+
+5. **`clearEntityInstances`**: This name is quite general. Renaming it to `deleteEntityInstances` might be more descriptive, emphasizing the deletion operation.
+
+6. **`selectAllOfSpecificType` and `deleteAllOfSpecificType`**: These names are descriptive but could be simplified. `selectAllEntitiesOfType` and `deleteAllEntitiesOfType` would be clearer.
+
+7. **`createSelectOrDeleteAllOfSpecificTypeQuery`**: This method's name is very long and somewhat confusing. A more concise name like `createQueryForEntityType` could be used with detailed documentation explaining its dual purpose.
+
+8. **`hasEntitySubclass` and `hasPotentiallyJoinTable`**: These names are good, but for consistency with the rest of the naming convention, they could be renamed to `doesEntityHaveSubclass` and `doesEntityHavePotentialJoinTable`.
+
+Here's how the refactored method signatures would look:
+
+```java
+void clearDataIfConfigured();
+private void closeSessionFactory(SessionFactoryImplementor sessionFactory);
+private void clearDatabaseAndIndexData(SessionFactoryImplementor sessionFactory);
+private void clearDatabaseForAllTenants(SessionFactoryImplementor sessionFactory, HibernateOrmMapping mapping);
+private void clearDatabaseForTenant(SessionFactoryImplementor sessionFactory, HibernateOrmMapping mapping, String tenantId);
+private static void deleteEntityInstances(SessionFactoryImplementor sessionFactory, HibernateOrmMapping mapping, String tenantId, EntityType<?> entityType);
+private static Query<?> selectAllEntitiesOfType(EntityType<?> entityType, Session session);
+private static Query<?> deleteAllEntitiesOfType(EntityType<?> entityType, Session session);
+private static Query<?> createQueryForEntityType(EntityType<?> entityType, Session session, QueryType queryType);
+private static boolean doesEntityHaveSubclass(SessionFactory sessionFactory, EntityType<?> parentEntity);
+private static boolean doesEntityHavePotentialJoinTable(Class<?> entityJavaType, SessionFactoryImplementor sessionFactory, ManagedType<?> managedType);
+```
+
+These renaming suggestions aim to improve the clarity of the method names while still accurately describing their functionality.

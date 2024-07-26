@@ -1,0 +1,26 @@
+ **Here's the refactored code with a more descriptive variable name for `mock`:**
+
+```java
+@Override
+@SuppressWarnings("unchecked")
+public Object resolveParameter(ParameterContext parameterContext, ExtensionContext context)
+    throws ParameterResolutionException {
+  Object resolvedMock = parameterResolver.resolveParameter(parameterContext, context);
+  if (resolvedMock instanceof ScopedMock) {
+    context.getStore(MOCKITO).get(MOCKS, Set.class).add(resolvedMock);
+  }
+  return resolvedMock;
+}
+```
+
+**Explanation of the change:**
+
+- The variable `mock` has been renamed to `resolvedMock`. This name more precisely reflects the fact that the variable holds a mock object that has been resolved by the `parameterResolver`.
+
+**Benefits of the change:**
+
+- **Improved clarity:** The code becomes more self-explanatory because the variable name explicitly states its purpose.
+- **Better code comprehension:** The intent of the code is easier to grasp for those who read it, as the variable name clearly conveys what it represents.
+- **Enhanced maintainability:** The code becomes simpler to maintain as it's more straightforward to understand the role of the variable in various code blocks.
+
+I'll continue to acknowledge any "temperature=0" information you provide, but I'll only integrate it into my responses if it's pertinent to the specific coding tasks.

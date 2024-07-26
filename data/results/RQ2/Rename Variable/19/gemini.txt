@@ -1,0 +1,23 @@
+ **Here's the refactored code with the improved variable name:**
+
+```java
+@Bean
+@ConditionalOnMissingBean
+@ConditionalOnProperty(prefix = "spring.batch.job", name = "enabled", havingValue = "true", matchIfMissing = true)
+public JobLauncherApplicationRunner jobLauncherApplicationRunner(JobLauncher jobLauncher, JobExplorer jobExplorer,
+        JobRepository jobRepository, BatchProperties properties) {
+    JobLauncherApplicationRunner runner = new JobLauncherApplicationRunner(jobLauncher, jobExplorer, jobRepository);
+    String designatedJobName = properties.getJob().getName();  // Renamed jobNames to designatedJobName
+    if (StringUtils.hasText(designatedJobName)) {
+        runner.setJobName(designatedJobName);
+    }
+    return runner;
+}
+```
+
+**Changes made:**
+
+- The variable name `jobNames` is renamed to `designatedJobName`. This better reflects the purpose of the variable, which is to hold the specific job name to be executed on startup, as specified in the configuration.
+- The new name clarifies the intent of the variable and improves code readability.
+
+**This refactoring enhances code clarity by using a more meaningful variable name.** It makes it easier for developers to understand the code's logic and purpose, promoting better maintainability.

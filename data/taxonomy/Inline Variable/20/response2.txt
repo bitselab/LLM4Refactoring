@@ -1,0 +1,34 @@
+In the given code snippet, we need to determine whether there are any inline variable refactoring opportunities. Let's review the code:
+
+```java
+@Test
+void mappingRowSimpleObject() {
+    MockRow mockRow = SIMPLE_PERSON_ROW;
+    BeanPropertyRowMapper<Person> mapper = new BeanPropertyRowMapper<>(Person.class);
+
+    Person result = mapper.apply(mockRow);
+
+    assertThat(result.firstName).as("firstName").isEqualTo("John");
+    assertThat(result.lastName).as("lastName").isEqualTo("Doe");
+    assertThat(result.age).as("age").isEqualTo(30);
+}
+```
+
+Here's a breakdown of the usage of each variable:
+- `mockRow`: This variable is assigned from `SIMPLE_PERSON_ROW` and used only once in the `mapper.apply(mockRow)` method call.
+- `mapper`: This variable is instantiated and used only once in `mapper.apply(mockRow)`.
+
+Given this usage, inline variable refactoring can be applied to both `mockRow` and `mapper` since they are only referenced once and their elimination would still maintain code readability. Here’s the refactored code:
+
+```java
+@Test
+void mappingRowSimpleObject() {
+    Person result = new BeanPropertyRowMapper<Person>(Person.class).apply(SIMPLE_PERSON_ROW);
+
+    assertThat(result.firstName).as("firstName").isEqualTo("John");
+    assertThat(result.lastName).as("lastName").isEqualTo("Doe");
+    assertThat(result.age).as("age").isEqualTo(30);
+}
+```
+
+By inlining `mockRow` and `mapper`, we've removed unnecessary intermediate variables, and the code remains clear and concise.

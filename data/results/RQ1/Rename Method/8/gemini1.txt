@@ -1,0 +1,66 @@
+## Refactoring Opportunities in OrmSetupHelperCleaner:
+
+The provided code snippet presents several opportunities for refactoring to improve readability, maintainability, and potentially performance. Here's a breakdown of the suggested changes:
+
+1. **Reduce code duplication:**
+   - The `clearDatabase` method calls the same logic twice for entities with and without tenants. This can be refactored into a single method that accepts a tenantId parameter as optional.
+
+2. **Simplify `hasPotentiallyJoinTable`:**
+   - The logic for checking entity associations can be simplified using streams to iterate attributes and filter based on conditions.
+
+3. **Extract helper methods:**
+   - The `createSelectOrDeleteAllOfSpecificTypeQuery` method can be refactored into separate methods for creating select and delete queries, promoting reusability.
+
+4. **Utilize lambda expressions:**
+   - Consider replacing anonymous inner classes with lambda expressions for pre-clear and entity clear order configuration closures (e.g., `preClear` and `clearOrder` methods in `DataClearConfigImpl`).
+
+5. **Descriptive variable names:**
+   - Refine variable names like `typeArg` and `managedType` to be more descriptive (e.g., `entityTypeClass` or `attributeType`).
+
+Here's an example of the refactored `clearDatabase` method incorporating some of the suggestions:
+
+```java
+private void clearDatabase(SessionFactoryImplementor sessionFactory, HibernateOrmMapping mapping, String tenantId) {
+  for (ThrowingConsumer<Session, RuntimeException> preClear : config.preClear) {
+    executePreClear(mapping, preClear, tenantId);
+  }
+
+  Set<String> clearedEntityNames = new HashSet<>();
+  for (Class<?> entityClass : config.entityClearOrder) {
+    clearEntityInstances(sessionFactory, mapping, tenantId, entityClass, clearedEntityNames);
+  }
+
+  // ... rest of the logic for clearing remaining entities
+}
+
+private void executePreClear(HibernateOrmMapping mapping, ThrowingConsumer<Session, RuntimeException> preClear, String tenantId) {
+  if (mapping != null) {
+    mapping.listenerEnabled(false);
+  }
+  try {
+    OrmUtils.with(sessionFactory, tenantId).runInTransaction(preClear);
+  } finally {
+    if (mapping != null) {
+      mapping.listenerEnabled(true);
+    }
+  }
+}
+
+private void clearEntityInstances(SessionFactoryImplementor sessionFactory, HibernateOrmMapping mapping,
+                                  String tenantId, Class<?> entityClass, Set<String> clearedEntityNames) {
+  EntityType<?> entityType;
+  try {
+    entityType = sessionFactory.getJpaMetamodel().entity(entityClass);
+  } catch (IllegalArgumentException e) {
+    // Handle ignored exception
+    return;
+  }
+  if (clearedEntityNames.add(entityType.getName())) {
+    clearEntityInstancesByType(sessionFactory, mapping, tenantId, entityType);
+  }
+}
+
+// ... separate methods for createSelectOfType and createDeleteOfType queries
+```
+
+**Note:** This is a simplified example to illustrate the refactoring concepts. Remember to thoroughly test any changes made to ensure they don't introduce regressions.

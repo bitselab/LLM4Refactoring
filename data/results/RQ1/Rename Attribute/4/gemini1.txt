@@ -1,0 +1,62 @@
+ **I've identified several refactoring opportunities in the given code:**
+
+1. **Extract `modifyDataStream` method to a separate class:**
+   - This method is responsible for core data stream modification logic.
+   - Extracting it to a `DataStreamModifier` class would improve cohesion and separation of concerns.
+
+2. **Combine similar `updateDataLifecycle` and `setRolloverOnWrite` methods:**
+   - These methods have a similar structure and could be combined into a single method with a parameter for the specific property to update.
+
+3. **Remove unnecessary task classes:**
+   - The `UpdateLifecycleTask` and `SetRolloverOnWriteTask` classes don't provide significant value and could be replaced with direct calls to task submission methods.
+
+4. **Address commented-out batching task issue:**
+   - The `@SuppressForbidden` annotation indicates a pending task for implementing batching. Resolve this to improve efficiency.
+
+5. **Consider using a builder pattern for `DataStream`:**
+   - Constructing `DataStream` objects using builders could enhance readability and maintainability.
+
+**Here's the refactored code incorporating these suggestions:**
+
+```java
+public class DataStreamService {
+
+    private final ClusterService clusterService;
+    private final IndicesService indicesService;
+    private final MasterServiceTaskQueue<DataStreamUpdateTask> taskQueue;
+
+    public DataStreamService(ClusterService clusterService, IndicesService indicesService) {
+        // ...
+    }
+
+    // ... other methods using DataStreamModifier ...
+
+    private void submitDataStreamUpdateTask(String source, DataStreamUpdateTask task) {
+        clusterService.submitStateUpdateTask(source, task);
+    }
+
+    static class DataStreamModifier {
+        static ClusterState modifyDataStream(ClusterState currentState, Iterable<DataStreamAction> actions,
+                                             Function<IndexMetadata, MapperService> mapperSupplier) {
+            // ... implementation ...
+        }
+
+        static ClusterState updateDataStreamProperty(ClusterState currentState, String dataStreamName,
+                                                      Function<DataStream, DataStream> propertyUpdater) {
+            Metadata metadata = currentState.metadata();
+            Metadata.Builder builder = Metadata.builder(metadata);
+            var dataStream = validateDataStream(metadata, dataStreamName);
+            builder.put(propertyUpdater.apply(dataStream));
+            return ClusterState.builder(currentState).metadata(builder.build()).build();
+        }
+    }
+
+    static abstract class DataStreamUpdateTask extends AckedClusterStateUpdateTask {
+        DataStreamUpdateTask(TimeValue ackTimeout, ActionListener<AcknowledgedResponse> listener) {
+            super(ackTimeout, listener);
+        }
+    }
+}
+```
+
+**Remember that refactoring decisions often involve trade-offs and should be evaluated in the context of the overall project goals and specific requirements.**

@@ -1,0 +1,79 @@
+ **Here are a few refactoring opportunities in the provided code:**
+
+1. **Redundant `this` usage:** The `this` keyword can be removed in several places to improve readability:
+   - Within the constructor:
+     ```java
+     LoadedPemSslStore(PemSslStoreDetails details) {
+         Assert.notNull(details, "Details must not be null");
+         details = details; // Remove this redundant assignment
+         certificates = supplier(() -> loadCertificates(details));
+         privateKeySupplier = supplier(() -> loadPrivateKey(details));
+     }
+     ```
+   - Within `certificates()` and `privateKey()`:
+     ```java
+     @Override
+     public List<X509Certificate> certificates() {
+         return certificates.get(); // Remove this.
+     }
+
+     @Override
+     public PrivateKey privateKey() {
+         return privateKeySupplier.get(); // Remove this.
+     }
+     ```
+
+2. **Consider merging `UncheckedIOException` methods:** The `asUncheckedIOException()` method is relatively simple and used only within `supplier()`. Consider merging it into `supplier()` for greater clarity.
+
+3. **Streamline `loadCertificates()`:** The `loadCertificates()` method can be simplified using `Optional` and a more concise conditional check:
+   ```java
+   private static List<X509Certificate> loadCertificates(PemSslStoreDetails details) throws IOException {
+       return Optional.ofNullable(PemContent.load(details.certificates()))
+               .map(PemContent::getCertificates)
+               .filter(certificates -> !certificates.isEmpty()) // Assert emptiness instead of using CollectionUtils
+               .orElseThrow(() -> new IllegalStateException("Loaded certificates are empty"));
+   }
+   ```
+
+4. **Simplify `loadPrivateKey()`:** Similarly, `loadPrivateKey()` can be streamlined using `Optional`:
+   ```java
+   private static PrivateKey loadPrivateKey(PemSslStoreDetails details) throws IOException {
+       return Optional.ofNullable(PemContent.load(details.privateKey()))
+               .map(pemContent -> pemContent.getPrivateKey(details.privateKeyPassword()))
+               .orElse(null);
+   }
+   ```
+
+**Here's the refactored code with these changes:**
+
+```java
+package org.springframework.boot.ssl.pem;
+
+// ... imports
+
+final class LoadedPemSslStore implements PemSslStore {
+
+    private final PemSslStoreDetails details;
+    private final Supplier<List<X509Certificate>> certificates;
+    private final Supplier<PrivateKey> privateKeySupplier;
+
+    LoadedPemSslStore(PemSslStoreDetails details) {
+        Assert.notNull(details, "Details must not be null");
+        this.details = details;
+        certificates = supplier(() -> loadCertificates(details));
+        privateKeySupplier = supplier(() -> loadPrivateKey(details));
+    }
+
+    private static <T> Supplier<T> supplier(ThrowingSupplier<T, IOException> supplier) {
+        return SingletonSupplier.of(() -> {
+            try {
+                return supplier.get();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+    }
+
+    // ... remaining methods with the mentioned refactorings
+}
+```

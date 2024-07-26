@@ -1,0 +1,68 @@
+Analyzing the provided code snippet from the `IOUtil` class, we need to determine if there is a suitable section that could benefit from the Extract Method refactoring pattern, wherein we isolate blocks of code that could be grouped together meaningfully in a separate method.
+
+### Original Code Analysis:
+```java
+public final class IOUtil {
+
+    @SuppressWarnings("PMD.CloseResource") // false-positive
+    public static Exception closeAll(Collection<? extends AutoCloseable> closeables) {
+        Exception composed = null;
+        for (AutoCloseable it : closeables) {
+            try {
+                it.close();
+            } catch (Exception e) {
+                if (composed == null) {
+                    return e;
+                } else {
+                    composed.addSuppressed(e);
+                }
+            }
+        }
+        return composed;
+    }
+
+}
+```
+
+The method `closeAll` handles closing a collection of `AutoCloseable` objects and accumulates exceptions that may be thrown during the close operations. 
+
+### Refactoring Considerations:
+1. **Loop Analysis**: The loop iterates through each closeable object, attempts to close it, and handles any exceptions that might occur.
+2. **Exception Handling**: Each caught exception is either returned immediately if it's the first one, or it is suppressed under the previously thrown exception.
+
+### Potential Extract Method Refactoring:
+There isn't a straightforward, large chunk of logic that is distinct enough to be extracted into a separate method without disrupting the cohesive nature of the `closeAll` method. However, the exception handling could potentially be refactored into its own method to encapsulate exception aggregation logic.
+
+### Proposed Refactored Code:
+```java
+public final class IOUtil {
+
+    @SuppressWarnings("PMD.CloseResource") // false-positive
+    public static Exception closeAll(Collection<? extends AutoCloseable> closeables) {
+        Exception composed = null;
+        for (AutoCloseable it : closeables) {
+            try {
+                it.close();
+            } catch (Exception e) {
+                composed = handleException(composed, e);
+            }
+        }
+        return composed;
+    }
+
+    private static Exception handleException(Exception composed, Exception current) {
+        if (composed == null) {
+            return current;
+        } else {
+            composed.addSuppressed(current);
+            return composed;
+        }
+    }
+
+}
+```
+
+### Explanation:
+- **Extracted `handleException` Method**: This method takes the potentially already composed exception and the current exception. It either returns the current exception (if it's the first one) or adds it to the composed exception and returns the composed exception. This extraction improves readability by separating the complex exception handling logic from the main logic of closing the resources.
+
+This refactoring improves clarity and modularizes the exception handling, making the `closeAll` method more focused on its primary responsibility—iterating through and closing the resources.

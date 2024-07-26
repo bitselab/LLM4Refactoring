@@ -1,0 +1,110 @@
+## Refactoring Opportunities:
+
+The provided code snippet presents a few opportunities for rename attribute refactoring:
+
+1. **TERSE_NAME**: This variable name is quite clear, but it's not very descriptive. Consider renaming it to `PLAIN_TEXT_LANGUAGE_NAME` to better reflect its purpose.
+
+2. **INSTANCE**: This variable name is clear, but since it represents a singleton instance, a more conventional naming style would be `PLAIN_TEXT_LANGUAGE_INSTANCE`.
+
+Here's the refactored code with the suggested changes:
+
+```java
+package net.sourceforge.pmd.lang;
+
+import net.sourceforge.pmd.annotation.Experimental;
+import net.sourceforge.pmd.cpd.AnyTokenizer;
+import net.sourceforge.pmd.cpd.CpdCapableLanguage;
+import net.sourceforge.pmd.cpd.Tokenizer;
+import net.sourceforge.pmd.lang.ast.AstInfo;
+import net.sourceforge.pmd.lang.ast.Parser;
+import net.sourceforge.pmd.lang.ast.Parser.ParserTask;
+import net.sourceforge.pmd.lang.ast.RootNode;
+import net.sourceforge.pmd.lang.ast.impl.AbstractNode;
+import net.sourceforge.pmd.lang.document.TextRegion;
+import net.sourceforge.pmd.lang.impl.SimpleLanguageModuleBase;
+
+/**
+ * A dummy language implementation whose parser produces a single node.
+ * This is provided for cases where a non-null language is required, but
+ * the parser is not useful. This is useful eg to mock rules when no other
+ * language is on the classpath. This language is not exposed by {@link LanguageRegistry}
+ * and can only be used explicitly with {@link #getInstance()}.
+ *
+ * @author Clément Fournier
+ * @since 6.48.0
+ */
+@Experimental
+public final class PlainTextLanguage extends SimpleLanguageModuleBase implements CpdCapableLanguage {
+
+    private static final String PLAIN_TEXT_LANGUAGE_NAME = "text";
+
+    private static final PlainTextLanguage PLAIN_TEXT_LANGUAGE_INSTANCE = new PlainTextLanguage();
+
+    private PlainTextLanguage() {
+        super(LanguageMetadata.withId(PLAIN_TEXT_LANGUAGE_NAME).name("Plain text")
+                        .extensions("plain-text-file-goo-extension")
+                        .addDefaultVersion("default"),
+                new TextLvh());
+    }
+
+    /**
+     * Returns the singleton instance of this language.
+     */
+    public static PlainTextLanguage getInstance() {
+        return PLAIN_TEXT_LANGUAGE_INSTANCE; // note: this language is _not_ exposed via LanguageRegistry (no entry in META-INF/services)
+    }
+
+    @Override
+    public Tokenizer createCpdTokenizer(LanguagePropertyBundle bundle) {
+        return new AnyTokenizer();
+    }
+
+    private static final class TextLvh implements LanguageVersionHandler {
+        @Override
+        public Parser getParser() {
+            return PlainTextFile::new;
+        }
+    }
+
+    /**
+     * The only node produced by the parser of {@link PlainTextLanguage}.
+     */
+    public static class PlainTextFile extends AbstractNode<PlainTextFile, PlainTextFile> implements RootNode {
+
+        private final AstInfo<PlainTextFile> astInfo;
+
+
+        PlainTextFile(ParserTask task) {
+            this.astInfo = new AstInfo<>(task, this);
+        }
+
+        @Override
+        public TextRegion getTextRegion() {
+            return getTextDocument().getEntireRegion();
+        }
+
+        @Override
+        public String getXPathNodeName() {
+            return "TextFile";
+        }
+
+        @Override
+        public String getImage() {
+            return null;
+        }
+
+        @Override
+        public String toString() {
+            return "Plain text file (" + getEndLine() + " lines)";
+        }
+
+        @Override
+        public AstInfo<? extends RootNode> getAstInfo() {
+            return astInfo;
+        }
+    }
+
+}
+```
+
+These changes improve code readability by using more descriptive names for the variables. 

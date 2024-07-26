@@ -1,0 +1,79 @@
+In the provided Java code snippet, we see functionality primarily related to writing to a pack reverse index file in a version-specific format. The class `PackReverseIndexWriterV1` is responsible for writing both the header and the body of this file, using a nested private class for sorting based on object positions.
+
+To assess potential refactoring opportunities based on the extract class pattern, we need to consider if any part of the functionality could logically stand alone as a separate class. Here are the key responsibilities of the class:
+1. **Writing the header:** This involves writing out predefined static data, such as format magic numbers and version information.
+2. **Writing the body:** This involves sorting object positions using a comparator and then writing these positions to the output.
+
+### Possible Refactoring: Extracting Comparator as a Separate Class
+The comparator `IndexPositionsByOffsetComparator` could be refactored into its own class. This would allow the sorting logic to be more modular, potentially reusable, and easier to test independently from the file writing logic. This matches the extract class refactoring pattern by moving methods and attributes related to the sorting logic into a new class.
+
+#### Refactored Code:
+```java
+package org.eclipse.jgit.internal.storage.file;
+
+import static org.eclipse.jgit.internal.storage.file.PackReverseIndex.MAGIC;
+import static org.eclipse.jgit.internal.storage.file.PackReverseIndex.VERSION_1;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.List;
+
+import org.eclipse.jgit.transport.PackedObjectInfo;
+import org.eclipse.jgit.util.IntList;
+import org.eclipse.jgit.util.IntList.IntComparator;
+
+/**
+ * Writes reverse index files following the version 1 format.
+ * <p>
+ * The file format is specified at
+ * https://git-scm.com/docs/pack-format#_pack_rev_files_have_the_format.
+ */
+final class PackReverseIndexWriterV1 extends PackReverseIndexWriter {
+    private static final int OID_VERSION_SHA1 = 1;
+    private static final int DEFAULT_OID_VERSION = OID_VERSION_SHA1;
+
+    PackReverseIndexWriterV1(final OutputStream dst) {
+        super(dst);
+    }
+
+    @Override
+    protected void writeHeader() throws IOException {
+        out.write(MAGIC);
+        dataOutput.writeInt(VERSION_1);
+        dataOutput.writeInt(DEFAULT_OID_VERSION);
+    }
+
+    @Override
+    protected void writeBody(List<? extends PackedObjectInfo> objectsByIndexPos)
+            throws IOException {
+        IntList positionsByOffset = IntList.filledWithRange(0, objectsByIndexPos.size());
+        IndexPositionsByOffsetComparator comparator = new IndexPositionsByOffsetComparator(objectsByIndexPos);
+        positionsByOffset.sort(comparator);
+
+        for (int i = 0; i < positionsByOffset.size(); i++) {
+            int indexPosition = positionsByOffset.get(i);
+            dataOutput.writeInt(indexPosition);
+        }
+    }
+}
+
+class IndexPositionsByOffsetComparator implements IntComparator {
+    private List<? extends PackedObjectInfo> objectsByIndexPos;
+
+    IndexPositionsByOffsetComparator(List<? extends PackedObjectInfo> objectsByIndexPos) {
+        this.objectsByIndexPos = objectsByIndexPos;
+    }
+
+    @Override
+    public int compare(int firstIndexPosition, int secondIndexPosition) {
+        return Long.compare(getOffset(firstIndexPosition), getOffset(secondIndexPosition));
+    }
+
+    private long getOffset(int indexPosition) {
+        return objectsByIndexPos.get(indexPosition).getOffset();
+    }
+}
+```
+
+### Summary
+This refactoring extracts the `IndexPositionsByOffsetComparator` class, making it independent from the `PackReverseIndexWriterV1`. This aligns with the extract class refactoring pattern, potentially improving maintainability and testing of the sorting logic. Other than this, the core functionality of `PackReverseIndexWriterV1` appears cohesive and does not present clear opportunities for further extract class refactorings without a broader context or additional requirements.

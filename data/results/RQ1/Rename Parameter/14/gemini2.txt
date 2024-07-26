@@ -1,0 +1,37 @@
+## Refactoring Opportunities in WeightedSpanTermExtractor
+
+The provided code snippet for `WeightedSpanTermExtractor` presents a few opportunities for rename parameter refactoring:
+
+1. **extractWeightedTerms**: This method name is slightly misleading as it suggests it only extracts terms for weighted terms, but it actually extracts terms from any query. A more accurate name could be `extractTermsFromQuery`.
+
+2. **extractWeightedSpanTerms**: Similar to the above, this method extracts terms from a `SpanQuery`. A clearer name could be `extractTermsFromSpanQuery`.
+
+3. **mustRewriteQuery**: This method checks if a query needs to be rewritten. A more descriptive name could be `shouldRewriteQuery`.
+
+Here's the refactored code with the suggested renames:
+
+```java
+public class WeightedSpanTermExtractor {
+
+  // ... other class members ...
+
+  protected void extractTermsFromQuery(Query query, float boost, Map<String, WeightedSpanTerm> terms)
+      throws IOException {
+    // ... existing implementation ...
+  }
+
+  protected void extractTermsFromSpanQuery(
+      Map<String, WeightedSpanTerm> terms, SpanQuery spanQuery, float boost) throws IOException {
+
+    // ... existing implementation ...
+  }
+
+  protected boolean shouldRewriteQuery(SpanQuery spanQuery) {
+    // ... existing implementation ...
+  }
+
+  // ... other methods ...
+}
+```
+
+These renamed methods better reflect their functionalities and improve code readability.

@@ -1,0 +1,65 @@
+In the provided code snippet, there are a few opportunities for the "extract variable" refactoring to enhance readability and possibly improve performance by reducing redundancy. Here's an analysis of potential refactorings:
+
+1. **Repeated Method Calls** - Method calls that are used multiple times in the code should be stored in a variable if the returned value remains consistent during the method's execution.
+2. **Complex Expressions** - Any complex expressions, especially those involving method calls that can be simplified to a variable for clarity and reuse.
+
+### Original Code Snippet Analysis
+Let's focus on repeated method calls and potentially complex expressions that could benefit from variable extraction:
+
+- The `inputStream.readAllBytes()` method is called twice:
+  - This can be expensive in terms of I/O operations and can be extracted into a variable.
+
+### Refactored Code
+```java
+@EndPoint(method = PUT, path = API_PATH, permission = CONFIG_EDIT_PERM)
+public void updateConfigSetFile(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
+    ensureConfigSetUploadEnabled();
+
+    final String configSetName = req.getPathTemplateValues().get("name");
+    boolean overwritesExisting = configSetService.checkConfigExists(configSetName);
+    boolean requestIsTrusted =
+            isTrusted(req.getUserPrincipal(), coreContainer.getAuthenticationPlugin());
+
+    // Get upload parameters
+
+    String singleFilePath = req.getPathTemplateValues().getOrDefault(FILEPATH_PLACEHOLDER, "");
+    boolean allowOverwrite = req.getParams().getBool(ConfigSetParams.OVERWRITE, true);
+    boolean cleanup = req.getParams().getBool(ConfigSetParams.CLEANUP, false);
+    final InputStream inputStream = ensureNonEmptyInputStream(req);
+
+    byte[] inputStreamBytes = inputStream.readAllBytes();  // Extracted variable for inputStream read bytes.
+
+    String fixedSingleFilePath = singleFilePath;
+    if (fixedSingleFilePath.charAt(0) == '/') {
+        fixedSingleFilePath = fixedSingleFilePath.substring(1);
+    }
+    if (fixedSingleFilePath.isEmpty()) {
+        throw new SolrException(
+                SolrException.ErrorCode.BAD_REQUEST,
+                "The file path provided for upload, '" + singleFilePath + "', is not valid.");
+    } else if (ZkMaintenanceUtils.isFileForbiddenInConfigSets(fixedSingleFilePath)
+            || FileTypeMagicUtil.isFileForbiddenInConfigset(inputStreamBytes)) {
+        throw new SolrException(
+                SolrException.ErrorCode.BAD_REQUEST,
+                "The file type provided for upload, '"
+                        + singleFilePath
+                        + "', is forbidden for use in configSets.");
+    } else if (cleanup) {
+        // Cleanup is not allowed while using singleFilePath upload
+        throw new SolrException(
+                SolrException.ErrorCode.BAD_REQUEST,
+                "ConfigSet uploads do not allow cleanup=true when file path is used.");
+    } else {
+        // Create a node for the configuration in config
+        // For creating the baseNode, the cleanup parameter is only allowed to be true when
+        // singleFilePath is not passed.
+        createBaseNode(configSetService, overwritesExisting, requestIsTrusted, configSetName);
+        configSetService.uploadFileToConfig(configSetName, fixedSingleFilePath, inputStreamBytes, allowOverwrite);
+    }
+}
+```
+
+### Summary of Refactoring
+- Extracted `inputStream.readAllBytes()` into `inputStreamBytes`. This reduces the need to read all bytes from the stream multiple times, which is a costly operation.
+
+These changes should make the code cleaner and potentially more efficient, especially in terms of avoiding multiple reads from an `InputStream`.

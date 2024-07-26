@@ -1,0 +1,98 @@
+ **Here's the refactored code applying extract variable to the repeated expression "helloWorld.length + 1":**
+
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.apache.commons.io.IOUtils;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests for {@link BoundedInputStream}.
+ */
+public class BoundedInputStreamTest {
+
+    private void compare(final String msg, final byte[] expected, final byte[] actual) {
+        assertEquals(expected.length, actual.length, msg + " length");
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], actual[i], msg + " byte[" + i + "]");
+        }
+    }
+
+    @Test
+    public void testOnMaxLength() throws Exception {
+        BoundedInputStream bounded;
+        final byte[] helloWorld = "Hello World".getBytes();
+        final byte[] hello = "Hello".getBytes();
+        final AtomicBoolean boolRef = new AtomicBoolean();
+
+        // limit = length
+        bounded = new BoundedInputStream(new ByteArrayInputStream(helloWorld), helloWorld.length) {
+            @Override
+            protected void onMaxLength(final long max, final long readCount) {
+                boolRef.set(true);
+            }
+        };
+        // ... rest of the code for "limit = length" case
+
+        // Extract variable for "helloWorld.length + 1"
+        final int maxLengthPlusOne = helloWorld.length + 1;
+
+        // limit > length
+        // limit > length
+        boolRef.set(false);
+        bounded = new BoundedInputStream(new ByteArrayInputStream(helloWorld), maxLengthPlusOne) {
+          @Override
+          protected void onMaxLength(final long max, final long readCount) {
+            boolRef.set(true);
+          }
+        };
+        assertEquals(maxLengthPlusOne, bounded.getMaxLength());
+        assertEquals(0, bounded.getCount());
+        assertEquals(bounded.getMaxLength(), bounded.getRemaining());
+        assertFalse(boolRef.get());
+        int readCount = 0;
+        for (int i = 0; i < helloWorld.length; i++) {
+          assertEquals(helloWorld[i], bounded.read(), "limit > length byte[" + i + "]");
+          readCount++;
+          assertEquals(maxLengthPlusOne, bounded.getMaxLength());
+          assertEquals(readCount, bounded.getCount());
+          assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+        }
+        // Since limit is greater than the actual data, no onMaxLength call is triggered here
+        assertEquals(-1, bounded.read(), "limit > length end");
+        assertEquals(maxLengthPlusOne, bounded.getMaxLength());
+        assertEquals(readCount, bounded.getCount());
+        assertEquals(bounded.getMaxLength() - readCount, bounded.getRemaining());
+        assertFalse(boolRef.get());  
+
+        // limit < length
+        boolRef.set(false);
+        bounded = new BoundedInputStream(new ByteArrayInputStream(helloWorld), hello.length) {
+            @Override
+            protected void onMaxLength(final long max, final long readCount) {
+                boolRef.set(true);
+            }
+        };
+        // ... rest of the code for "limit < length" case
+    }
+
+    // ... other test methods
+}
+```
+**Key changes:**
+
+- A new variable `maxLengthPlusOne` is declared and initialized with `helloWorld.length + 1`.
+- The expression `helloWorld.length + 1` is replaced with `maxLengthPlusOne` in the relevant places.
+
+**Benefits of this refactoring:**
+
+- **Improved readability:** The code becomes more concise and easier to read by avoiding repetition.
+- **Enhanced maintainability:** Changes to the expression only need to be made in one place, reducing the likelihood of errors.
+- **Potential performance improvement:** In some cases, extracting a variable can improve performance by avoiding repeated calculations.

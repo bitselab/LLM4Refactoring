@@ -1,0 +1,82 @@
+To refactor the provided code snippet using the "Extract Class" technique, we'll create a new class to encapsulate the properties related to the `Tokenizer` configuration. This will improve the readability and maintainability of the code by separating the configuration logic from the tokenization logic.
+
+1. **Create a new class `TokenizerProperties`** to hold the property descriptors and the deprecated string constant.
+2. **Remove the property-related code from the `Tokenizer` interface** and reference the new class as needed.
+
+Here's the refactored code:
+
+**TokenizerProperties.java:**
+```java
+package net.sourceforge.pmd.cpd;
+
+/**
+ * Properties for configuring Tokenizer.
+ */
+public class TokenizerProperties {
+
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_LITERAL_SEQUENCES =
+            PropertyFactory.booleanProperty("cpdIgnoreLiteralSequences")
+                    .defaultValue(false)
+                    .desc("Ignore sequences of literals, eg `0, 0, 0, 0`")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_LITERAL_AND_IDENTIFIER_SEQUENCES =
+            PropertyFactory.booleanProperty("cpdIgnoreLiteralAndIdentifierSequences")
+                    .defaultValue(false)
+                    .desc("Ignore sequences of literals, eg `a, b, 0, 0`")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_ANONYMIZE_LITERALS =
+            PropertyFactory.booleanProperty("cpdAnonymizeLiterals")
+                    .defaultValue(false)
+                    .desc("Anonymize literals. They are still part of the token stream but all literals appear to have the same value.")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_ANONYMIZE_IDENTIFIERS =
+            PropertyFactory.booleanProperty("cpdAnonymizeIdentifiers")
+                    .defaultValue(false)
+                    .desc("Anonymize identifiers. They are still part of the token stream but all identifiers appear to have the same value.")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_IMPORTS =
+            PropertyFactory.booleanProperty("cpdIgnoreImports")
+                    .defaultValue(true)
+                    .desc("Ignore import statements and equivalent (eg using statements in C#).")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_METADATA =
+            PropertyFactory.booleanProperty("cpdIgnoreMetadata")
+                    .defaultValue(false)
+                    .desc("Ignore metadata such as Java annotations or C# attributes.")
+                    .build();
+
+    @Deprecated
+    public static final String DEFAULT_SKIP_BLOCKS_PATTERN = "#if 0|#endif";
+}
+```
+
+**Tokenizer.java:**
+```java
+package net.sourceforge.pmd.cpd;
+
+import java.io.IOException;
+import net.sourceforge.pmd.lang.document.TextDocument;
+
+/**
+ * Tokenizes a source file into tokens consumable by CPD.
+ */
+public interface Tokenizer {
+
+    /**
+     * Tokenize the source code and record tokens using the provided token factory.
+     */
+    void tokenize(TextDocument document, TokenFactory tokens) throws IOException;
+
+    /**
+     * Wraps a call to {@link #tokenize(TextDocument, TokenFactory)} to properly
+     * create and close the token factory.
+     */
+    static void tokenize(Tokenizer tokenizer, TextDocument textDocument, Tokens tokens) throws IOException {
+        try (TokenFactory tf = Tokens.factoryForFile(textDocument, tokens)) {
+            tokenizer.tokenize(textDocument, tf);
+        }
+    }
+}
+```
+
+In this refactoring, the `TokenizerProperties` class is dedicated to storing property descriptors and the deprecated pattern string, while the `Tokenizer` interface focuses solely on the tokenization process. This separation enhances the clarity and modularity of the codebase.

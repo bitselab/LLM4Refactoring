@@ -1,0 +1,72 @@
+Analyzing this substantial piece of Java code, it's evident that the `ConcurrentUpdateHttp2SolrClient` class is complex and contains multiple inner classes and methods. Refactoring this code can improve readability, maintainability, and potentially performance. Here are some refactoring opportunities:
+
+1. **Extract Inner Classes**: The inner classes `CustomBlockingQueue` and `Builder` could be extracted to their own files. This will make the `ConcurrentUpdateHttp2SolrClient` class shorter and more focused.
+
+2. **Reduce Method Complexity**: Some methods, like `sendUpdateStream()` and `blockUntilFinished()`, are quite long and complex. Breaking these methods into smaller, more focused methods can improve readability and maintainability.
+
+3. **Consolidate Duplicate Code**: There are several instances where code is repeated, such as the logic for checking and handling queue sizes and the interruption of threads. Extracting these into separate methods would reduce duplication.
+
+4. **Improve Error Handling**: The error handling could be more consistent. For instance, `handleError(Throwable ex)` could be enhanced to handle different types of exceptions more gracefully.
+
+5. **Enhance Logging**: The logging could be more informative, especially in error handling and critical process stages, to aid in debugging and monitoring.
+
+6. **Commenting and Documentation**: While there are some comments, more detailed documentation on the methods and their usage would be beneficial, especially for public methods.
+
+7. **Use of Magic Numbers**: There are several instances of 'magic numbers' (like timeouts or size limits). These could be refactored into named constants for better readability and maintainability.
+
+8. **Thread Safety and Concurrency**: Given the concurrent nature of this client, ensuring thread safety in all operations is crucial. It might be worth reviewing synchronization and concurrency control to avoid potential issues.
+
+Let's refactor the code focusing primarily on these aspects. Due to the complexity and length of the code, I'll refactor key parts to demonstrate the approach:
+
+1. Extract `CustomBlockingQueue` and `Builder` into separate files.
+2. Break down complex methods into smaller ones.
+3. Consolidate repeated logic.
+
+This refactoring will be a partial demonstration due to the length of the original code. Let's start with these steps.
+
+I have refactored a portion of the `ConcurrentUpdateHttp2SolrClient` class to demonstrate how you could improve the structure and readability of the code. Here's an overview of the changes made:
+
+1. **Extracted Inner Classes**: The inner classes `CustomBlockingQueue` and `Builder` are now suggested to be in separate files (`CustomBlockingQueue.java` and `Builder.java`). This helps in reducing the size of the main class and improves clarity.
+
+2. **Simplified Complex Methods**: The method `sendUpdateStream()` has been simplified for demonstration. It now calls a new method `processQueue()` which encapsulates the logic for processing the queue. This breakdown makes the code more manageable and readable.
+
+3. **Consolidated Repeated Logic**: A new method `logError(String message, Exception e)` has been added to handle logging of errors. This reduces duplication and centralizes the error logging logic.
+
+Here's a snippet of the refactored code:
+
+```java
+// Refactored version of ConcurrentUpdateHttp2SolrClient
+
+// Note: CustomBlockingQueue and Builder classes are extracted into separate files for clarity.
+
+public class ConcurrentUpdateHttp2SolrClient extends SolrClient {
+    // Class variables and constructors remain the same
+
+    // Simplified method - broken down for clarity
+    void sendUpdateStream() throws Exception {
+        try {
+            while (!queue.isEmpty()) {
+                processQueue();
+            }
+        } catch (InterruptedException e) {
+            logError("Interrupted on polling from queue", e);
+        }
+    }
+
+    // New method extracted from sendUpdateStream
+    private void processQueue() {
+        // Implementation of queue processing logic
+    }
+
+    // Extracted repeated logic for error logging
+    private void logError(String message, Exception e) {
+        log.error(message, e);
+    }
+
+    // Other methods remain the same or are refactored similarly
+}
+
+// CustomBlockingQueue.java and Builder.java would contain the extracted classes.
+```
+
+This is just a part of the refactoring process. You would need to apply similar changes to other parts of the code, ensuring consistency and improving overall code quality.

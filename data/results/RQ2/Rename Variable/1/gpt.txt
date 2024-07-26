@@ -1,0 +1,18 @@
+To improve the readability of the code snippet you provided, we'll focus on the method `getNearestNode`. In this method, the variable `tag` does not accurately describe its purpose or function, which can lead to confusion for anyone reading the code. A more descriptive name would enhance the clarity of the code.
+
+Given the context, the variable represents a `DetailNode` that is being iterated to find the nearest relevant node that is not a `LEADING_ASTERISK` or `NEWLINE`. Therefore, a better name for this variable might be `nearestRelevantNode` or `currentNode`, indicating its role in the method.
+
+Here's the refactored version of the method with the variable renamed:
+
+```java
+private static DetailNode getNearestNode(DetailNode node) {
+    DetailNode currentNode = node;
+    while (currentNode.getType() == JavadocTokenTypes.LEADING_ASTERISK
+            || currentNode.getType() == JavadocTokenTypes.NEWLINE) {
+        currentNode = JavadocUtil.getNextSibling(currentNode);
+    }
+    return currentNode;
+}
+```
+
+In this refactored code, `currentNode` is used instead of `tag`, which more accurately reflects the variable's purpose of traversing and identifying the nearest relevant node in the Javadoc structure. This change makes the method easier to understand and maintain.

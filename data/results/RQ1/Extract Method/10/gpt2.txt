@@ -1,0 +1,132 @@
+After reviewing the code, there are opportunities for the Extract Method refactoring to improve readability and maintainability. This refactoring involves breaking down complex methods into smaller, more manageable methods. Here's the refactored version of the code with the Extract Method refactoring applied:
+
+### Refactored Code:
+
+```java
+// ... [Other parts of the code remain unchanged] ...
+
+class FileChannelDataBlock implements CloseableDataBlock {
+    // ... [Other parts of the FileChannelDataBlock remain unchanged] ...
+
+    @Override
+    public int read(ByteBuffer dst, long pos) throws IOException {
+        validatePosition(pos);
+        ensureOpen(ClosedChannelException::new);
+
+        int remaining = calculateRemainingSize(pos);
+        if (remaining <= 0) {
+            return -1;
+        }
+
+        int originalDestinationLimit = setBufferLimit(dst, remaining);
+        int result = this.channel.read(dst, this.offset + pos);
+        restoreOriginalLimit(dst, originalDestinationLimit);
+
+        return result;
+    }
+
+    private void validatePosition(long pos) {
+        if (pos < 0) {
+            throw new IllegalArgumentException("Position must not be negative");
+        }
+    }
+
+    private int calculateRemainingSize(long pos) {
+        return (int) (this.size - pos);
+    }
+
+    private int setBufferLimit(ByteBuffer dst, int remaining) {
+        if (dst.remaining() > remaining) {
+            int originalLimit = dst.limit();
+            dst.limit(dst.position() + remaining);
+            return originalLimit;
+        }
+        return -1;
+    }
+
+    private void restoreOriginalLimit(ByteBuffer dst, int originalLimit) {
+        if (originalLimit != -1) {
+            dst.limit(originalLimit);
+        }
+    }
+
+    // ... [Rest of the FileChannelDataBlock methods remain unchanged] ...
+}
+
+static class ManagedFileChannel {
+    // ... [Other parts of the ManagedFileChannel remain unchanged] ...
+
+    int read(ByteBuffer dst, long position) throws IOException {
+        synchronized (this.lock) {
+            if (isBufferUpdateNeeded(position)) {
+                updateBuffer(position);
+            }
+            return readBuffer(dst, position);
+        }
+    }
+
+    private boolean isBufferUpdateNeeded(long position) {
+        return position < this.bufferPosition || position >= this.bufferPosition + this.bufferSize;
+    }
+
+    private void updateBuffer(long position) throws IOException {
+        for (int i = 0; i < 10; i++) {
+            try {
+                loadBuffer(position);
+                return;
+            } catch (ClosedByInterruptException ex) {
+                handleInterruptedLoad();
+            }
+        }
+        throw new ClosedByInterruptException();
+    }
+
+    private void loadBuffer(long position) throws IOException {
+        boolean interrupted = Thread.interrupted();
+        this.buffer.clear();
+        this.bufferSize = this.fileChannel.read(this.buffer, position);
+        this.bufferPosition = position;
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void handleInterruptedLoad() throws IOException {
+        repairFileChannel();
+        if (Thread.interrupted()) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private int readBuffer(ByteBuffer dst, long position) {
+        if (this.bufferSize <= 0) {
+            return this.bufferSize;
+        }
+        int offset = (int) (position - this.bufferPosition);
+        int length = Math.min(this.bufferSize - offset, dst.remaining());
+        dst.put(dst.position(), this.buffer, offset, length);
+        dst.position(dst.position() + length);
+        return length;
+    }
+
+    // ... [Rest of the ManagedFileChannel methods remain unchanged] ...
+}
+
+// ... [Rest of the code remains unchanged] ...
+```
+
+### Summary of Changes:
+
+1. **In `FileChannelDataBlock.read` Method**:
+   - Extracted the validation of `pos` into `validatePosition`.
+   - Extracted the calculation of remaining size into `calculateRemainingSize`.
+   - Extracted the logic for setting and restoring the buffer limit into `setBufferLimit` and `restoreOriginalLimit`.
+
+2. **In `ManagedFileChannel.read` Method**:
+   - Extracted the condition to check if buffer update is needed into `isBufferUpdateNeeded`.
+   - Extracted the logic to update the buffer into `updateBuffer`.
+   - Extracted the process of loading the buffer into `loadBuffer`.
+   - Extracted handling of an interrupted load into `handleInterruptedLoad`.
+   - Extracted the logic to read from the buffer into `readBuffer`.
+
+These refactoring steps should make the code more readable and easier to maintain. Each method now has a single responsibility, aligning with the SOLID principles of object-oriented design.

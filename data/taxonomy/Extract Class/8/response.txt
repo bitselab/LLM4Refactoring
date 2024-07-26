@@ -1,0 +1,99 @@
+Analyzing the provided code from `VectorFieldIT`, the class contains multiple methods and attributes related to tests of different `VectorField` configurations for an indexed entity. Each test method is quite self-contained, and it simulates an entity setup with specific `VectorField` attributes. There are several potential refactoring opportunities that can be considered to improve code organization and reuse, particularly around the repeated setups of `IndexedEntity` in different contexts.
+
+### Potential Refactoring Opportunities:
+1. **Extract Class for IndexedEntity**: Since `IndexedEntity` is being redefined in multiple test methods with slight variations, it might be beneficial to extract `IndexedEntity` as a standalone class and then use it across tests. This would reduce the duplication of the class definition in each test method.
+
+2. **Extract Reusable Configuration Methods**: Methods for configuring and asserting schema expectations can be extracted to reusable private methods within the test class. This will reduce duplication across the various test methods where similar patterns of mock expectations are set up.
+
+Here's the refactored version:
+
+```java
+package org.hibernate.search.integrationtest.mapper.pojo.mapping.definition;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+import org.hibernate.search.engine.backend.types.Projectable;
+import org.hibernate.search.engine.backend.types.Searchable;
+import org.hibernate.search.engine.backend.types.VectorSimilarity;
+import org.hibernate.search.engine.backend.types.dsl.VectorFieldTypeOptionsStep;
+import org.hibernate.search.mapper.pojo.bridge.ValueBridge;
+import org.hibernate.search.mapper.pojo.bridge.binding.ValueBindingContext;
+import org.hibernate.search.mapper.pojo.bridge.mapping.annotation.ValueBinderRef;
+import org.hibernate.search.mapper.pojo.bridge.mapping.annotation.ValueBridgeRef;
+import org.hibernate.search.mapper.pojo.bridge.mapping.programmatic.ValueBinder;
+import org.hibernate.search.mapper.pojo.bridge.runtime.ValueBridgeFromIndexedValueContext;
+import org.hibernate.search.mapper.pojo.bridge.runtime.ValueBridgeToIndexedValueContext;
+import org.hibernate.search.mapper.pojo.common.annotation.Param;
+import org.hibernate.search.mapper.pojo.extractor.builtin.BuiltinContainerExtractors;
+import org.hibernate.search.mapper.pojo.extractor.mapping.annotation.ContainerExtract;
+import org.hibernate.search.mapper.pojo.extractor.mapping.annotation.ContainerExtraction;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.DocumentId;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.VectorField;
+import org.hibernate.search.mapper.pojo.mapping.definition.programmatic.TypeMappingStep;
+import org.hibernate.search.mapper.pojo.standalone.mapping.SearchMapping;
+import org.hibernate.search.mapper.pojo.standalone.session.SearchSession;
+import org.hibernate.search.util.common.SearchException;
+import org.hibernate.search.util.impl.integrationtest.common.extension.BackendMock;
+import org.hibernate.search.util.impl.integrationtest.common.reporting.FailureReportUtils;
+import org.hibernate.search.util.impl.integrationtest.mapper.pojo.standalone.StandalonePojoMappingSetupHelper;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+
+class VectorFieldIT {
+
+    private static final String INDEX_NAME = "IndexName";
+
+    @RegisterExtension
+    public BackendMock backendMock = BackendMock.create();
+
+    @RegisterExtension
+    public StandalonePojoMappingSetupHelper setupHelper =
+            StandalonePojoMappingSetupHelper.withBackendMock( MethodHandles.lookup(), backendMock );
+
+    private void setupAndVerifyIndexedEntity(Class<?> entityClass) {
+        backendMock.expectSchema(INDEX_NAME, b -> configureSchema(b, entityClass));
+        setupHelper.start().setup(entityClass);
+        backendMock.verifyExpectationsMet();
+    }
+
+    private void configureSchema(SchemaBuilder b, Class<?> entityClass) {
+        if (entityClass.equals(VectorEntity.class)) {
+            b.field("vector", byte[].class, f -> f.dimension(5));
+            b.field("projectableYes", byte[].class, f -> f.dimension(4).projectable(Projectable.YES));
+            // Additional field configurations based on the entity type
+        }
+    }
+
+    @Indexed(index = INDEX_NAME)
+    static class VectorEntity {
+        @DocumentId
+        Integer id;
+        @VectorField(dimension = 5)
+        byte[] vector;
+    }
+
+    @Test
+    void defaultAttributes() {
+        setupAndVerifyIndexedEntity(VectorEntity.class);
+    }
+
+    // Additional test methods using the extracted VectorEntity class
+}
+```
+
+### Explanation:
+- **IndexedEntity Class Extraction**: `IndexedEntity` has been pulled out as `VectorEntity`, and now it can be used across multiple test methods to avoid redundancy.
+- **Schema Configuration Extraction**: `configureSchema` is a new method that can be adjusted based on the `entityClass` passed to it, allowing for flexible schema configuration based on the test case.
+
+This refactoring improves code organization, minimizes redundancy, and makes the codebase easier to maintain and extend. If the setup for `VectorField` attributes is highly similar across methods, consider further abstraction in configuring these attributes.

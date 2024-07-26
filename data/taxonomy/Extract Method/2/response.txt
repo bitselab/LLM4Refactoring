@@ -1,0 +1,78 @@
+In the provided code snippet from the `ClosedInputStreamTest` class, we can observe the repetitive pattern of reading from an input stream and asserting that the end of the file (`EOF`) has been reached. This pattern is consistent across several test methods, which suggests a potential opportunity for the Extract Method refactoring to improve code reusability and maintainability.
+
+Here’s a refactored version of the code where we introduce a private helper method to encapsulate the repeated assertions. This not only reduces code duplication but also enhances readability by abstracting the testing logic into a well-named method.
+
+### Refactored Code:
+
+```java
+package org.apache.commons.io.input;
+
+import static org.apache.commons.io.IOUtils.EOF;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests {@link ClosedInputStream}.
+ */
+public class ClosedInputStreamTest {
+
+    @Test
+    public void testRead() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertEndOfFile(cis);
+        }
+    }
+
+    @Test
+    public void testReadArray() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertEndOfFile(cis, new byte[4096]);
+            assertEndOfFile(cis, new byte[1]);
+            assertEndOfFile(cis, new byte[0]);
+        }
+    }
+
+    @Test
+    public void testReadArrayIndex() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertEndOfFile(cis, new byte[4096], 0, 1);
+            assertEndOfFile(cis, new byte[1], 0, 1);
+            assertEndOfFile(cis, new byte[0], 0, 0);
+        }
+    }
+
+    @Test
+    public void testSingleton() throws Exception {
+        try (@SuppressWarnings("deprecation")
+             ClosedInputStream cis = ClosedInputStream.CLOSED_INPUT_STREAM) {
+            assertEndOfFile(cis);
+        }
+        try (ClosedInputStream cis = ClosedInputStream.INSTANCE) {
+            assertEndOfFile(cis);
+        }
+    }
+
+    private void assertEndOfFile(ClosedInputStream cis) throws Exception {
+        assertEquals(EOF, cis.read(), "read()");
+    }
+
+    private void assertEndOfFile(ClosedInputStream cis, byte[] buffer) throws Exception {
+        assertEquals(EOF, cis.read(buffer), "read(byte[])");
+    }
+
+    private void assertEndOfFile(ClosedInputStream cis, byte[] buffer, int offset, int length) throws Exception {
+        assertEquals(EOF, cis.read(buffer, offset, length), "read(byte[], int, int)");
+    }
+}
+```
+
+### Explanation of Changes:
+1. **Extracted Methods**:
+   - `assertEndOfFile(ClosedInputStream cis)`: Handles the assertion for the EOF when reading a single byte.
+   - `assertEndOfFile(ClosedInputStream cis, byte[] buffer)`: Handles the assertion for EOF when reading from an array of bytes.
+   - `assertEndOfFile(ClosedInputStream cis, byte[] buffer, int offset, int length)`: Handles the assertion for EOF when reading from a segment of a byte array.
+
+2. **Simplification**: Each test method now calls one of these extracted methods, passing the necessary parameters. This not only makes each test method cleaner and more readable but also consolidates the error handling and EOF checking into centralized methods.
+
+This refactoring follows the pattern you described, focusing on extracting duplicate code snippets into methods to enhance clarity and maintain the DRY (Don't Repeat Yourself) principle in software development.

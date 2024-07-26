@@ -1,0 +1,127 @@
+Analyzing the provided code snippet from the `NFARunAutomaton` class, I noticed several opportunities for the Extract Method refactoring. This refactoring involves creating new methods by extracting segments of code from existing methods. It's useful for reducing code duplication, improving readability, and making the code easier to maintain.
+
+Here are some potential refactorings:
+
+1. **Extract Method for Binary Search in `getCharClass`:** The binary search logic within the `getCharClass` method can be extracted into its own method. This makes `getCharClass` more readable and the binary search reusable if needed elsewhere.
+
+2. **Extract Method for Transition Processing in `determinize`:** The code inside the `determinize` method that processes transitions could be extracted into a separate method. This would improve the readability of `determinize` and encapsulate the transition processing logic.
+
+3. **Extract Method for Transition Initialization in `DState` Constructor:** The logic in the `DState` constructor that calculates `hashCode` and `isAccept` can be extracted into separate methods. This will make the constructor more readable and the logic reusable.
+
+4. **Extract Method for Transition Handling in `DState.step`:** The nested loop inside the `DState.step` method, which processes transitions, could be refactored into a separate method. This would simplify `step` and make the transition processing logic more modular.
+
+5. **Extract Method for Setting Transitions in `determinize`:** The segment of code within `determinize` that sets transitions can be extracted into a separate method for better clarity.
+
+Let's apply these refactorings to the provided code. Due to the complexity of the code, I'll demonstrate the approach with snippets focusing on these specific refactoring opportunities.
+
+### Refactored `NFARunAutomaton` Class Snippets
+
+1. **Extract Method for Binary Search in `getCharClass`:**
+
+   ```java
+   final int getCharClass(int c) {
+       assert c < alphabetSize;
+
+       if (c < classmap.length) {
+           return classmap[c];
+       }
+       return binarySearchForCharClass(c);
+   }
+
+   private int binarySearchForCharClass(int c) {
+       int a = 0;
+       int b = points.length;
+       while (b - a > 1) {
+           int d = (a + b) >>> 1;
+           if (points[d] > c) b = d;
+           else if (points[d] < c) a = d;
+           else return d;
+       }
+       return a;
+   }
+   ```
+
+2. **Extract Method for Transition Processing in `determinize`:**
+
+   ```java
+   private void determinize() {
+       if (transitions != null && computedTransitions == transitions.length) {
+           return; // already determinized
+       }
+       initTransitions();
+       processTransitionsForDeterminize();
+   }
+
+   private void processTransitionsForDeterminize() {
+       transitionSet.reset();
+       for (int nfaState : nfaStates) {
+           // Code to process transitions...
+       }
+       // Remaining logic...
+   }
+   ```
+
+3. **Extract Method for Transition Initialization in `DState` Constructor:**
+
+   ```java
+   private DState(int[] nfaStates) {
+       this.nfaStates = nfaStates;
+       this.isAccept = calculateIsAccept(nfaStates);
+       this.hashCode = calculateHashCode(nfaStates);
+   }
+
+   private boolean calculateIsAccept(int[] states) {
+       for (int s : states) {
+           if (automaton.isAccept(s)) {
+               return true;
+           }
+       }
+       return false;
+   }
+
+   private int calculateHashCode(int[] states) {
+       int hashCode = states.length;
+       for (int s : states) {
+           hashCode += BitMixer.mix(s);
+       }
+       return hashCode;
+   }
+   ```
+
+4. **Extract Method for Transition Handling in `DState.step`:**
+
+   ```java
+   private DState step(int c) {
+       statesSet.reset();
+       processTransitionsForStep(c);
+       if (statesSet.size() == 0) {
+           return null;
+       }
+       // Remaining logic...
+   }
+
+   private void processTransitionsForStep(int c) {
+       int numTransitions;
+       // Logic for processing transitions...
+   }
+   ```
+
+5. **Extract Method for Setting Transitions in `determinize`:**
+
+   ```java
+   private void determinize() {
+       if (isAlreadyDeterminized()) return;
+       initTransitions();
+       processAllTransitions();
+   }
+
+   private void processAllTransitions() {
+       // Logic for processing all transitions...
+   }
+
+   private boolean isAlreadyDeterminized() {
+       return transitions != null && computedTransitions == transitions.length;
+   }
+   ```
+
+These refactorings aim to improve readability and maintainability of the code by breaking down complex methods into simpler, more focused methods. Each extracted method has a single responsibility, making the code easier to understand and test.

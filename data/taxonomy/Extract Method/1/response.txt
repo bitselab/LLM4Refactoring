@@ -1,0 +1,199 @@
+In the provided code, we can identify some repeated code that can be extracted into a method to follow the extract method refactoring pattern. Specifically, the repeated code related to logging messages can be extracted into a new method.
+
+Here is the refactored code with the extract method applied:
+
+### Before Refactoring:
+```java
+package com.puppycrawl.tools.checkstyle.checks.regexp;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.puppycrawl.tools.checkstyle.FileStatefulCheck;
+import com.puppycrawl.tools.checkstyle.api.AbstractCheck;
+import com.puppycrawl.tools.checkstyle.api.DetailAST;
+import com.puppycrawl.tools.checkstyle.api.FileContents;
+import com.puppycrawl.tools.checkstyle.api.FileText;
+import com.puppycrawl.tools.checkstyle.api.LineColumn;
+import com.puppycrawl.tools.checkstyle.utils.CommonUtil;
+
+// ... (class Javadoc and other code)
+
+@FileStatefulCheck
+public class RegexpCheck extends AbstractCheck {
+
+    // ... (class variables and methods)
+
+    /** Recursive method that finds the matches. */
+    @SuppressWarnings("deprecation")
+    private void findMatch() {
+        final boolean foundMatch = matcher.find();
+        if (foundMatch) {
+            final FileText text = getFileContents().getText();
+            final LineColumn start = text.lineColumn(matcher.start());
+            final int startLine = start.getLine();
+
+            final boolean ignore = isIgnore(startLine, text, start);
+
+            if (!ignore) {
+                matchCount++;
+                if (illegalPattern || checkForDuplicates
+                        && matchCount - 1 > duplicateLimit) {
+                    errorCount++;
+                    logMessage(startLine);
+                }
+            }
+            if (canContinueValidation(ignore)) {
+                findMatch();
+            }
+        }
+        else if (!illegalPattern && matchCount == 0) {
+            String msg;
+
+            if (message == null || message.isEmpty()) {
+                msg = format.pattern();
+            }
+            else {
+                msg = message;
+            }
+
+            if (errorCount >= errorLimit) {
+                msg = ERROR_LIMIT_EXCEEDED_MESSAGE + msg;
+            }
+            log(1, MSG_REQUIRED_REGEXP, msg);
+        }
+    }
+
+    // ... (other methods)
+
+    /**
+     * Displays the right message.
+     *
+     * @param lineNumber the line number the message relates to.
+     */
+    private void logMessage(int lineNumber) {
+        String msg;
+
+        if (message == null || message.isEmpty()) {
+            msg = format.pattern();
+        }
+        else {
+            msg = message;
+        }
+
+        if (errorCount >= errorLimit) {
+            msg = ERROR_LIMIT_EXCEEDED_MESSAGE + msg;
+        }
+
+        if (illegalPattern) {
+            log(lineNumber, MSG_ILLEGAL_REGEXP, msg);
+        }
+        else {
+            log(lineNumber, MSG_DUPLICATE_REGEXP, msg);
+        }
+    }
+
+    // ... (rest of the code)
+}
+```
+
+### After Refactoring:
+```java
+package com.puppycrawl.tools.checkstyle.checks.regexp;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.puppycrawl.tools.checkstyle.FileStatefulCheck;
+import com.puppycrawl.tools.checkstyle.api.AbstractCheck;
+import com.puppycrawl.tools.checkstyle.api.DetailAST;
+import com.puppycrawl.tools.checkstyle.api.FileContents;
+import com.puppycrawl.tools.checkstyle.api.FileText;
+import com.puppycrawl.tools.checkstyle.api.LineColumn;
+import com.puppycrawl.tools.checkstyle.utils.CommonUtil;
+
+// ... (class Javadoc and other code)
+
+@FileStatefulCheck
+public class RegexpCheck extends AbstractCheck {
+
+    // ... (class variables and methods)
+
+    /** Recursive method that finds the matches. */
+    @SuppressWarnings("deprecation")
+    private void findMatch() {
+        final boolean foundMatch = matcher.find();
+        if (foundMatch) {
+            final FileText text = getFileContents().getText();
+            final LineColumn start = text.lineColumn(matcher.start());
+            final int startLine = start.getLine();
+
+            final boolean ignore = isIgnore(startLine, text, start);
+
+            if (!ignore) {
+                matchCount++;
+                if (illegalPattern || checkForDuplicates
+                        && matchCount - 1 > duplicateLimit) {
+                    errorCount++;
+                    logMessage(startLine, format.pattern());
+                }
+            }
+            if (canContinueValidation(ignore)) {
+                findMatch();
+            }
+        }
+        else if (!illegalPattern && matchCount == 0) {
+            String msg = buildMessage();
+            log(1, MSG_REQUIRED_REGEXP, msg);
+        }
+    }
+
+    // ... (other methods)
+
+    /**
+     * Displays the right message.
+     *
+     * @param lineNumber the line number the message relates to.
+     * @param pattern the pattern used in the message
+     */
+    private void logMessage(int lineNumber, String pattern) {
+        String msg = buildMessage();
+        if (illegalPattern) {
+            log(lineNumber, MSG_ILLEGAL_REGEXP, msg);
+        }
+        else {
+            log(lineNumber, MSG_DUPLICATE_REGEXP, msg);
+        }
+    }
+
+    /**
+     * Builds the message for logging.
+     *
+     * @return the message string
+     */
+    private String buildMessage() {
+        String msg;
+
+        if (message == null || message.isEmpty()) {
+            msg = format.pattern();
+        }
+        else {
+            msg = message;
+        }
+
+        if (errorCount >= errorLimit) {
+            msg = ERROR_LIMIT_EXCEEDED_MESSAGE + msg;
+        }
+        return msg;
+    }
+
+    // ... (rest of the code)
+}
+```
+
+### Summary of Changes:
+1. Extracted the logic to build the message into a new method `buildMessage()`.
+2. Modified `logMessage` to accept an additional parameter `pattern` to pass the pattern used in the message.
+3. Updated `findMatch()` to use the new `buildMessage()` method.
+
+This refactoring improves code readability and reduces redundancy by consolidating the message-building logic into a single method.

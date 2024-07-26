@@ -1,0 +1,89 @@
+In the provided `JacksonProperties` class, we can identify potential refactoring opportunities using the Extract Class refactoring pattern to make the class more modular and maintainable. Here's a breakdown of the refactorings:
+
+1. **Feature Maps Refactoring**: The maps handling various Jackson features (serialization, deserialization, parsers, generators, mapper features, enum features, JsonNode features) could be extracted into separate classes. Each class would encapsulate all related operations and properties for these specific aspects of Jackson configuration.
+
+2. **Locale and Time Refactoring**: Locale and time zone settings are another cohesive unit that could be extracted. This extraction would group all locale and time-related settings into a single class, which could simplify the management of these settings and enhance readability.
+
+Here is how the code could be refactored:
+
+### Refactored Code
+
+```java
+package org.springframework.boot.autoconfigure.jackson;
+
+import java.util.EnumMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.TimeZone;
+
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.cfg.EnumFeature;
+import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+/**
+ * Configuration properties to configure Jackson.
+ *
+ * @author Jackson Team
+ * @since 1.2.0
+ */
+@ConfigurationProperties(prefix = "spring.jackson")
+public class JacksonProperties {
+    private String dateFormat;
+    private String propertyNamingStrategy;
+    private JsonInclude.Include defaultPropertyInclusion;
+    private Boolean defaultLeniency;
+    private ConstructorDetectorStrategy constructorDetector;
+    private LocalizationSettings localizationSettings = new LocalizationSettings();
+    private FeatureSettings featureSettings = new FeatureSettings();
+
+    // Getters and setters for the properties retained in this class
+    // ...
+
+    public LocalizationSettings getLocalizationSettings() {
+        return localizationSettings;
+    }
+
+    public FeatureSettings getFeatureSettings() {
+        return featureSettings;
+    }
+
+    // ConstructorDetectorStrategy enum remains here
+    // ...
+}
+
+class FeatureSettings {
+    private final Map<PropertyAccessor, JsonAutoDetect.Visibility> visibility = new EnumMap<>(PropertyAccessor.class);
+    private final Map<SerializationFeature, Boolean> serialization = new EnumMap<>(SerializationFeature.class);
+    private final Map<DeserializationFeature, Boolean> deserialization = new EnumMap<>(DeserializationFeature.class);
+    private final Map<MapperFeature, Boolean> mapper = new EnumMap<>(MapperFeature.class);
+    private final Map<JsonParser.Feature, Boolean> parser = new EnumMap<>(JsonParser.Feature.class);
+    private final Map<JsonGenerator.Feature, Boolean> generator = new EnumMap<>(JsonGenerator.Feature.class);
+    private final Map<EnumFeature, Boolean> enumFeatures = new EnumMap<>(EnumFeature.class);
+    private final Map<JsonNodeFeature, Boolean> jsonNode = new EnumMap<>(JsonNodeFeature.class);
+
+    // Getters and setters for each map
+    // ...
+}
+
+class LocalizationSettings {
+    private TimeZone timeZone;
+    private Locale locale;
+
+    // Getters and setters for TimeZone and Locale
+    // ...
+}
+```
+
+### Analysis
+- **FeatureSettings**: This new class encapsulates all the `EnumMap` related settings, providing a focused and cohesive handling of Jackson's serialization and deserialization features.
+- **LocalizationSettings**: This new class encapsulates timezone and locale settings, simplifying the main `JacksonProperties` class and making these settings more manageable.
+
+This refactoring approach follows the Extract Class pattern to decompose the `JacksonProperties` class, resulting in a clearer, more manageable codebase.

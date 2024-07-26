@@ -1,0 +1,187 @@
+Extract method refactorings are frequently employed to decompose complex methods to improve readability.
+##################################################
+An extract method refactoring pattern is to extract a piece of code as a new method to decompose this method. Here is an example of the extract method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public class SourceResolver {
+
+    protected Url canonicalizeUrl(@NotNull String url, @Nullable Url baseUrl, boolean trimFileScheme, int sourceIndex, boolean baseUrlIsFile) {
+        if (trimFileScheme && url.startsWith(StandardFileSystems.FILE_PROTOCOL_PREFIX)) {
+            return Urls.newLocalFileUrl(FileUtil.toCanonicalPath(VfsUtilCore.toIdeaUrl(url, true).substring(StandardFileSystems.FILE_PROTOCOL_PREFIX.length()), '/'));
+        } else if (baseUrl == null || url.contains(URLUtil.SCHEME_SEPARATOR) || url.startsWith("data:") || url.startsWith("blob:") || url.startsWith("javascript:")) {
+            return Urls.parseEncoded(url);
+        }
+        String path = url;
+        if (url.charAt(0) != '/') {
+            String basePath = baseUrl.getPath();
+            if (baseUrlIsFile) {
+                int lastSlashIndex = basePath.lastIndexOf('/');
+                StringBuilder pathBuilder = new StringBuilder();
+                if (lastSlashIndex == -1) {
+                    pathBuilder.append('/');
+                } else {
+                    pathBuilder.append(basePath, 0, lastSlashIndex + 1);
+                }
+                path = pathBuilder.append(url).toString();
+            } else {
+                path = basePath + '/' + url;
+            }
+        }
+        path = FileUtil.toCanonicalPath(path, '/');
+        if (baseUrl.getScheme() == null && baseUrl.isInLocalFileSystem()) {
+            return Urls.newLocalFileUrl(path);
+        }
+        if (isAbsolute(path)) {
+            VirtualFile file = LocalFileFinder.findFile(path);
+            if (file != null) {
+                if (absoluteLocalPathToSourceIndex == null) {
+                    // must be linked, on iterate original path must be first
+                    absoluteLocalPathToSourceIndex = createStringIntMap(rawSources.size());
+                    sourceIndexToAbsoluteLocalPath = new String[rawSources.size()];
+                }
+                absoluteLocalPathToSourceIndex.put(path, sourceIndex);
+                sourceIndexToAbsoluteLocalPath[sourceIndex] = path;
+                String canonicalPath = file.getCanonicalPath();
+                if (canonicalPath != null && !canonicalPath.equals(path)) {
+                    absoluteLocalPathToSourceIndex.put(canonicalPath, sourceIndex);
+                }
+                return Urls.newLocalFileUrl(path);
+            }
+        }
+        return new UrlImpl(baseUrl.getScheme(), baseUrl.getAuthority(), path, null);
+    }
+
+}
+```
+The source code after refactoring is:
+```
+public class SourceResolver {
+
+    protected Url canonicalizeUrl(@NotNull String url, @Nullable Url baseUrl, boolean trimFileScheme, int sourceIndex, boolean baseUrlIsFile) {
+        if (trimFileScheme && url.startsWith(StandardFileSystems.FILE_PROTOCOL_PREFIX)) {
+            return Urls.newLocalFileUrl(FileUtil.toCanonicalPath(VfsUtilCore.toIdeaUrl(url, true).substring(StandardFileSystems.FILE_PROTOCOL_PREFIX.length()), '/'));
+        } else if (baseUrl == null || url.contains(URLUtil.SCHEME_SEPARATOR) || url.startsWith("data:") || url.startsWith("blob:") || url.startsWith("javascript:")) {
+            return Urls.parseEncoded(url);
+        }
+        String path = canonicalizePath(url, baseUrl, baseUrlIsFile);
+        if (baseUrl.getScheme() == null && baseUrl.isInLocalFileSystem()) {
+            return Urls.newLocalFileUrl(path);
+        }
+        if (isAbsolute(path)) {
+            VirtualFile file = LocalFileFinder.findFile(path);
+            if (file != null) {
+                if (absoluteLocalPathToSourceIndex == null) {
+                    // must be linked, on iterate original path must be first
+                    absoluteLocalPathToSourceIndex = createStringIntMap(rawSources.size());
+                    sourceIndexToAbsoluteLocalPath = new String[rawSources.size()];
+                }
+                absoluteLocalPathToSourceIndex.put(path, sourceIndex);
+                sourceIndexToAbsoluteLocalPath[sourceIndex] = path;
+                String canonicalPath = file.getCanonicalPath();
+                if (canonicalPath != null && !canonicalPath.equals(path)) {
+                    absoluteLocalPathToSourceIndex.put(canonicalPath, sourceIndex);
+                }
+                return Urls.newLocalFileUrl(path);
+            }
+        }
+        return new UrlImpl(baseUrl.getScheme(), baseUrl.getAuthority(), path, null);
+    }
+
+    private static String canonicalizePath(String url, Url baseUrl, boolean baseUrlIsFile) {
+        String path = url;
+        if (url.charAt(0) != '/') {
+            String basePath = baseUrl.getPath();
+            if (baseUrlIsFile) {
+                int lastSlashIndex = basePath.lastIndexOf('/');
+                StringBuilder pathBuilder = new StringBuilder();
+                if (lastSlashIndex == -1) {
+                    pathBuilder.append('/');
+                } else {
+                    pathBuilder.append(basePath, 0, lastSlashIndex + 1);
+                }
+                path = pathBuilder.append(url).toString();
+            } else {
+                path = basePath + '/' + url;
+            }
+        }
+        path = FileUtil.toCanonicalPath(path, '/');
+        return path;
+    }
+
+}
+```
+In this example, the developer extracted the following statements:
+```
+String path = url;
+if (url.charAt(0) != '/') {
+    String basePath = baseUrl.getPath();
+    if (baseUrlIsFile) {
+        int lastSlashIndex = basePath.lastIndexOf('/');
+        StringBuilder pathBuilder = new StringBuilder();
+        if (lastSlashIndex == -1) {
+            pathBuilder.append('/');
+        } else {
+            pathBuilder.append(basePath, 0, lastSlashIndex + 1);
+        }
+        path = pathBuilder.append(url).toString();
+    } else {
+        path = basePath + '/' + url;
+    }
+}
+path = FileUtil.toCanonicalPath(path, '/');
+return path;
+```
+as new method "canonicalizePath".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public class FileBasedConfig extends StoredConfig {
+
+    @Override
+    public void load() throws IOException, ConfigInvalidException {
+        lock.readLock().lock();
+        try {
+            Boolean wasRead = FileUtils.readWithRetries(getFile(), f -> {
+                FileSnapshot oldSnapshot = snapshot;
+                // don't use config in this snapshot to avoid endless recursion
+                FileSnapshot newSnapshot = FileSnapshot.saveNoConfig(f);
+                byte[] in = IO.readFully(f);
+                ObjectId newHash = hash(in);
+                if (hash.equals(newHash)) {
+                    if (oldSnapshot.equals(newSnapshot)) {
+                        oldSnapshot.setClean(newSnapshot);
+                    } else {
+                        snapshot = newSnapshot;
+                    }
+                } else {
+                    String decoded;
+                    if (isUtf8(in)) {
+                        decoded = RawParseUtils.decode(UTF_8, in, 3, in.length);
+                        utf8Bom = true;
+                    } else {
+                        decoded = RawParseUtils.decode(in);
+                    }
+                    fromText(decoded);
+                    snapshot = newSnapshot;
+                    hash = newHash;
+                }
+                return Boolean.TRUE;
+            });
+            if (wasRead == null) {
+                clear();
+                snapshot = FileSnapshot.MISSING_FILE;
+            }
+            exists.set(wasRead != null);
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ConfigInvalidException(MessageFormat
+                    .format(JGitText.get().cannotReadFile, getFile()), e);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

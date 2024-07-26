@@ -1,0 +1,70 @@
+The method `convertToTargetType` in the provided code snippet is a good candidate for inline method refactoring. This method adds an unnecessary layer of abstraction and can be simplified for better readability. The key here is to integrate its logic directly into the `convert` method where it's called.
+
+Here is the refactored version of the `DefaultArgumentConverter` class with the `convertToTargetType` method inlined:
+
+```java
+package org.junit.jupiter.params.converter;
+
+// ... [imports remain the same]
+
+@API(status = INTERNAL, since = "5.0")
+public class DefaultArgumentConverter implements ArgumentConverter {
+
+    // ... [other members remain the same]
+
+    @Override
+    public final Object convert(Object source, ParameterContext context) {
+        Class<?> targetType = context.getParameter().getType();
+        return convert(source, targetType, context);
+    }
+
+    public final Object convert(Object source, Class<?> targetType, ParameterContext context) {
+        if (source == null) {
+            if (targetType.isPrimitive()) {
+                throw new ArgumentConversionException(
+                        "Cannot convert null to primitive value of type " + targetType.getTypeName());
+            }
+            return null;
+        }
+
+        if (ReflectionUtils.isAssignableTo(source, targetType)) {
+            return source;
+        }
+
+        // Inline logic of convertToTargetType starts here
+        if (source instanceof String) {
+            Class<?> targetTypeToUse = toWrapperType(targetType);
+            Optional<StringToObjectConverter> converter = stringToObjectConverters.stream().filter(
+                    candidate -> candidate.canConvert(targetTypeToUse)).findFirst();
+            if (converter.isPresent()) {
+                ClassLoader classLoader = context.getDeclaringExecutable().getDeclaringClass().getClassLoader();
+                if (classLoader == null) {
+                    classLoader = ClassLoaderUtils.getDefaultClassLoader();
+                }
+                try {
+                    return converter.get().convert((String) source, targetTypeToUse, classLoader);
+                } catch (Exception ex) {
+                    if (ex instanceof ArgumentConversionException) {
+                        throw (ArgumentConversionException) ex;
+                    }
+                    throw new ArgumentConversionException(
+                            "Failed to convert String \"" + source + "\" to type " + targetType.getTypeName(), ex);
+                }
+            }
+        }
+        throw new ArgumentConversionException(
+                String.format("No built-in converter for source type %s and target type %s",
+                        source.getClass().getTypeName(), targetType.getTypeName()));
+        // Inline logic ends here
+    }
+
+    // ... [rest of the class remains the same]
+}
+```
+
+In this refactoring:
+- The logic within `convertToTargetType` is directly incorporated into the `convert` method.
+- This change eliminates the need for a separate `convertToTargetType` method, simplifying the class structure.
+- The method `toWrapperType` is retained as it provides a clear utility function.
+
+Refactoring like this should be done carefully to ensure that it doesn't compromise the readability and maintainability of the code, especially for more complex methods. In this case, the inlined method is straightforward enough that its integration into the main method improves the overall clarity of the class.

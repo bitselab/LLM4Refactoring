@@ -1,0 +1,165 @@
+Rename method refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename method refactoring pattern is to rename methods to align with the naming convention in other methods. Here is an example of the rename method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+@Test
+public void shouldAddAccountsToDatabase(){
+    Account account1 = new Account("AlphaAccount");
+    Account account2 = new Account("BetaAccount");
+    Transaction transaction = new Transaction("MyTransaction");
+    Split split = new Split(Money.getZeroInstance(), account1.getUID());
+    transaction.addSplit(split);
+    transaction.addSplit(split.createPair(account2.getUID()));
+    account1.addTransaction(transaction);
+    account2.addTransaction(transaction);
+
+    long id1 = mAccountsDbAdapter.addAccount(account1);
+    long id2 = mAccountsDbAdapter.addAccount(account2);
+
+    assertThat(id1).isGreaterThan(0);
+    assertThat(id2).isGreaterThan(0);
+
+    assertThat(mTransactionsDbAdapter.getRecordsCount()).isEqualTo(1);
+}
+
+/**
+ * Tests the foreign key constraint "ON DELETE CASCADE" between accounts and splits
+ */
+@Test
+public void testDeletingAccountShouldDeleteSplits(){
+    Account first = new Account(ALPHA_ACCOUNT_NAME);
+    first.setUID(ALPHA_ACCOUNT_NAME);
+    Account second = new Account(BRAVO_ACCOUNT_NAME);
+    second.setUID(BRAVO_ACCOUNT_NAME);
+    mAccountsDbAdapter.addAccount(second);
+    mAccountsDbAdapter.addAccount(first);
+    Transaction transaction = new Transaction("TestTrn");
+    Split split = new Split(Money.getZeroInstance(), ALPHA_ACCOUNT_NAME);
+    transaction.addSplit(split);
+    transaction.addSplit(split.createPair(BRAVO_ACCOUNT_NAME));
+
+    long id = mTransactionsDbAdapter.addTransaction(transaction);
+    assertThat(id).isGreaterThan(0);
+
+    mAccountsDbAdapter.deleteRecord(ALPHA_ACCOUNT_NAME);
+
+    Transaction trxn = mTransactionsDbAdapter.getTransaction(transaction.getUID());
+    assertThat(trxn.getSplits().size()).isEqualTo(1);
+    assertThat(trxn.getSplits().get(0).getAccountUID()).isEqualTo(BRAVO_ACCOUNT_NAME);
+}
+
+/**
+ * Tests that a ROOT account will always be created in the system
+ */
+@Test
+public void shouldCreateDefaultRootAccount(){
+    Account account = new Account("Some account");
+    mAccountsDbAdapter.addAccount(account);
+    assertThat(mAccountsDbAdapter.getRecordsCount()).isEqualTo(2L);
+
+    List<Account> accounts = mAccountsDbAdapter.getSimpleAccountList();
+    assertThat(accounts).extracting("mAccountType").contains(AccountType.ROOT);
+    String rootAccountUID = mAccountsDbAdapter.getOrCreateGnuCashRootAccountUID();
+    assertThat(rootAccountUID).isEqualTo(accounts.get(1).getParentUID());
+}
+```
+The source code after refactoring is:
+```
+@Test
+public void shouldAddAccountsToDatabase(){
+    Account account1 = new Account("AlphaAccount");
+    Account account2 = new Account("BetaAccount");
+    Transaction transaction = new Transaction("MyTransaction");
+    Split split = new Split(Money.getZeroInstance(), account1.getUID());
+    transaction.addSplit(split);
+    transaction.addSplit(split.createPair(account2.getUID()));
+    account1.addTransaction(transaction);
+    account2.addTransaction(transaction);
+
+    long id1 = mAccountsDbAdapter.addAccount(account1);
+    long id2 = mAccountsDbAdapter.addAccount(account2);
+
+    assertThat(id1).isGreaterThan(0);
+    assertThat(id2).isGreaterThan(0);
+
+    assertThat(mTransactionsDbAdapter.getRecordsCount()).isEqualTo(1);
+}
+
+/**
+ * Tests the foreign key constraint "ON DELETE CASCADE" between accounts and splits
+ */
+@Test
+public void shouldDeleteSplitsWhenAccountDeleted(){
+    Account first = new Account(ALPHA_ACCOUNT_NAME);
+    first.setUID(ALPHA_ACCOUNT_NAME);
+    Account second = new Account(BRAVO_ACCOUNT_NAME);
+    second.setUID(BRAVO_ACCOUNT_NAME);
+    mAccountsDbAdapter.addAccount(second);
+    mAccountsDbAdapter.addAccount(first);
+    Transaction transaction = new Transaction("TestTrn");
+    Split split = new Split(Money.getZeroInstance(), ALPHA_ACCOUNT_NAME);
+    transaction.addSplit(split);
+    transaction.addSplit(split.createPair(BRAVO_ACCOUNT_NAME));
+
+    long id = mTransactionsDbAdapter.addTransaction(transaction);
+    assertThat(id).isGreaterThan(0);
+
+    mAccountsDbAdapter.deleteRecord(ALPHA_ACCOUNT_NAME);
+
+    Transaction trxn = mTransactionsDbAdapter.getTransaction(transaction.getUID());
+    assertThat(trxn.getSplits().size()).isEqualTo(1);
+    assertThat(trxn.getSplits().get(0).getAccountUID()).isEqualTo(BRAVO_ACCOUNT_NAME);
+}
+
+/**
+ * Tests that a ROOT account will always be created in the system
+ */
+@Test
+public void shouldCreateDefaultRootAccount(){
+    Account account = new Account("Some account");
+    mAccountsDbAdapter.addAccount(account);
+    assertThat(mAccountsDbAdapter.getRecordsCount()).isEqualTo(2L);
+
+    List<Account> accounts = mAccountsDbAdapter.getSimpleAccountList();
+    assertThat(accounts).extracting("mAccountType").contains(AccountType.ROOT);
+    String rootAccountUID = mAccountsDbAdapter.getOrCreateGnuCashRootAccountUID();
+    assertThat(rootAccountUID).isEqualTo(accounts.get(1).getParentUID());
+}
+```
+In this example, the developer renamed the method "testDeletingAccountShouldDeleteSplits" to "shouldDeleteSplitsWhenAccountDeleted".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public enum SpatialCoordinateTypes {
+
+    public abstract Point longAsPoint(long encoded);
+
+    public abstract long pointAsLong(double x, double y);
+
+    public long wkbAsLong(BytesRef wkb) {
+        
+    }
+
+    public BytesRef longAsWkb(long encoded) {
+        
+    }
+
+    public String asWkt(Geometry geometry) {
+    
+    }
+
+    public BytesRef pointAsWKB(Geometry geometry) {
+        return new BytesRef(WellKnownBinary.toWKB(geometry, ByteOrder.LITTLE_ENDIAN));
+    }
+
+    public BytesRef wktToWkb(String wkt) {
+        
+    }
+
+    public String wkbToWkt(BytesRef wkb) {
+        
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

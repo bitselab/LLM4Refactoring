@@ -1,0 +1,68 @@
+Rename parameter refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename parameter refactoring pattern is to rename parameters that are inconsistent with attributes within the enclosing class. Here is an example of the rename parameter refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public class KeyStoreInformation {
+
+    private final char[] keyStorePassword;
+    private final char[] keyPassword;
+    private final KeyStore keyStore;
+
+    public KeyStoreInformation(KeyStore keyStorePath, char[] keyStorePassword, char[] keyPassword)
+    {
+        this.keyStore = keyStorePath;
+        this.keyStorePassword = keyStorePassword;
+        this.keyPassword = keyPassword;
+    }
+}
+```
+The source code after refactoring is:
+```
+public class KeyStoreInformation {
+
+    private final char[] keyStorePassword;
+    private final char[] keyPassword;
+    private final KeyStore keyStore;
+
+    public KeyStoreInformation(KeyStore keyStore, char[] keyStorePassword, char[] keyPassword)
+    {
+        this.keyStore = keyStore;
+        this.keyStorePassword = keyStorePassword;
+        this.keyPassword = keyPassword;
+    }
+}
+```
+In this example, the developer renamed the parameter "keyStorePath" to "keyStore".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename parameter refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public static class Builder {
+    protected Collection<String> zkHosts = new ArrayList<>();
+    protected List<String> solrUrls = new ArrayList<>();
+    protected String zkChroot;
+    protected Http2SolrClient httpClient;
+    protected boolean shardLeadersOnly = true;
+    protected boolean directUpdatesToLeadersOnly = false;
+    protected boolean parallelUpdates = true;
+    protected ClusterStateProvider stateProvider;
+    protected Http2SolrClient.Builder internalClientBuilder;
+    private RequestWriter requestWriter;
+    private ResponseParser responseParser;
+    private long retryExpiryTimeNano =
+            TimeUnit.NANOSECONDS.convert(3, TimeUnit.SECONDS); // 3 seconds or 3 million nanos
+
+    private String defaultCollection;
+    private long timeToLiveSeconds = 60;
+    private int parallelCacheRefreshesLocks = 3;
+    private int zkConnectTimeout = SolrZkClientTimeout.DEFAULT_ZK_CONNECT_TIMEOUT;
+    private int zkClientTimeout = SolrZkClientTimeout.DEFAULT_ZK_CLIENT_TIMEOUT;
+    private boolean canUseZkACLs = true;
+
+    public Builder withDefaultCollection(String collection) {
+        this.defaultCollection = collection;
+        return this;
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

@@ -1,0 +1,143 @@
+Inline variable refactorings are frequently employed to eliminate unnecessary variables to improve readability.
+##################################################
+##################################################
+An inline variable refactoring pattern is to remove variables that are used only once within the method. Here is an example of the inline variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public int getNumEntries() throws IOException {
+    if (m_closed) {
+        open(false);
+    }
+    if (m_fc.size() > SEGMENT_HEADER_BYTES) {
+        final int numEntries = m_buf.b().getInt(COUNT_OFFSET);
+        return numEntries;
+    } else {
+        return 0;
+    }
+}
+```
+The source code after refactoring is:
+```
+public int getNumEntries() throws IOException {
+    if (m_closed) {
+        open(false);
+    }
+    if (m_fc.size() > SEGMENT_HEADER_BYTES) {
+        return m_buf.b().getInt(COUNT_OFFSET);
+    } else {
+        return 0;
+    }
+}
+```
+In this example, the developer removed the unnecessary variable "numEntries".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential inline variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public MutationExecutorStandard(
+        MutationOperationGroup mutationOperationGroup,
+        BatchKeyAccess batchKeySupplier,
+        int batchSize,
+        SharedSessionContractImplementor session) {
+    this.mutationOperationGroup = mutationOperationGroup;
+    this.generatedValuesDelegate = mutationOperationGroup.asEntityMutationOperationGroup() != null ?
+            mutationOperationGroup.asEntityMutationOperationGroup().getMutationDelegate() :
+            null;
+
+    final BatchKey batchKey = batchKeySupplier.getBatchKey();
+
+    // split the table operations into batchable and non-batchable -
+    // 		1. batchable statements are handle via Batch
+    //		2. non-batchable statements are handled locally
+
+    List<PreparableMutationOperation> batchedJdbcMutations = null;
+    List<PreparableMutationOperation> nonBatchedJdbcMutations = null;
+    List<SelfExecutingUpdateOperation> selfExecutingMutations = null;
+
+    boolean hasAnyNonBatchedJdbcOperations = false;
+
+    for ( int i = mutationOperationGroup.getNumberOfOperations() - 1; i >= 0; i-- ) {
+        final MutationOperation operation = mutationOperationGroup.getOperation( i );
+        if ( operation instanceof SelfExecutingUpdateOperation ) {
+            final SelfExecutingUpdateOperation selfExecutingMutation = (SelfExecutingUpdateOperation) operation;
+            if ( selfExecutingMutations == null ) {
+                selfExecutingMutations = new ArrayList<>();
+            }
+            selfExecutingMutations.add( 0, selfExecutingMutation );
+        }
+        else {
+            final PreparableMutationOperation preparableMutationOperation = (PreparableMutationOperation) operation;
+            final TableMapping tableDetails = operation.getTableDetails();
+            final boolean canBeBatched;
+
+            if ( tableDetails.isIdentifierTable() && hasAnyNonBatchedJdbcOperations ) {
+                canBeBatched = false;
+            }
+            else {
+                canBeBatched = preparableMutationOperation.canBeBatched( batchKey, batchSize );
+            }
+
+            if ( canBeBatched ) {
+                if ( batchedJdbcMutations == null ) {
+                    batchedJdbcMutations = new ArrayList<>();
+                }
+                batchedJdbcMutations.add( 0, preparableMutationOperation );
+                statementLocationMap.put( tableDetails.getTableName(), StatementLocation.BATCHED );
+            }
+            else {
+                hasAnyNonBatchedJdbcOperations = true;
+                if ( nonBatchedJdbcMutations == null ) {
+                    nonBatchedJdbcMutations = new ArrayList<>();
+                }
+                nonBatchedJdbcMutations.add( 0, preparableMutationOperation );
+                statementLocationMap.put( tableDetails.getTableName(), StatementLocation.NON_BATCHED );
+            }
+        }
+    }
+
+    // todo (mutation) : consider creating single PreparedStatementGroup for all
+    //		batched and non-batched statements.  we then need a way to know whether a
+    //		statement is batched or not.  `PreparedStatementDetails#isBatched`?
+
+    if ( batchedJdbcMutations == null || batchedJdbcMutations.isEmpty() ) {
+        this.batch = null;
+    }
+    else {
+        assert generatedValuesDelegate == null : "Unsupported batched mutation for entity target with generated values delegate";
+        final List<PreparableMutationOperation> batchedMutationsRef = batchedJdbcMutations;
+        this.batch = session.getJdbcCoordinator().getBatch(
+                batchKey,
+                batchSize,
+                () -> ModelMutationHelper.toPreparedStatementGroup(
+                        mutationOperationGroup.getMutationType(),
+                        mutationOperationGroup.getMutationTarget(),
+                        null,
+                        batchedMutationsRef,
+                        session
+                )
+        );
+        assert batch != null;
+    }
+
+    this.nonBatchedStatementGroup = ModelMutationHelper.toPreparedStatementGroup(
+            mutationOperationGroup.getMutationType(),
+            mutationOperationGroup.getMutationTarget(),
+            generatedValuesDelegate,
+            nonBatchedJdbcMutations,
+            session
+    );
+
+    this.selfExecutingMutations = selfExecutingMutations;
+
+    this.valueBindings = new JdbcValueBindingsImpl(
+            mutationOperationGroup.getMutationType(),
+            mutationOperationGroup.getMutationTarget(),
+            this,
+            session
+    );
+
+    if ( isNotEmpty( nonBatchedJdbcMutations ) || isNotEmpty( selfExecutingMutations ) ) {
+        prepareForNonBatchedWork( batchKey, session );
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

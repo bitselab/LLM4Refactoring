@@ -1,0 +1,62 @@
+In this code snippet from the Apache Lucene project, inline variable refactoring can be applied to simplify the code and enhance readability. Inline variable refactoring involves replacing a variable with its initial value directly in places where the variable is used. This is particularly useful when a variable is used only once or its name doesn't add significant meaning or context beyond its value.
+
+Here are a few opportunities for inline variable refactoring in the provided code:
+
+1. **Inline Temporary Variables**: Temporary variables that are only used once and whose names do not add significant clarity can be inlined. This can reduce the number of lines and make the code more readable.
+
+2. **Query Type Checks**: When checking the type of a `Query` instance, the code often assigns the `query` to a new variable of a more specific type (like `BoostQuery`). These variables are used only once immediately after their declaration, so they can be inlined.
+
+Let's refactor the code with these changes:
+
+```java
+// ... [Unchanged parts of the code]
+
+protected void extract(Query query, float boost, Map<String, WeightedSpanTerm> terms)
+        throws IOException {
+    if (query instanceof BoostQuery) {
+        extract(((BoostQuery) query).getQuery(), boost * ((BoostQuery) query).getBoost(), terms);
+    } else if (query instanceof BooleanQuery) {
+        for (BooleanClause clause : (BooleanQuery) query) {
+            if (!clause.isProhibited()) {
+                extract(clause.getQuery(), boost, terms);
+            }
+        }
+    } else if (query instanceof PhraseQuery) {
+        PhraseQuery phraseQuery = (PhraseQuery) query;
+        Term[] phraseQueryTerms = phraseQuery.getTerms();
+        if (phraseQueryTerms.length == 1) {
+            extractWeightedSpanTerms(terms, new SpanTermQuery(phraseQueryTerms[0]), boost);
+        } else {
+            // ... [rest of the PhraseQuery handling remains unchanged]
+        }
+    } else if (query instanceof TermQuery || query instanceof SynonymQuery) {
+        extractWeightedTerms(terms, query, boost);
+    } else if (query instanceof SpanQuery) {
+        extractWeightedSpanTerms(terms, (SpanQuery) query, boost);
+    } else if (query instanceof ConstantScoreQuery) {
+        if (((ConstantScoreQuery) query).getQuery() != null) {
+            extract(((ConstantScoreQuery) query).getQuery(), boost, terms);
+        }
+    } else if (query instanceof CommonTermsQuery) {
+        extractWeightedTerms(terms, query, boost);
+    } else if (query instanceof DisjunctionMaxQuery) {
+        for (Query clause : ((DisjunctionMaxQuery) query)) {
+            extract(clause, boost, terms);
+        }
+    } else if (query instanceof MultiPhraseQuery) {
+        // ... [rest of the MultiPhraseQuery handling remains unchanged]
+    } else if (query instanceof MatchAllDocsQuery || query instanceof FieldExistsQuery) {
+        // nothing
+    } else if (query instanceof FunctionScoreQuery) {
+        extract(((FunctionScoreQuery) query).getWrappedQuery(), boost, terms);
+    } else if (isQueryUnsupported(query.getClass())) {
+        // nothing
+    } else {
+        // ... [rest of the 'else' block remains unchanged]
+    }
+}
+
+// ... [Rest of the code remains unchanged]
+```
+
+This refactoring focuses on inlining variables in the `extract` method where it improves clarity. It's a good practice to balance inlining with maintaining readability, especially in complex conditional logic. In some cases, keeping the temporary variable can provide clearer documentation of intent.

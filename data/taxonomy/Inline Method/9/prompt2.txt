@@ -1,0 +1,89 @@
+Inline method refactorings are frequently employed to eliminate unnecessary methods to improve readability.
+##################################################
+An inline method refactoring pattern is to remove methods with only a few statements. Here is an example of the inline method refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private final class OpenSslSession implements SSLSession, ApplicationProtocolAccessor {
+
+    public Principal getLocalPrincipal() {
+        Certificate[] local = getLocalCertificates();
+        if (local == null || local.length == 0) {
+            return null;
+        }
+        return principal(local);
+    }
+
+    private Principal principal(Certificate[] certs) {
+        return ((java.security.cert.X509Certificate) certs[0]).getIssuerX500Principal();
+    }
+
+}
+```
+The source code after refactoring is:
+```
+private final class OpenSslSession implements SSLSession, ApplicationProtocolAccessor {
+
+    public Principal getLocalPrincipal() {
+        Certificate[] local = getLocalCertificates();
+        if (local == null || local.length == 0) {
+            return null;
+        }
+        return ((java.security.cert.X509Certificate) local[0]).getIssuerX500Principal();
+    }
+
+}
+```
+In this example, the developer removed the unnecessary method "principal".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential inline method refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public class NewItemSimplePopupPanel extends JBPanel implements Disposable {
+    
+    protected @NotNull ExtendableTextField createTextField(boolean liveErrorValidation) {
+        ExtendableTextField res = createNonCustomizedTextField();
+
+        Dimension minSize = res.getMinimumSize();
+        Dimension prefSize = res.getPreferredSize();
+        minSize.height = JBUIScale.scale(28);
+        prefSize.height = JBUIScale.scale(28);
+        res.setMinimumSize(minSize);
+        res.setPreferredSize(prefSize);
+        res.setColumns(30);
+
+        Border border = JBUI.Borders.customLine(JBUI.CurrentTheme.NewClassDialog.bordersColor(), 1, 0, 0, 0);
+        Border errorBorder = new ErrorBorder(res.getBorder());
+        res.setBorder(JBUI.Borders.merge(border, errorBorder, false));
+        res.setBackground(JBUI.CurrentTheme.NewClassDialog.searchFieldBackground());
+
+        res.putClientProperty(TextComponentEmptyText.STATUS_VISIBLE_FUNCTION, (Predicate<JBTextField>)field -> field.getText().isEmpty());
+        res.getEmptyText().setText(IdeBundle.message("action.create.new.class.name.field"));
+        res.getAccessibleContext().setAccessibleName(IdeBundle.message("action.create.new.class.name.field"));
+        res.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    if (myApplyAction == null) return;
+                    try (AccessToken ignore = SlowOperations.startSection(SlowOperations.ACTION_PERFORM)) {
+                        myApplyAction.consume(e);
+                    }
+                }
+            }
+        });
+
+        res.getDocument().addDocumentListener(new DocumentAdapter() {
+            @Override
+            protected void textChanged(@NotNull DocumentEvent e) {
+                if (!liveErrorValidation) setError(null);
+            }
+        });
+
+        return res;
+    }
+
+    protected ExtendableTextField createNonCustomizedTextField() {
+        return new ExtendableTextField();
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

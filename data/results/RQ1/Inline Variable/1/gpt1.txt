@@ -1,0 +1,106 @@
+This code, part of the Apache Lucene project, is already well-structured and follows many best practices. However, there are a few opportunities for refactoring to improve readability, maintainability, and efficiency:
+
+1. **Extract Method Refactoring**: The `extract` method is quite lengthy and handles multiple query types. This method can be refactored by extracting code blocks that handle specific query types into separate methods. This will improve readability and maintainability.
+
+2. **Use of `instanceof`**: The extensive use of `instanceof` for determining the query type can be refactored using the Visitor design pattern, which can help in separating the algorithm from the object structure on which it operates.
+
+3. **Repetitive Code**: There are several instances where similar code patterns are used, particularly in the handling of different query types in the `extract` method. Extracting these similar code blocks into reusable methods can reduce redundancy.
+
+4. **Comments and Documentation**: While the code contains some comments, enhancing the documentation, especially for public methods and complex code blocks, can improve understandability.
+
+5. **Error Handling**: The method `getFieldInfos` in the `DelegatingLeafReader` class throws `UnsupportedOperationException`. It might be beneficial to handle this case more gracefully or provide a more detailed explanation in the method's documentation.
+
+6. **Magic Numbers**: There are several 'magic numbers' used in the code (like `ScoreMode.COMPLETE_NO_SCORES`, `1` in `searcher.createWeight`). It’s a good practice to replace these with named constants for better readability.
+
+7. **Optimizing Imports**: There are a lot of imported classes. Some of them might not be used and can be removed to clean up the code.
+
+8. **Code Formatting**: Consistent code formatting, like line breaks and spacing, can improve the readability of the code.
+
+9. **Generics**: In some places, like the `PositionCheckingMap`, the use of generics can be improved for type safety.
+
+I will refactor the code focusing primarily on extracting methods from the `extract` method, enhancing readability and maintainability. Please note that the entire refactoring can be quite extensive and might not be fully captured in this format. Here's a refactored version of a portion of the code:
+
+```java
+package org.apache.lucene.search.highlight;
+
+// ... [imports remain unchanged]
+
+public class WeightedSpanTermExtractor {
+    // ... [Field declarations and constructor remain unchanged]
+
+    // Refactored extract method
+    protected void extract(Query query, float boost, Map<String, WeightedSpanTerm> terms) throws IOException {
+        if (query instanceof BoostQuery) {
+            handleBoostQuery((BoostQuery) query, boost, terms);
+        } else if (query instanceof BooleanQuery) {
+            handleBooleanQuery((BooleanQuery) query, boost, terms);
+        } else if (query instanceof PhraseQuery) {
+            handlePhraseQuery((PhraseQuery) query, boost, terms);
+        } else if (query instanceof TermQuery || query instanceof SynonymQuery) {
+            extractWeightedTerms(terms, query, boost);
+        } else if (query instanceof SpanQuery) {
+            extractWeightedSpanTerms(terms, (SpanQuery) query, boost);
+        } else if (query instanceof ConstantScoreQuery) {
+            handleConstantScoreQuery((ConstantScoreQuery) query, boost, terms);
+        } else if (query instanceof CommonTermsQuery) {
+            extractWeightedTerms(terms, query, boost);
+        } else if (query instanceof DisjunctionMaxQuery) {
+            handleDisjunctionMaxQuery((DisjunctionMaxQuery) query, boost, terms);
+        } else if (query instanceof MultiPhraseQuery) {
+            handleMultiPhraseQuery((MultiPhraseQuery) query, boost, terms);
+        } else if (query instanceof MatchAllDocsQuery || query instanceof FieldExistsQuery) {
+            // Nothing to do for these query types
+        } else if (query instanceof FunctionScoreQuery) {
+            handleFunctionScoreQuery((FunctionScoreQuery) query, boost, terms);
+        } else {
+            handleOtherQueryTypes(query, boost, terms);
+        }
+    }
+
+    // New methods for handling specific query types
+    private void handleBoostQuery(BoostQuery query, float boost, Map<String, WeightedSpanTerm> terms) throws IOException {
+        extract(query.getQuery(), boost * query.getBoost(), terms);
+    }
+
+    private void handleBooleanQuery(BooleanQuery query, float boost, Map<String, WeightedSpanTerm> terms) throws IOException {
+        for (BooleanClause clause : query) {
+            if (!clause.isProhibited()) {
+                extract(clause.getQuery(), boost, terms);
+            }
+        }
+    }
+
+    private void handlePhraseQuery(PhraseQuery query, float boost, Map<String, WeightedSpanTerm> terms) throws IOException {
+        // Implementation of phrase query handling...
+    }
+
+    private void handleConstantScoreQuery(ConstantScoreQuery query, float boost, Map<String, WeightedSpanTerm> terms) throws IOException {
+        final Query q = query.getQuery();
+        if (q != null) {
+            extract(q, boost, terms);
+        }
+    }
+
+    private void handleDisjunctionMaxQuery(DisjunctionMaxQuery query, float boost, Map<String, WeightedSpanTerm> terms) throws IOException {
+        for (Query clause : query) {
+            extract(clause, boost, terms);
+        }
+    }
+
+    private void handleMultiPhraseQuery(MultiPhraseQuery query, float boost, Map<String, WeightedSpanTerm> terms) throws IOException {
+        // Implementation of multi-phrase query handling...
+    }
+
+    private void handleFunctionScoreQuery(FunctionScoreQuery query, float boost, Map<String, WeightedSpanTerm> terms) throws IOException {
+        extract(query.getWrappedQuery(), boost, terms);
+    }
+
+    private void handleOtherQueryTypes(Query query, float boost, Map<String, WeightedSpanTerm> terms) throws IOException {
+        // Implementation for handling other query types...
+    }
+
+    // ... [Remaining methods unchanged]
+}
+```
+
+This refactoring focuses on the `extract` method. Each block handling a specific type of query is extracted into a separate private method. This makes the `extract` method more readable and easier to maintain. Further refactoring can be done in other methods following similar principles.

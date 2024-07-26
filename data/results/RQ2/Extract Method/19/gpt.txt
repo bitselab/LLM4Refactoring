@@ -1,0 +1,39 @@
+To improve the readability and maintainability of the code snippet provided, the specific block of code dealing with the creation and serialization of `sortedParams` in the `customizeAuthentication` method is a prime candidate for an extract method refactoring. This refactoring involves moving this block of code into its own method, which can then be called from the original location. This not only makes the `customizeAuthentication` method more concise but also encapsulates the parameter sorting and serialization logic in a separate, reusable method.
+
+Here's the refactored version of the code:
+
+```java
+package org.springframework.boot.autoconfigure.pulsar;
+
+// Import statements remain the same
+
+final class PulsarPropertiesMapper {
+    // Other members and constructors remain the same
+
+    private void customizeAuthentication(AuthenticationConsumer authentication,
+                                         PulsarProperties.Authentication properties) {
+        if (StringUtils.hasText(properties.getPluginClassName())) {
+            try {
+                String authParamString = createSortedParamString(params);
+                authentication.accept(properties.getPluginClassName(), authParamString);
+            }
+            catch (UnsupportedAuthenticationException ex) {
+                throw new IllegalStateException("Unable to configure Pulsar authentication", ex);
+            }
+        }
+    }
+
+    private String createSortedParamString(Map<String, String> params) {
+        Map<String, String> sortedParams = new TreeMap<>(params);
+        try {
+            return ObjectMapperFactory.create().writeValueAsString(sortedParams);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Could not convert auth parameters to encoded string", ex);
+        }
+    }
+
+    // Rest of the class remains the same...
+}
+```
+
+In this refactored code, the logic for sorting the parameters and converting them to a JSON string is encapsulated in the `createSortedParamString` method. This method takes a `Map<String, String>` as input and returns a serialized JSON string. This refactoring makes the `customizeAuthentication` method cleaner and the new method `createSortedParamString` can potentially be reused in other parts of the class or even outside of it, if needed.

@@ -1,0 +1,61 @@
+In the provided code snippet, most parameter names are clear and descriptive. However, there are a few opportunities for renaming to improve clarity and readability:
+
+1. **Constructor Parameters in `DoubleValuesSourceComparator`:**
+   - `numHits`: This name is somewhat ambiguous. If it refers to the number of hits in a search context, a more descriptive name like `hitCount` might be clearer.
+   - `field`: This is a generic name. If it refers to a specific field in a document, a more descriptive name like `documentField` could provide more context.
+   - `missingValue`: This name is clear, but it could be more specific. If it refers to a default value for missing double values, renaming it to `defaultMissingValue` might be more informative.
+   - `reversed`: The name `reversed` is clear in the context of sorting, but `isReversedOrder` would make the purpose immediately obvious.
+   - `enableSkipping`: A more descriptive name could be `pruningStrategy`, assuming it refers to a strategy for pruning search results.
+
+2. **Parameter in `getNumericDocValues` Method:**
+   - `field`: Similar to the constructor parameter, this could be renamed to something more descriptive like `fieldName` to indicate it's a field's name.
+
+Let's refactor the code with these suggestions:
+
+```java
+package org.hibernate.search.backend.lucene.lowlevel.comparator.impl;
+
+import java.io.IOException;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.search.LeafFieldComparator;
+import org.apache.lucene.search.Pruning;
+import org.apache.lucene.search.comparators.DoubleComparator;
+import org.hibernate.search.backend.lucene.lowlevel.docvalues.impl.DoubleMultiValuesToSingleValuesSource;
+
+public class DoubleValuesSourceComparator extends DoubleComparator {
+
+    private final DoubleMultiValuesToSingleValuesSource source;
+
+    public DoubleValuesSourceComparator(int hitCount, String documentField, Double defaultMissingValue, boolean isReversedOrder,
+                                        Pruning pruningStrategy, DoubleMultiValuesToSingleValuesSource source) {
+        super(hitCount, documentField, defaultMissingValue, isReversedOrder, pruningStrategy);
+        this.source = source;
+    }
+
+    @Override
+    public LeafFieldComparator getLeafComparator(LeafReaderContext context) throws IOException {
+        return new DoubleValuesSourceLeafComparator(context);
+    }
+
+    private class DoubleValuesSourceLeafComparator extends DoubleLeafComparator {
+        DoubleValuesSourceLeafComparator(LeafReaderContext context) throws IOException {
+            super(context);
+        }
+
+        @Override
+        protected NumericDocValues getNumericDocValues(LeafReaderContext context, String fieldName) throws IOException {
+            return source.getValues(context, null).getRawDoubleValues();
+        }
+    }
+}
+```
+
+Renamed parameters:
+- `numHits` to `hitCount`
+- `field` to `documentField` in the constructor and `fieldName` in `getNumericDocValues`
+- `missingValue` to `defaultMissingValue`
+- `reversed` to `isReversedOrder`
+- `enableSkipping` to `pruningStrategy`
+
+These changes should enhance the readability and clarity of the code.

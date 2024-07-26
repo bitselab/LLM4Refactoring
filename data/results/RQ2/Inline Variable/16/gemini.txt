@@ -1,0 +1,31 @@
+ **Here's the refactored code with the unnecessary variable "handler" removed using inline variable refactoring:**
+
+```java
+private MessageHandler createLateReplier(final CountDownLatch latch, final AtomicReference<Throwable> failure) {
+    return message -> {
+        try {
+            Thread.sleep(500);
+            MessageChannel replyChannel = (MessageChannel) message.getHeaders().getReplyChannel();
+            replyChannel.send(new GenericMessage<>("response"));
+            failure.set(new IllegalStateException("Expected exception"));
+        } catch (InterruptedException e) {
+            failure.set(e);
+        } catch (MessageDeliveryException ex) {
+            String expected = "Reply message received but the receiving thread has exited due to a timeout";
+            String actual = ex.getMessage();
+            if (!expected.equals(actual)) {
+                failure.set(new IllegalStateException(
+                        "Unexpected error: '" + actual + "'"));
+            }
+        } finally {
+            latch.countDown();
+        }
+    };
+}
+```
+
+**Explanation of the refactoring:**
+
+- The original code declared a variable `handler` inside the `createLateReplier` method. Its only purpose was to hold a lambda expression that represented a delayed message handler.
+- By directly returning the lambda expression without assigning it to `handler`, we eliminate the need for the variable and make the code more concise.
+- This refactoring maintains the same functionality while improving readability.

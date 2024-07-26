@@ -1,0 +1,66 @@
+Reviewing the provided code snippet from the `TestAbfsRestOperationMockFailures` class, it appears that the class is primarily focused on testing various retry scenarios for an Azure Blob File System REST operation. The tests involve simulated network exceptions and HTTP status code responses to validate retry logic. The class also involves a lot of repetitive code for setting up mock behaviors and handling exceptions.
+
+### Potential Refactoring Opportunity: Extract Class
+The repetitive setup and execution logic in the tests can be encapsulated into separate classes to simplify the main test class and adhere to the Single Responsibility Principle. Here's a suggested refactor:
+
+1. **Exception Handling and Retry Test Setup** - Extracting methods related to setting up exceptions and handling retries into a separate utility class can streamline the main test class and make the utility methods reusable for other test classes.
+
+2. **Mock Behavior Setup** - The methods used for setting up mock behavior (`addGeneralMockBehaviourToRestOpAndHttpOp` and `addGeneralMockBehaviourToAbfsClient`) are good candidates for extraction into a separate class or utility because they are essentially providing a cross-cutting concern across different test cases.
+
+#### Refactored Code
+
+```java
+// New class to handle the setup of mocks and retry behavior
+public class TestRetryBehaviorSetup {
+
+    public static void addGeneralMockBehaviourToRestOpAndHttpOp(final AbfsRestOperation abfsRestOperation,
+                                                                final AbfsHttpOperation httpOperation) throws IOException {
+        HttpURLConnection httpURLConnection = Mockito.mock(HttpURLConnection.class);
+        Mockito.doNothing().when(httpURLConnection)
+                .setRequestProperty(nullable(String.class), nullable(String.class));
+        Mockito.doReturn(httpURLConnection).when(httpOperation).getConnection();
+        Mockito.doReturn("").when(abfsRestOperation).getClientLatency();
+        Mockito.doReturn(httpOperation).when(abfsRestOperation).createHttpOperation();
+    }
+
+    public static void addGeneralMockBehaviourToAbfsClient(final AbfsClient abfsClient,
+                                                           final ExponentialRetryPolicy retryPolicy) throws IOException {
+        Mockito.doReturn(OAuth).when(abfsClient).getAuthType();
+        Mockito.doReturn("").when(abfsClient).getAccessToken();
+        AbfsThrottlingIntercept intercept = Mockito.mock(
+                AbfsThrottlingIntercept.class);
+        Mockito.doReturn(intercept).when(abfsClient).getIntercept();
+        Mockito.doNothing()
+                .when(intercept)
+                .sendingRequest(any(), nullable(AbfsCounters.class));
+        Mockito.doNothing().when(intercept).updateMetrics(any(), any());
+
+        Mockito.doReturn(retryPolicy).when(abfsClient).getRetryPolicy();
+        Mockito.doReturn(true)
+                .when(retryPolicy)
+                .shouldRetry(nullable(Integer.class), nullable(Integer.class));
+        Mockito.doReturn(false).when(retryPolicy).shouldRetry(0, HTTP_OK);
+        Mockito.doReturn(false).when(retryPolicy).shouldRetry(1, HTTP_OK);
+        Mockito.doReturn(false).when(retryPolicy).shouldRetry(2, HTTP_OK);
+    }
+}
+
+// Simplified main test class using the extracted utility class
+public class TestAbfsRestOperationMockFailures {
+    // Tests remain the same, but now use the utility methods from the new class
+    // Example:
+    @Test
+    public void testClientRequestIdForConnectTimeoutRetry() throws Exception {
+        Exception[] exceptions = new Exception[1];
+        String[] abbreviations = new String[1];
+        exceptions[0] = new SocketTimeoutException(CONNECTION_TIMEOUT_JDK_MESSAGE);
+        abbreviations[0] = CONNECTION_TIMEOUT_ABBREVIATION;
+        testClientRequestIdForTimeoutRetry(exceptions, abbreviations, 1);
+    }
+
+    // Other tests...
+}
+```
+
+### Conclusion
+This refactoring helps clean up the main testing class and offloads the responsibility of setting up mocks and handling retries to a more specialized utility class, improving maintainability and readability. This also allows for better reusability of the mock setup methods in other test classes if needed.

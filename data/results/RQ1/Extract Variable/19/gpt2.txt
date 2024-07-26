@@ -1,0 +1,65 @@
+In the provided code snippet, the use of "Extract Variable" refactoring can indeed improve readability by breaking down complex expressions. Here are a few places where this technique can be applied:
+
+1. **In `createHttpHandler` Method:** The condition `StringUtils.hasLength(this.contextPath)` is used to determine the handling logic. Extracting this condition into a descriptive variable can enhance readability.
+
+2. **In `getStartLogMessage` Method:** The construction of the log message involves several concatenated strings and conditions. Extracting parts of this logic into variables can make the code more readable.
+
+Here's the refactored code:
+
+```java
+package org.springframework.boot.web.embedded.undertow;
+
+import io.undertow.Handlers;
+import io.undertow.Undertow.Builder;
+import io.undertow.server.HttpHandler;
+import io.undertow.servlet.api.DeploymentManager;
+
+import org.springframework.boot.web.server.WebServer;
+import org.springframework.util.StringUtils;
+
+public class UndertowServletWebServer extends UndertowWebServer {
+
+    private final String contextPath;
+    private final DeploymentManager manager;
+
+    public UndertowServletWebServer(Builder builder, Iterable<HttpHandlerFactory> httpHandlerFactories,
+                                    String contextPath, boolean autoStart) {
+        super(builder, httpHandlerFactories, autoStart);
+        this.contextPath = contextPath;
+        this.manager = findManager(httpHandlerFactories);
+    }
+
+    private DeploymentManager findManager(Iterable<HttpHandlerFactory> httpHandlerFactories) {
+        for (HttpHandlerFactory httpHandlerFactory : httpHandlerFactories) {
+            if (httpHandlerFactory instanceof DeploymentManagerHttpHandlerFactory deploymentManagerFactory) {
+                return deploymentManagerFactory.getDeploymentManager();
+            }
+        }
+        return null;
+    }
+
+    @Override
+    protected HttpHandler createHttpHandler() {
+        HttpHandler handler = super.createHttpHandler();
+        boolean hasContextPath = StringUtils.hasLength(this.contextPath);
+        if (hasContextPath) {
+            handler = Handlers.path().addPrefixPath(this.contextPath, handler);
+        }
+        return handler;
+    }
+
+    @Override
+    protected String getStartLogMessage() {
+        String baseMessage = super.getStartLogMessage();
+        String contextPathMessage = StringUtils.hasText(this.contextPath) ? this.contextPath : "/";
+        return baseMessage + " with context path '" + contextPathMessage + "'";
+    }
+
+    public DeploymentManager getDeploymentManager() {
+        return this.manager;
+    }
+
+}
+```
+
+These changes make the code more readable by clarifying the purpose of each expression and reducing the complexity within method calls.

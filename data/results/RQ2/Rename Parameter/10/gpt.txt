@@ -1,0 +1,22 @@
+To improve the readability of the code, the parameter `xml1` in the `assertXMLEquals` method can be renamed to something more descriptive. A good choice might be `expectedXml`, which clearly communicates that this string represents the expected XML content. Similarly, renaming `actual` to `actualXml` will make it clear that this parameter is the actual XML content being compared. Here's the refactored method:
+
+```java
+public void assertXMLEquals(String expectedXml, String actualXml) throws SAXException, IOException {
+    final Document expectedDocument = getDocument(expectedXml);
+    final Document actualDocument = getDocument(actualXml);
+
+    if (!expectedDocument.isEqualNode(actualDocument)) {
+        try {
+            fail(String.format("-- expected:\n%s-- actual:\n%s",
+                    getXML(expectedDocument), getXML(actualDocument)));
+        } catch(TransformerException ex) {
+            fail(String.format(""
+                            + "expected: <%s>, but it was <%s>\n"
+                            + "Additionally, a TransformerException was raised when trying to report XML document contents",
+                    expectedXml, actualXml), ex);
+        }
+    }
+}
+```
+
+This change makes the method more self-documenting and improves the clarity of the code, helping future developers (or even yourself) to quickly understand what each parameter represents.

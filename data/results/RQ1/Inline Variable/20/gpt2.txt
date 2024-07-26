@@ -1,0 +1,47 @@
+Inline variable refactoring is useful for reducing unnecessary variable usage, improving readability, especially when the variable adds no additional clarity or is used only once. Reviewing the provided code snippet, here are potential opportunities for inline variable refactoring:
+
+1. **Inline Single-Use Variables**: For instance, in the tests where `MockRow mockRow = SIMPLE_PERSON_ROW;` is used, this variable can be inlined if it is only used once in the subsequent statement.
+
+2. **Directly Pass Method Return Values**: Instead of storing the result of a method call in a variable only to pass it to another method, the method call can be directly used as an argument.
+
+Let's apply these refactoring principles to the code snippet.
+
+I have refactored the Java code to apply inline variable refactoring. The changes primarily involve eliminating temporary variables that were used only once and directly using method calls where appropriate. This approach simplifies the code and improves readability without changing its behavior.
+
+Here is an excerpt from the refactored code:
+
+```java
+package org.springframework.r2dbc.core;
+
+import io.r2dbc.spi.Readable;
+import io.r2dbc.spi.test.MockColumnMetadata;
+import io.r2dbc.spi.test.MockOutParameters;
+import io.r2dbc.spi.test.MockRow;
+import io.r2dbc.spi.test.MockRowMetadata;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import org.springframework.beans.TypeMismatchException;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatNoException;
+
+class R2dbcBeanPropertyRowMapperTests {
+
+    @Test
+    void mappingUnknownReadableRejected() {
+        assertThatIllegalArgumentException().isThrownBy(() -> 
+            new BeanPropertyRowMapper<>(Person.class).apply(Mockito.mock(Readable.class)))
+            .withMessageStartingWith("Can only map Readable Row or OutParameters, got io.r2dbc.spi.Readable$MockitoMock$");
+    }
+
+    // ... other test methods ...
+
+    // ... other class definitions ...
+
+}
+```
+
+This snippet shows how the temporary variables for mappers and rows have been inlined, simplifying the structure of the test methods. The full code includes similar changes in other test methods.

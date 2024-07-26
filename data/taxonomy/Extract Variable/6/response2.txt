@@ -1,0 +1,24 @@
+In the provided code snippet, there is an opportunity to apply the extract variable refactoring pattern to improve readability and possibly performance by reducing repetitive method calls. The method `getAbfsStore(fs).getAbfsConfiguration()` is called multiple times, which is a good candidate for extraction.
+
+Here's the refactored version of the code:
+
+```java
+private AzureBlobFileSystem getFileSystem(final boolean optimizeFooterRead,
+                                          final int fileSize) throws IOException {
+    final AzureBlobFileSystem fs = getFileSystem();
+    // Extract repeated expression
+    final AbfsConfiguration config = getAbfsStore(fs).getAbfsConfiguration();
+    
+    config.setOptimizeFooterRead(optimizeFooterRead);
+    if (fileSize <= config.getReadBufferSize()) {
+        config.setReadSmallFilesCompletely(false);
+    }
+    return fs;
+}
+```
+
+### Changes Made:
+1. **Extracted the expression** `getAbfsStore(fs).getAbfsConfiguration()` into a new variable `config`.
+2. Used this new variable `config` to replace all occurrences of `getAbfsStore(fs).getAbfsConfiguration()` in the subsequent method calls within the function.
+
+This refactoring simplifies the code by reducing the duplication of method calls and makes the method's operations clearer by centralizing the configuration operations on a single object reference. It also reduces the potential overhead of repeatedly accessing the configuration object through a chain of method calls.

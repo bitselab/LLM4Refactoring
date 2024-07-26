@@ -1,0 +1,107 @@
+Rename variable refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename variable refactoring pattern is to rename variables that are inconsistent with their types. Here is an example of the rename variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private List<AbsoluteMetricQueueItem> buildInstanceStatusPut(final String instanceId) throws Exception {
+    final List<Pair<String, Double>> instanceStatusDatums = ImmutableList.<Pair<String, Double>>builder()
+            .add(Pair.pair(
+                    Count.StatusCheckFailed.name(),
+                    instanceInfoProvider.getStatusCheckFailed(instanceId).doubleValue()))
+            .add(Pair.pair(
+                    Count.StatusCheckFailed_Instance.name(),
+                    instanceInfoProvider.getInstanceStatusCheckFailed(instanceId).doubleValue()))
+            .add(Pair.pair(
+                    Count.StatusCheckFailed_System.name(),
+                    instanceInfoProvider.getSystemStatusCheckFailed(instanceId).doubleValue()))
+            .build();
+    final ArrayList<Dimension> dimArray = Lists.newArrayList();
+    populateInstanceDimensions(instanceId, dimArray);
+    final Dimensions dimensions = new Dimensions();
+    dimensions.setMember(dimArray);
+    final List<AbsoluteMetricQueueItem> queueItems = Lists.newArrayList();
+    for (final Pair<String, Double> datum : instanceStatusDatums) {
+        final MetricDatum metricDatum = new MetricDatum();
+        metricDatum.setMetricName(datum.getLeft());
+        metricDatum.setDimensions(dimensions);
+        metricDatum.setTimestamp(new Date());
+        metricDatum.setValue(datum.getRight());
+        metricDatum.setUnit(Count.class.getSimpleName());
+        final AbsoluteMetricQueueItem putMetricData = new AbsoluteMetricQueueItem();
+        putMetricData.setNamespace("AWS/EC2");
+        putMetricData.setMetricDatum(metricDatum);
+        putMetricData.setAccountId(instanceInfoProvider.getEffectiveUserId(instanceId).getAccountNumber());
+        queueItems.add(putMetricData);
+    }
+    return queueItems;
+}
+```
+The source code after refactoring is:
+```
+private List<AbsoluteMetricQueueItem> buildInstanceStatusPut(final String instanceId) throws Exception {
+    final List<Pair<String, Double>> instanceStatusDatums = ImmutableList.<Pair<String, Double>>builder()
+            .add(Pair.pair(
+                    Count.StatusCheckFailed.name(),
+                    instanceInfoProvider.getStatusCheckFailed(instanceId).doubleValue()))
+            .add(Pair.pair(
+                    Count.StatusCheckFailed_Instance.name(),
+                    instanceInfoProvider.getInstanceStatusCheckFailed(instanceId).doubleValue()))
+            .add(Pair.pair(
+                    Count.StatusCheckFailed_System.name(),
+                    instanceInfoProvider.getSystemStatusCheckFailed(instanceId).doubleValue()))
+            .build();
+    final ArrayList<Dimension> dimArray = Lists.newArrayList();
+    populateInstanceDimensions(instanceId, dimArray);
+    final Dimensions dimensions = new Dimensions();
+    dimensions.setMember(dimArray);
+    final List<AbsoluteMetricQueueItem> queueItems = Lists.newArrayList();
+    for (final Pair<String, Double> datum : instanceStatusDatums) {
+        final MetricDatum metricDatum = new MetricDatum();
+        metricDatum.setMetricName(datum.getLeft());
+        metricDatum.setDimensions(dimensions);
+        metricDatum.setTimestamp(new Date());
+        metricDatum.setValue(datum.getRight());
+        metricDatum.setUnit(Count.class.getSimpleName());
+        final AbsoluteMetricQueueItem queueItem = new AbsoluteMetricQueueItem();
+        queueItem.setNamespace("AWS/EC2");
+        queueItem.setMetricDatum(metricDatum);
+        queueItem.setAccountId(instanceInfoProvider.getEffectiveUserId(instanceId).getAccountNumber());
+        queueItems.add(queueItem);
+    }
+    return queueItems;
+}
+```
+In this example, the developer renamed the variable "putMetricData" to "queueItem".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+@Test
+public void simple()
+        throws InterruptedException,
+        IOException {
+    List<Company> companies = JobTestUtil.findIndexedResults( emf, Company.class, "name", "Google" );
+    List<Person> people = JobTestUtil.findIndexedResults( emf, Person.class, "firstName", "Linus" );
+    List<WhoAmI> whos = JobTestUtil.findIndexedResults( emf, WhoAmI.class, "id", "id01" );
+    assertEquals( 0, companies.size() );
+    assertEquals( 0, people.size() );
+    assertEquals( 0, whos.size() );
+
+    JobExecution executionId = JobTestUtil.startJobAndWaitForSuccessNoRetry(
+            MassIndexingJob.parameters()
+                    .forEntities( Company.class, Person.class, WhoAmI.class )
+                    .checkpointInterval( CHECKPOINT_INTERVAL )
+                    .build()
+    );
+    assertProgress( executionId, Person.class, INSTANCE_PER_ENTITY_TYPE );
+    assertProgress( executionId, Company.class, INSTANCE_PER_ENTITY_TYPE );
+    assertProgress( executionId, WhoAmI.class, INSTANCE_PER_ENTITY_TYPE );
+
+    companies = JobTestUtil.findIndexedResults( emf, Company.class, "name", "Google" );
+    people = JobTestUtil.findIndexedResults( emf, Person.class, "firstName", "Linus" );
+    whos = JobTestUtil.findIndexedResults( emf, WhoAmI.class, "id", "id01" );
+    assertEquals( INSTANCES_PER_DATA_TEMPLATE, companies.size() );
+    assertEquals( INSTANCES_PER_DATA_TEMPLATE, people.size() );
+    assertEquals( INSTANCES_PER_DATA_TEMPLATE, whos.size() );
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

@@ -1,0 +1,21 @@
+To apply the inline variable refactoring technique for improving readability in the specified code snippet, we can focus on the `testMergedFieldInfos_empty` method. In this method, the variable `expected` is used only once and can be directly inlined in the `assertSame` assertion. Here's how the refactored method would look:
+
+```java
+public void testMergedFieldInfos_empty() throws IOException {
+    Directory dir = newDirectory();
+    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(new MockAnalyzer(random())));
+
+    IndexReader reader = DirectoryReader.open(writer);
+    FieldInfos actual = FieldInfos.getMergedFieldInfos(reader);
+
+    assertSame(FieldInfos.EMPTY, actual); // Inlined 'expected' variable here
+
+    reader.close();
+    writer.close();
+    dir.close();
+}
+```
+
+In this refactored version, `FieldInfos.EMPTY` is directly used in the `assertSame` method instead of assigning it to the `expected` variable first. This makes the code slightly more concise without losing clarity.
+
+It's important to note that inline variable refactoring should be used judiciously. It is most effective when the variable being inlined is used in a straightforward and clear context, as in this case.

@@ -1,0 +1,38 @@
+Here's the refactored code with a more descriptive method name:
+
+```java
+@Test
+public void testPartialReadWithoutDataAtEnd() throws Exception {
+  int fileIdx = 0;
+  for (int i = 0; i <= 4; i++) {
+    for (int j = 0; j <= 2; j++) {
+      int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+      int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+      final AzureBlobFileSystem fs = getFileSystem(
+          true, fileSize, footerReadBufferSize);
+      String fileName = methodName.getMethodName() + fileIdx++;
+      byte[] fileContent = getRandomBytesArray(fileSize);
+      Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+      testPartialReadWithNoData(fs, testFilePath,
+          fileSize - AbfsInputStream.FOOTER_SIZE, AbfsInputStream.FOOTER_SIZE,
+          fileContent, footerReadBufferSize);
+    }
+  }
+}
+```
+
+**Explanation of the refactoring:**
+
+- **Original method name:** `testPartialReadWithNoDat()`
+- **Refactored method name:** `testPartialReadWithoutDataAtEnd()` 
+
+**Improvements:**
+
+- **Clarity:** The new name, `testPartialReadWithoutDataAtEnd()`, clearly describes the purpose of the test, which is to test a partial read scenario where there is no data remaining after the footer. This makes it easier to understand what the test is doing.
+- **Accuracy:** The original name, `testPartialReadWithNoDat`, could be interpreted in multiple ways. It's not clear if "NoDat" refers to "no data" or a typo. The new name is more accurate and avoids confusion.
+- **Readability:** The new name is longer but improves readability by using complete words and avoiding abbreviations.
+
+**Additional notes:**
+
+- The rest of the code remains unchanged.
+- Using more descriptive method names enhances code maintainability and makes it easier for other developers to understand the code's purpose.

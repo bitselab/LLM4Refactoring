@@ -1,0 +1,131 @@
+Rename attribute refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename attribute refactoring pattern is to rename attributes that are inconsistent with their types. Here is an example of the rename attribute refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public class CacheSingletonServiceBuilder<T> implements SingletonServiceBuilder<T>, Service<T>, ServiceProviderRegistration.Listener, SingletonContext<T>, Singleton {
+    private final InjectedValue<Group> group = new InjectedValue<>();
+    private final InjectedValue<ServiceProviderRegistrationFactory> registrationFactory = new InjectedValue<>();
+    @@ -79,45 +78,48 @@ public class SingletonService<T extends Serializable> implements Service<T>, Ser
+    final ServiceName singletonServiceName;
+    private final AtomicBoolean master = new AtomicBoolean(false);
+    private final SingletonContext<T> singletonDispatcher = new SingletonDispatcher();
+    private final String containerName;
+    private final String cacheName;
+    volatile ServiceProviderRegistration registration;
+    volatile CommandDispatcher<SingletonContext<T>> dispatcher;
+    volatile boolean started = false;
+    private volatile SingletonElectionPolicy electionPolicy = new SimpleSingletonElectionPolicy();
+    private volatile ServiceRegistry container;
+    volatile int quorum = 1;
+}
+```
+The source code after refactoring is:
+```
+public class CacheSingletonServiceBuilder<T> implements SingletonServiceBuilder<T>, Service<T>, ServiceProviderRegistration.Listener, SingletonContext<T>, Singleton {
+    private final InjectedValue<Group> group = new InjectedValue<>();
+    private final InjectedValue<ServiceProviderRegistrationFactory> registrationFactory = new InjectedValue<>();
+    @@ -79,45 +78,48 @@ public class SingletonService<T extends Serializable> implements Service<T>, Ser
+    final ServiceName singletonServiceName;
+    private final AtomicBoolean master = new AtomicBoolean(false);
+    private final SingletonContext<T> singletonDispatcher = new SingletonDispatcher();
+    private final String containerName;
+    private final String cacheName;
+    volatile ServiceProviderRegistration registration;
+    volatile CommandDispatcher<SingletonContext<T>> dispatcher;
+    volatile boolean started = false;
+    private volatile SingletonElectionPolicy electionPolicy = new SimpleSingletonElectionPolicy();
+    private volatile ServiceRegistry registry;
+    volatile int quorum = 1;
+}
+```
+In this example, the developer renamed the attribute "container" to "registry".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename attribute refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+package org.springframework.boot.ssl.pem;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+import java.util.List;
+import java.util.function.Supplier;
+
+import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.function.SingletonSupplier;
+import org.springframework.util.function.ThrowingSupplier;
+
+/**
+ * {@link PemSslStore} loaded from {@link PemSslStoreDetails}.
+ *
+ * @author Phillip Webb
+ * @see PemSslStore#load(PemSslStoreDetails)
+ */
+final class LoadedPemSslStore implements PemSslStore {
+
+    private final PemSslStoreDetails details;
+
+    private final Supplier<List<X509Certificate>> certificates;
+
+    private final Supplier<PrivateKey> privateKeySupplier;
+
+    LoadedPemSslStore(PemSslStoreDetails details) {
+        Assert.notNull(details, "Details must not be null");
+        this.details = details;
+        this.certificates = supplier(() -> loadCertificates(details));
+        this.privateKeySupplier = supplier(() -> loadPrivateKey(details));
+    }
+
+    private static <T> Supplier<T> supplier(ThrowingSupplier<T> supplier) {
+        return SingletonSupplier.of(supplier.throwing(LoadedPemSslStore::asUncheckedIOException));
+    }
+
+    private static UncheckedIOException asUncheckedIOException(String message, Exception cause) {
+        return new UncheckedIOException(message, (IOException) cause);
+    }
+
+    private static List<X509Certificate> loadCertificates(PemSslStoreDetails details) throws IOException {
+        PemContent pemContent = PemContent.load(details.certificates());
+        if (pemContent == null) {
+            return null;
+        }
+        List<X509Certificate> certificates = pemContent.getCertificates();
+        Assert.state(!CollectionUtils.isEmpty(certificates), "Loaded certificates are empty");
+        return certificates;
+    }
+
+    private static PrivateKey loadPrivateKey(PemSslStoreDetails details) throws IOException {
+        PemContent pemContent = PemContent.load(details.privateKey());
+        return (pemContent != null) ? pemContent.getPrivateKey(details.privateKeyPassword()) : null;
+    }
+
+    @Override
+    public String type() {
+        return this.details.type();
+    }
+
+    @Override
+    public String alias() {
+        return this.details.alias();
+    }
+
+    @Override
+    public String password() {
+        return this.details.password();
+    }
+
+    @Override
+    public List<X509Certificate> certificates() {
+        return this.certificates.get();
+    }
+
+    @Override
+    public PrivateKey privateKey() {
+        return this.privateKeySupplier.get();
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

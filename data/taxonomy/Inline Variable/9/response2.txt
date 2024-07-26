@@ -1,0 +1,58 @@
+In the provided code snippet, there are opportunities to apply inline variable refactoring for improved readability and compactness. The variable `defaultResult` is only used once when it is appended to `buf`, making it a good candidate for this kind of refactoring. Here's how the code can be refactored:
+
+Original Code:
+```java
+StringBuilder buf = new StringBuilder();
+String defaultResult = CoverageBundle.message("hits.title", lineData.getHits());
+buf.append(defaultResult).append("\n");
+```
+
+Refactored Code:
+```java
+StringBuilder buf = new StringBuilder();
+buf.append(CoverageBundle.message("hits.title", lineData.getHits())).append("\n");
+```
+
+Let's see the full refactored code with this adjustment:
+
+```java
+public static @NotNull String createBriefReport(@NotNull LineData lineData,
+                                                List<ConditionCoverageExpression> conditions,
+                                                List<SwitchCoverageExpression> switches) {
+    StringBuilder buf = new StringBuilder();
+    buf.append(CoverageBundle.message("hits.title", lineData.getHits())).append("\n");
+    int idx = 0;
+    int hits = 0;
+
+    if (lineData.getJumps() != null) {
+        for (JumpData jumpData : lineData.getJumps()) {
+            if (idx >= conditions.size()) {
+                LOG.info("Cannot map coverage report data with PSI: there are more branches in report then in PSI");
+                return createDefaultHitsMessage(lineData);
+            }
+            ConditionCoverageExpression expression = conditions.get(idx++);
+            addJumpDataInfo(buf, jumpData, expression);
+            hits += jumpData.getTrueHits() + jumpData.getFalseHits();
+        }
+    }
+
+    if (lineData.getSwitches() != null) {
+        for (SwitchData switchData : lineData.getSwitches()) {
+            if (idx >= switches.size()) {
+                LOG.info("Cannot map coverage report data with PSI: there are more switches in report then in PSI");
+                return createDefaultHitsMessage(lineData);
+            }
+            SwitchCoverageExpression expression = switches.get(idx++);
+            addSwitchDataInfo(buf, switchData, expression, lineData.getStatus());
+            hits += IntStream.of(switchData.getHits()).sum() + switchData.getDefaultHits();
+        }
+    }
+    if (lineData.getHits() > hits && hits > 0) {
+        buf.append(JavaCoverageBundle.message("report.unknown.outcome", lineData.getHits() - hits));
+    }
+
+    return buf.toString();
+}
+```
+
+This change keeps the code functionality intact while removing an unnecessary variable, thus enhancing code simplicity and readability.

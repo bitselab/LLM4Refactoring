@@ -1,0 +1,196 @@
+Extract variable refactorings are frequently employed to remove repeated expressions to improve readability and reusability.
+##################################################
+An extract variable refactoring pattern is to extract repeated expressions as a new variable within the same method. Here is an example of the extract variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private Map<String, User> getIssueUsersByLogin(Issue issue) {
+    Map<String, User> usersByLogin = Maps.newHashMap();
+    if (issue.assignee() != null) {
+        usersByLogin.put(issue.assignee(), userIndex.getByLogin(issue.assignee()));
+    }
+    String reporter = issue.reporter();
+    if (reporter != null) {
+        usersByLogin.put(reporter, userIndex.getByLogin(reporter));
+    }
+    return usersByLogin;
+}
+```
+The source code after refactoring is:
+```
+private Map<String, User> getIssueUsersByLogin(Issue issue) {
+    Map<String, User> usersByLogin = Maps.newHashMap();
+    String assignee = issue.assignee();
+    if (assignee != null) {
+        usersByLogin.put(assignee, userIndex.getByLogin(assignee));
+    }
+    String reporter = issue.reporter();
+    if (reporter != null) {
+        usersByLogin.put(reporter, userIndex.getByLogin(reporter));
+    }
+    return usersByLogin;
+}
+```
+In this example, the developer extracted the expression "issue.assignee()" as new variable "assignee".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+package org.eclipse.jetty.client;
+
+import org.eclipse.jetty.client.api.Connection;
+import org.eclipse.jetty.client.api.Result;
+import org.eclipse.jetty.io.CyclicTimeouts;
+import org.eclipse.jetty.util.thread.AutoLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public abstract class HttpChannel implements CyclicTimeouts.Expirable
+{
+    private static final Logger LOG = LoggerFactory.getLogger(HttpChannel.class);
+
+    private final AutoLock _lock = new AutoLock();
+    private final HttpDestination _destination;
+    private HttpExchange _exchange;
+
+    protected HttpChannel(HttpDestination destination)
+    {
+        _destination = destination;
+    }
+
+    public void destroy()
+    {
+    }
+
+    public HttpDestination getHttpDestination()
+    {
+        return _destination;
+    }
+
+    /**
+     * <p>Associates the given {@code exchange} to this channel in order to be sent over the network.</p>
+     * <p>If the association is successful, the exchange can be sent. Otherwise, the channel must be
+     * disposed because whoever terminated the exchange did not do it - it did not have the channel yet.</p>
+     *
+     * @param exchange the exchange to associate
+     * @return true if the association was successful, false otherwise
+     */
+    public boolean associate(HttpExchange exchange)
+    {
+        boolean result = false;
+        boolean abort = true;
+        try (AutoLock ignored = _lock.lock())
+        {
+            if (_exchange == null)
+            {
+                abort = false;
+                result = exchange.associate(this);
+                if (result)
+                    _exchange = exchange;
+            }
+        }
+
+        if (abort)
+        {
+            exchange.getRequest().abort(new UnsupportedOperationException("Pipelined requests not supported"));
+        }
+        else
+        {
+            exchange.getRequest().setConnection(getConnection());
+            if (LOG.isDebugEnabled())
+                LOG.debug("{} associated {} to {}", exchange, result, this);
+        }
+
+        return result;
+    }
+
+    public boolean disassociate(HttpExchange exchange)
+    {
+        boolean result = false;
+        try (AutoLock ignored = _lock.lock())
+        {
+            HttpExchange existing = _exchange;
+            _exchange = null;
+            if (existing == exchange)
+            {
+                existing.disassociate(this);
+                result = true;
+            }
+        }
+
+        if (LOG.isDebugEnabled())
+            LOG.debug("{} disassociated {} from {}", exchange, result, this);
+        return result;
+    }
+
+    public HttpExchange getHttpExchange()
+    {
+        try (AutoLock ignored = _lock.lock())
+        {
+            return _exchange;
+        }
+    }
+
+    protected abstract Connection getConnection();
+
+    @Override
+    public long getExpireNanoTime()
+    {
+        HttpExchange exchange = getHttpExchange();
+        return exchange != null ? exchange.getExpireNanoTime() : Long.MAX_VALUE;
+    }
+
+    protected abstract HttpSender getHttpSender();
+
+    protected abstract HttpReceiver getHttpReceiver();
+
+    public void send()
+    {
+        HttpExchange exchange = getHttpExchange();
+        if (exchange != null)
+            send(exchange);
+    }
+
+    public abstract void send(HttpExchange exchange);
+
+    public abstract void release();
+
+    public void proceed(HttpExchange exchange, Throwable failure)
+    {
+        getHttpSender().proceed(exchange, failure);
+    }
+
+    public boolean abort(HttpExchange exchange, Throwable requestFailure, Throwable responseFailure)
+    {
+        boolean requestAborted = false;
+        if (requestFailure != null)
+            requestAborted = getHttpSender().abort(exchange, requestFailure);
+
+        boolean responseAborted = false;
+        if (responseFailure != null)
+            responseAborted = abortResponse(exchange, responseFailure);
+
+        return requestAborted || responseAborted;
+    }
+
+    public boolean abortResponse(HttpExchange exchange, Throwable failure)
+    {
+        return getHttpReceiver().abort(exchange, failure);
+    }
+
+    public Result exchangeTerminating(HttpExchange exchange, Result result)
+    {
+        return result;
+    }
+
+    public void exchangeTerminated(HttpExchange exchange, Result result)
+    {
+        disassociate(exchange);
+    }
+
+    @Override
+    public String toString()
+    {
+        return String.format("%s@%x(exchange=%s)", getClass().getSimpleName(), hashCode(), getHttpExchange());
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

@@ -1,0 +1,12 @@
+In the provided code snippet, there is an opportunity to apply the extract variable refactoring pattern to improve the readability and reusability of the code. The expression `uriBuilderFactory.uriString(uriTemplate)` is used twice, making it a candidate for extraction to a new variable. Here's the refactored version of the code:
+
+```java
+@Override
+public RequestBodySpec uri(String uriTemplate, Function<UriBuilder, URI> uriFunction) {
+    UriString uriString = uriBuilderFactory.uriString(uriTemplate); // Extracted variable
+    attribute(URI_TEMPLATE_ATTRIBUTE, uriString.toUriString());
+    return uri(uriFunction.apply(uriString));
+}
+```
+
+In this refactored code, `uriBuilderFactory.uriString(uriTemplate)` is stored in the variable `uriString`, which is then used twice: once for setting the attribute and once for returning the `uri`. This change reduces the duplication of the method call, potentially improving performance slightly if the method call is expensive, and makes the code easier to maintain or modify.

@@ -1,0 +1,21 @@
+In the provided code snippet, the method `getFileSystem` contains multiple calls to `getAbfsStore(fs)` which can be refactored using the "Extract Variable" technique to improve readability and efficiency. By extracting this repetitive call into a single variable, the code becomes cleaner and easier to maintain. Here's the refactored version of the `getFileSystem` method:
+
+```java
+private AzureBlobFileSystem getFileSystem(final boolean optimizeFooterRead,
+                                          final int fileSize) throws IOException {
+    final AzureBlobFileSystem fs = getFileSystem();
+    AzureBlobFileSystemStore store = getAbfsStore(fs); // Extracted variable
+
+    store.getAbfsConfiguration().setOptimizeFooterRead(optimizeFooterRead);
+    if (fileSize <= store.getAbfsConfiguration().getReadBufferSize()) {
+        store.getAbfsConfiguration().setReadSmallFilesCompletely(false);
+    }
+    return fs;
+}
+```
+
+In this refactored version:
+- The call to `getAbfsStore(fs)` is made only once and stored in the `store` variable.
+- Subsequent references to `getAbfsStore(fs)` are replaced with the `store` variable.
+
+This change not only makes the code more readable but also potentially improves performance by reducing the number of method calls. It's a good practice to apply such refactorings across the codebase where similar patterns of repetitive method calls are observed.

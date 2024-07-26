@@ -1,0 +1,100 @@
+## Refactoring Opportunities and Recommendations
+
+The provided code demonstrates a well-structured and organized approach to escaping characters in Lucene queries. However, there are a few areas for improvement:
+
+1. **Reduce Code Duplication:**  
+There's repetition in escaping logic for terms and quoted strings. Both `escapeTerm` and `escapeQuoted` call `escapeChar` and `escapeWhiteChar` with the same logic. This can be refactored into a single helper method `escapeCommonChars(CharSequence term, Locale locale)` to avoid redundancy.
+
+2. **Simplify `escapeIgnoringCase`:**  
+The `escapeIgnoringCase` method can be simplified by utilizing `String.replace` with a case-insensitive flag. Here's an example:
+
+```java
+private static CharSequence escapeIgnoringCase(
+    CharSequence string, String sequence1, CharSequence escapeChar, Locale locale) {
+  return string.toString().toLowerCase(locale).replace(sequence1, escapeChar + sequence1);
+}
+```
+
+3. **Consider Alternative for `UnescapedCharSequence` Handling:**  
+The `escape` method handles `UnescapedCharSequence` objects differently. While it's valid logic, you might consider alternative approaches to avoid this special handling. This could involve modifying `UnescapedCharSequence` to handle escaping internally or introducing a new method specifically for unescaped sequences.
+
+## Refactored Code with Recommendations Applied:
+
+```java
+package org.apache.lucene.queryparser.flexible.standard.parser;
+
+import java.util.Locale;
+import org.apache.lucene.queryparser.flexible.core.messages.QueryParserMessages;
+import org.apache.lucene.queryparser.flexible.core.parser.EscapeQuerySyntax;
+import org.apache.lucene.queryparser.flexible.core.util.UnescapedCharSequence;
+import org.apache.lucene.queryparser.flexible.messages.MessageImpl;
+
+public class EscapeQuerySyntaxImpl implements EscapeQuerySyntax {
+
+  private static final char[] wildcardChars = {'*', '?'};
+
+  private static final String[] escapableTermExtraFirstChars = {"+", "-", "@"};
+
+  private static final String[] escapableTermChars = {
+      "\"", "<", ">", "=", "!", "(", ")", "^", "[", "{", ":", "]", "}", "~", "/"
+  };
+
+  private static final String[] escapableWhiteChars = {
+      " ", "\t", "\n", "\r", "\f", "\b", "\u3000"
+  };
+
+  private static final String[] escapableWordTokens = {
+      "AND", "OR", "NOT", "TO", "WITHIN", "SENTENCE", "PARAGRAPH", "INORDER"
+  };
+
+  private static CharSequence escapeCommonChars(CharSequence term, Locale locale) {
+    for (String escapableChar : escapableTermChars) {
+      term = escapeIgnoringCase(term, escapableChar.toLowerCase(locale), "\\", locale);
+    }
+    for (String escapableWhiteChar : escapableWhiteChars) {
+      term = escapeIgnoringCase(term, escapableWhiteChar.toLowerCase(locale), "\\", locale);
+    }
+    return term;
+  }
+
+  private static CharSequence escapeIgnoringCase(
+      CharSequence string, String sequence1, CharSequence escapeChar, Locale locale) {
+    return string.toString().toLowerCase(locale).replace(sequence1, escapeChar + sequence1);
+  }
+
+  private static CharSequence escapeTerm(CharSequence term, Locale locale) {
+    if (term == null || term.isEmpty()) return term;
+
+    // escape common chars
+    term = escapeCommonChars(term, locale);
+
+    // escape parser words
+    for (String escapableWordToken : escapableWordTokens) {
+      if (escapableWordToken.equalsIgnoreCase(term.toString())) return "\\" + term;
+    }
+    return term;
+  }
+
+  @Override
+  public CharSequence escape(CharSequence text, Locale locale, Type type) {
+    if (text == null || text.isEmpty()) return text;
+
+    // escape wildcards and the escape char
+    if (text instanceof UnescapedCharSequence) {
+      text = ((UnescapedCharSequence) text).toStringEscaped(wildcardChars);
+    } else {
+      text = new UnescapedCharSequence(text).toStringEscaped(wildcardChars);
+    }
+
+    if (type == Type.STRING) {
+      return escapeQuoted(text, locale);
+    } else {
+      return escapeTerm(text, locale);
+    }
+  }
+
+  // ... remaining code for discardEscapeChar (unchanged)
+}
+```
+
+These changes improve code readability and maintainability by reducing redundancy and potentially simplifying future modifications. Remember, the approach

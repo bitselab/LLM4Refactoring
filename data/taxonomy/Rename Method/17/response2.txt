@@ -1,0 +1,33 @@
+In the provided code snippet, the method name `loadFromJava17` suggests that the method specifically loads configurations or setups for Java 17, given its usage of the parameter `javaVersion`. However, upon reviewing the method's implementation, it becomes clear that it is designed to handle various versions of Java, not just Java 17, as indicated by the parameterized test and dynamic usage of the `javaVersion` variable.
+
+To align the method name more accurately with its functionality, a rename method refactoring would be appropriate. The name `loadFromJava17` could be misleading since it dynamically loads configurations based on the provided version of Java. A more descriptive and appropriate name could be `loadJavaVersion`, which clearly indicates that the method handles different Java versions based on the input provided.
+
+Here's the refactored code snippet with the updated method name:
+
+```java
+@ParameterizedTest
+@ValueSource(ints = {11, 17, 21})
+void loadJavaVersion(int javaVersion) throws IOException {
+    Path javaHome = Paths.get(System.getProperty("user.home"), "openjdk" + javaVersion);
+    assumeTrue(Files.isDirectory(javaHome), "Couldn't find java" + javaVersion + " installation at " + javaHome);
+
+    Path jrtfsPath = javaHome.resolve("lib/jrt-fs.jar");
+    assertTrue(Files.isRegularFile(jrtfsPath), "java" + javaVersion + " installation is incomplete. " + jrtfsPath + " not found!");
+    String classPath = jrtfsPath.toString();
+
+    try (ClasspathClassLoader loader = new ClasspathClassLoader(classPath, null)) {
+        assertEquals(javaHome.toString(), loader.javaHome);
+        try (InputStream stream = loader.getResourceAsStream("java/lang/Object.class")) {
+            assertNotNull(stream);
+            try (DataInputStream data = new DataInputStream(stream)) {
+                assertClassFile(data, javaVersion);
+            }
+        }
+
+        // should not fail for resources without a package
+        assertNull(loader.getResourceAsStream("ClassInDefaultPackage.class"));
+    }
+}
+```
+
+This renaming makes the purpose of the method clearer to other developers and avoids potential confusion, especially when the method is capable of handling multiple versions of Java.

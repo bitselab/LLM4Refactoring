@@ -1,0 +1,43 @@
+Here's a potential refactoring opportunity using the Extract Method technique in the provided code:
+
+The `DState#nextState` method performs several calculations and assignments related to determining the next state for a given character class. This logic can be extracted into a separate method to improve readability and maintainability.
+
+Here's the refactored code:
+
+```java
+private class DState {
+  // ... other fields and methods
+
+  private int determineNextState(int charClass) {
+    initTransitions();
+    if (transitions[charClass] == NOT_COMPUTED) {
+      assignTransition(charClass, findDState(step(points[charClass])));
+      // Update transitions to the left and right if minimalTransition exists
+      if (minimalTransition != null) {
+        updateLeftAndRightTransitions(charClass);
+        minimalTransition = null;
+      }
+    }
+    return transitions[charClass];
+  }
+
+  private void updateLeftAndRightTransitions(int charClass) {
+    int cls = charClass;
+    while (cls > 0 && points[--cls] >= minimalTransition.min) {
+      assert transitions[cls] == NOT_COMPUTED || transitions[cls] == transitions[charClass];
+      assignTransition(cls, transitions[charClass]);
+    }
+    cls = charClass;
+    while (cls < points.length - 1 && points[++cls] <= minimalTransition.max) {
+      assert transitions[cls] == NOT_COMPUTED || transitions[cls] == transitions[charClass];
+      assignTransition(cls, transitions[charClass]);
+    }
+  }
+
+  // ... other methods
+}
+```
+
+The original logic within `nextState` is now encapsulated in the new `determineNextState` method. This improves code organization and makes the purpose of the logic more explicit.
+
+It's important to note that this is just one potential refactoring opportunity. Further analysis might reveal additional improvements based on your specific coding standards and project requirements.

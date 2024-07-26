@@ -1,0 +1,17 @@
+The variable name `mock` in the method `resolveParameter` is indeed generic and could be more descriptive. In the context of this method, the variable represents a parameter resolved by the `parameterResolver`, which could be a mock object or another type of object. To improve readability and make the code more self-explanatory, we can rename `mock` to `resolvedParameter`.
+
+Here's the refactored method with the renamed variable:
+
+```java
+@Override
+@SuppressWarnings("unchecked")
+public Object resolveParameter(ParameterContext parameterContext, ExtensionContext context) throws ParameterResolutionException {
+    Object resolvedParameter = parameterResolver.resolveParameter(parameterContext, context);
+    if (resolvedParameter instanceof ScopedMock) {
+        context.getStore(MOCKITO).get(MOCKS, Set.class).add(resolvedParameter);
+    }
+    return resolvedParameter;
+}
+```
+
+This renaming makes it clear that the variable holds whatever parameter has been resolved, and not necessarily a mock object. This clarity is especially beneficial for readers who might not be intimately familiar with the workings of the Mockito framework.

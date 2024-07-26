@@ -1,0 +1,56 @@
+There is an opportunity for inline variable refactoring in the provided code snippet.
+
+**Original Code:**
+
+```java
+if ( generatedValuesDelegate != null ) {
+  final EntityMutationOperationGroup entityGroup = mutationOperationGroup.asEntityMutationOperationGroup();
+  final EntityMutationTarget entityTarget = entityGroup.getMutationTarget();
+  final PreparedStatementDetails details = nonBatchedStatementGroup.getPreparedStatementDetails(
+      entityTarget.getIdentifierTableName()
+  );
+  generatedValues = generatedValuesDelegate.performMutation(
+      details,
+      valueBindings,
+      modelReference,
+      session
+  );
+
+  final Object id = entityGroup.getMutationType() == MutationType.INSERT && details.getMutatingTableDetails().isIdentifierTable() ?
+      generatedValues.getGeneratedValue( entityTarget.getTargetPart().getIdentifierMapping() ) :
+      null;
+  nonBatchedStatementGroup.forEachStatement( (tableName, statementDetails) -> {
+    if ( !statementDetails.getMutatingTableDetails().isIdentifierTable() ) {
+      performNonBatchedMutation(
+          statementDetails,
+          id,
+          valueBindings,
+          inclusionChecker,
+          resultChecker,
+          session
+      );
+    }
+  } );
+}
+```
+
+**Refactored Code:**
+
+```java
+if ( generatedValuesDelegate != null ) {
+  final EntityMutationOperationGroup entityGroup = mutationOperationGroup.asEntityMutationOperationGroup();
+  final EntityMutationTarget entityTarget = entityGroup.getMutationTarget();
+  final PreparedStatementDetails details = nonBatchedStatementGroup.getPreparedStatementDetails(entityTarget.getIdentifierTableName());
+  generatedValues = generatedValuesDelegate.performMutation(details, valueBindings, modelReference, session);
+
+  final Object id = (entityGroup.getMutationType() == MutationType.INSERT && details.getMutatingTableDetails().isIdentifierTable()) ?
+      generatedValues.getGeneratedValue(entityTarget.getTargetPart().getIdentifierMapping()) : null;
+  nonBatchedStatementGroup.forEachStatement((tableName, statementDetails) -> {
+    if (!statementDetails.getMutatingTableDetails().isIdentifierTable()) {
+      performNonBatchedMutation(statementDetails, id, valueBindings, inclusionChecker, resultChecker, session);
+    }
+  });
+}
+```
+
+Here, the variable `details` is assigned the result of `nonBatchedStatementGroup.getPreparedStatementDetails(entityTarget.getIdentifierTableName())`. This value is then used  within the same code block. We can eliminate the unnecessary variable by directly using the expression in the function call to `generatedValuesDelegate.performMutation`. This refactoring improves code readability and reduces the number of lines.

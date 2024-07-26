@@ -1,0 +1,55 @@
+ **Here are potential refactoring opportunities for the provided code:**
+
+1. **Constructor Consolidation:**
+   - The three constructors can be combined into a single constructor with default values for `classLoader` and `javaClass`.
+
+2. **Lazy Loading Streamlining:**
+   - The lazy loading logic within `getJavaClass()` can be simplified by directly using `ReflectionUtils.tryToLoadClass` and handling potential exceptions within a `try-catch` block.
+
+3. **Error Handling Consistency:**
+   - The exception handling in `getJavaClass()` can be made consistent with other methods by throwing a `PreconditionViolationException` directly.
+
+4. **Unnecessary Annotations:**
+   - The `@formatter:off` and `@formatter:on` annotations don't seem to serve a functional purpose and can be removed.
+
+5. **Code Formatting:**
+   - The code could benefit from more consistent indentation and spacing for better readability.
+
+**Here's the refactored code:**
+
+```java
+package org.junit.platform.engine.discovery;
+
+// ... imports
+
+@API(status = STABLE, since = "1.0")
+public class ClassSelector implements DiscoverySelector {
+
+    private final String className;
+    private final ClassLoader classLoader;
+
+    private Class<?> javaClass;
+
+    ClassSelector(String className, ClassLoader classLoader = null, Class<?> javaClass = null) {
+        this.className = className;
+        this.classLoader = classLoader;
+        this.javaClass = javaClass;
+    }
+
+    // ... other methods
+
+    @Override
+    public Class<?> getJavaClass() {
+        if (javaClass == null) {
+            try {
+                javaClass = ReflectionUtils.tryToLoadClass(className, classLoader).get();
+            } catch (Exception e) {
+                throw new PreconditionViolationException("Could not load class with name: " + className, e);
+            }
+        }
+        return javaClass;
+    }
+
+    // ... other methods
+}
+```

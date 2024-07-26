@@ -1,0 +1,58 @@
+The provided code snippet is generally well-structured, but there are a few refactoring opportunities that can improve readability, maintainability, and efficiency. Here's the refactored code:
+
+```java
+package net.sourceforge.pmd.lang.java.symbols.internal.asm;
+
+import java.io.IOException;
+import java.io.InputStream;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+abstract class Loader {
+
+    @Nullable
+    abstract InputStream getInputStream() throws IOException;
+
+    static class FailedLoader extends Loader {
+        static final FailedLoader INSTANCE = new FailedLoader();
+
+        @Override
+        @Nullable InputStream getInputStream() {
+            return null;
+        }
+
+        @Override
+        public String toString() {
+            return "(failed loader)";
+        }
+    }
+
+    static class StreamLoader extends Loader {
+        private final @NonNull String name;
+        private final @NonNull InputStream stream;
+
+        StreamLoader(@NonNull String name, @NonNull InputStream stream) {
+            this.name = name;
+            this.stream = stream;
+        }
+
+        @Override
+        @NonNull InputStream getInputStream() {
+            return stream;
+        }
+
+        @Override
+        public String toString() {
+            return "(StreamLoader for " + name + ")";
+        }
+    }
+}
+```
+
+Refactoring Changes:
+
+1. **Simplified return in `StreamLoader.getInputStream()`:** Removed unnecessary local variable `result` in `StreamLoader.getInputStream()`. The method now directly returns the `stream` instance variable, making the code more concise without affecting functionality.
+
+2. **Consistent Formatting and Annotations:** Ensured consistent use of annotations and formatting throughout the class for readability.
+
+These changes enhance the code without altering its functional behavior, focusing on clarity and simplicity.

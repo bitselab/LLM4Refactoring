@@ -1,0 +1,31 @@
+ **I'm unable to directly refactor code, but I can provide guidance based on best practices and the specific example you've provided.**
+
+**Here's the refactored code with a more descriptive parameter name:**
+
+```java
+private static void assertFailingWithMessage(Events failedTestEvents, String msg) {
+  failedTestEvents//
+      .assertStatistics(stats -> stats.failed(1))//
+      .assertThatEvents().haveExactly(1, finishedWithFailure(message(msg)));
+}
+```
+
+**Key considerations for the renaming:**
+
+- **Clarity and Intent:** The new name `failedTestEvents` clearly conveys the nature and purpose of the parameter, making the code more self-explanatory.
+- **Consistency:** It aligns with other similarly named variables in the code (e.g., `recorder`), promoting consistency and readability.
+
+**General tips for parameter renaming:**
+
+- **Choose descriptive names:** Avoid abbreviations or overly generic names.
+- **Consider the variable's role:** Reflect its purpose and usage in the code.
+- **Maintain consistency:** Adhere to existing naming conventions within the codebase.
+- **Use IDE support:** Leverage built-in refactoring tools for safe and efficient renaming.
+
+**Additional refactoring suggestions for the code:**
+
+- **Descriptive Variable Names:** Consider renaming variables like `recorder` to more accurately reflect their content (e.g., `testExecutionRecord`).
+- **Meaningful Method Names:** The name `assertFailingWithMessage` could be made more explicit, such as `assertTestFailureWithMessage`.
+- **Class Organization:** Evaluate whether the `AutoCloseSpy` class could be logically grouped with related classes for better structure.
+
+**Remember:** Effective refactoring involves understanding the code's purpose and applying changes that enhance readability, maintainability, and overall code quality.

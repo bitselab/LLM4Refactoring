@@ -1,0 +1,125 @@
+The given code snippet can benefit from the "Extract Variable" refactoring technique, particularly in the areas where repeated expressions are used. This technique not only improves readability but also enhances maintainability. Here are the specific areas where this refactoring can be applied:
+
+1. **Repeated Vector Generation**: The generation of random float arrays for the `vectorField` is repeated multiple times. Extracting this into a separate method or variable would be beneficial.
+
+2. **Repeated Use of Fields**: The strings `textField`, `numericField`, and `vectorField` are used multiple times. These can be made class-level constants if they are not varying per instance.
+
+3. **Repeated Query Building**: The construction of `QueryBuilder` objects is done in a loop and can be extracted into a separate method for clarity.
+
+4. **Response Validation Blocks**: The nested for-loops used for response validation have repetitive code that can be extracted into separate methods or variables.
+
+Let's refactor the code accordingly:
+
+Here is the refactored version of the provided code:
+
+```java
+package org.elasticsearch.search.profile.dfs;
+
+// ... [imports remain unchanged]
+
+public class DfsProfilerIT extends ESIntegTestCase {
+
+    private static final int KNN_DIM = 3;
+    private static final String TEXT_FIELD = "text_field";
+    private static final String NUMERIC_FIELD = "number";
+    private static final String VECTOR_FIELD = "vector";
+    private static final String INDEX_NAME = "text-dfs-profile";
+    private static final int MIN_RANDOM_DOCS = 10;
+    private static final int MAX_RANDOM_DOCS = 50;
+    private static final int MIN_ITERS = 5;
+    private static final int MAX_ITERS = 10;
+    private static final int MIN_KNN = 5;
+    private static final int MAX_KNN = 10;
+    private static final int KNN_SIZE = 50;
+
+    public void testProfileDfs() throws Exception {
+        createIndex(INDEX_NAME, VECTOR_FIELD);
+        ensureGreen();
+
+        int numDocs = randomIntBetween(MIN_RANDOM_DOCS, MAX_RANDOM_DOCS);
+        IndexRequestBuilder[] docs = new IndexRequestBuilder[numDocs];
+        for (int i = 0; i < numDocs; i++) {
+            docs[i] = prepareIndex(INDEX_NAME).setId(String.valueOf(i))
+                    .setSource(
+                            TEXT_FIELD,
+                            English.intToEnglish(i),
+                            NUMERIC_FIELD,
+                            i,
+                            VECTOR_FIELD,
+                            generateRandomVector()
+                    );
+        }
+        indexRandom(true, docs);
+        refresh();
+
+        int iterations = between(MIN_ITERS, MAX_ITERS);
+        for (int i = 0; i < iterations; i++) {
+            QueryBuilder query = randomQueryBuilder(List.of(TEXT_FIELD), List.of(NUMERIC_FIELD), numDocs, 3);
+            addKnnSearchBuilder(query, VECTOR_FIELD);
+            logger.info("Query: {}", query);
+            assertSearchResponse(query);
+        }
+    }
+
+    private void addKnnSearchBuilder(QueryBuilder query, String vectorField) {
+        if (randomBoolean()) {
+            new KnnSearchBuilder(
+                    vectorField,
+                    generateRandomVector(),
+                    randomIntBetween(MIN_KNN, MAX_KNN),
+                    KNN_SIZE,
+                    randomBoolean() ? null : randomFloat()
+            ).addFilterQuery(query);
+        }
+    }
+
+    private float[] generateRandomVector() {
+        return new float[]{randomFloat(), randomFloat(), randomFloat()};
+    }
+
+    private void assertSearchResponse(QueryBuilder query) {
+        assertResponse(
+                prepareSearch().setQuery(query)
+                        .setTrackTotalHits(true)
+                        .setProfile(true)
+                        .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
+                        .setKnnSearch(randomList(2, 5, this::generateKnnSearchBuilder)),
+                this::validateResponse
+        );
+    }
+
+    private KnnSearchBuilder generateKnnSearchBuilder() {
+        return new KnnSearchBuilder(
+                VECTOR_FIELD,
+                generateRandomVector(),
+                randomIntBetween(MIN_KNN, MAX_KNN),
+                KNN_SIZE,
+                randomBoolean() ? null : randomFloat()
+        );
+    }
+
+    private void validateResponse(SearchResponse response) {
+        // Existing validation logic...
+    }
+
+    private void createIndex(String name, String vectorField) throws IOException {
+        // Existing index creation logic...
+    }
+}
+```
+
+### Refactoring Details:
+
+1. **Extracted Method for Random Vector Generation**: Created `generateRandomVector()` to reduce repetition of creating a random vector.
+
+2. **Constants for Repeated Strings and Numbers**:
+
+Converted `textField`, `numericField`, `vectorField`, and `indexName` to class-level constants to avoid repetition and improve readability.
+
+3. **Extracted Method for KNN Search Builder**: Created `addKnnSearchBuilder()` to encapsulate the logic for adding a KNN search builder to a query. Similarly, `generateKnnSearchBuilder()` is used in `assertSearchResponse()` for generating a KNN search builder.
+
+4. **Refactoring assertSearchResponse Method**: Encapsulated the logic of asserting the search response into a separate method, `assertSearchResponse()`, to make `testProfileDfs()` cleaner.
+
+5. **Using Constants for Configuration Values**: Introduced constants like `MIN_RANDOM_DOCS`, `MAX_RANDOM_DOCS`, `MIN_ITERS`, `MAX_ITERS`, `MIN_KNN`, `MAX_KNN`, and `KNN_SIZE` for better configurability and readability.
+
+This refactoring focuses on extracting repeated expressions into methods or constants, thereby improving the readability and maintainability of the code.

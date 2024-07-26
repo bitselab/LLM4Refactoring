@@ -1,0 +1,189 @@
+Reviewing the provided code from the `BridgeMethodResolver` class, several opportunities for the Extract Method refactoring can be identified. The aim here is to enhance readability, modularity, and maintainability by extracting complex or duplicated logic into separate methods.
+
+### Identified Opportunities for Refactoring
+
+1. **Method for Candidate Search and Bridged Method Retrieval:**
+   There is repeated logic for searching methods and determining the most specific or bridged method across two methods: `findBridgedMethod` and `getMostSpecificMethod`. This logic involves filtering candidate methods, searching for candidates, and checking conditions against the bridge methods.
+
+2. **Method for Resolved Type Matching:**
+   The logic to determine if a method's generic parameter types match another method's parameter types (used in method `isResolvedTypeMatch`) is a candidate for extraction. This would involve processing parameter types and matching them against a target class's resolved types.
+
+3. **Method for Bridge Method Searching in Superclasses and Interfaces:**
+   The logic for traversing superclasses and interfaces to find a method that matches the bridge method signature is used in multiple places (`findGenericDeclaration`). Extracting this into a dedicated method can improve clarity and reuse.
+
+### Proposed Refactoring Changes
+
+Here is the refactored code based on the above analysis:
+
+```java
+package org.springframework.core;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.lang.Nullable;
+import org.springframework.util.ClassUtils;
+import org.springframework.util.ConcurrentReferenceHashMap;
+import org.springframework.util.ReflectionUtils;
+import org.springframework.util.ReflectionUtils.MethodFilter;
+
+public final class BridgeMethodResolver {
+
+    private static final Map<Object, Method> cache = new ConcurrentReferenceHashMap<>();
+
+    private BridgeMethodResolver() {
+    }
+
+    public static Method findBridgedMethod(Method bridgeMethod) {
+        return findOrGetBridgedMethod(bridgeMethod, bridgeMethod.getDeclaringClass());
+    }
+
+    public static Method getMostSpecificMethod(Method bridgeMethod, @Nullable Class<?> targetClass) {
+        Method specificMethod = ClassUtils.getMostSpecificMethod(bridgeMethod, targetClass);
+        return findOrGetBridgedMethod(specificMethod, targetClass);
+    }
+
+    private static Method findOrGetBridgedMethod(Method method, @Nullable Class<?> targetClass) {
+        Class<?> targetClass1 = (targetClass != null ? targetClass : method.getDeclaringClass());
+        boolean localBridge = (targetClass1 == method.getDeclaringClass());
+        if (!method.isBridge() && localBridge) {
+            return method;
+        }
+
+        Object cacheKey = (localBridge ? method : new MethodClassKey(method, targetClass1));
+        Method bridgedMethod = cache.get(cacheKey);
+        if (bridgedMethod == null) {
+            List<Method> candidateMethods = findCandidateMethods(targetClass1, method);
+            bridgedMethod = determineBridgedMethod(candidateMethods, method, targetClass1);
+            cache.put(cacheKey, bridgedMethod);
+        }
+        return bridgedMethod;
+    }
+
+    private static List<Method> findCandidateMethods(Class<?> targetClass, Method method) {
+        List<Method> candidateMethods = new ArrayList<>();
+        MethodFilter filter = (candidateMethod -> isBridgedCandidateFor(candidateMethod, method));
+        ReflectionUtils.doWithMethods(targetClass, candidateMethods::add, filter);
+        return candidateMethods;
+    }
+
+    @Nullable
+    private static Method determineBridgedMethod(List<Method> candidateMethods, Method method, Class<?> targetClass) {
+        if (candidateMethods.isEmpty()) {
+            return method;
+        }
+        Method previousMethod = null;
+        boolean sameSig = true;
+        for (Method candidateMethod : candidateMethods) {
+            if (isBridgeMethodFor(method, candidateMethod, targetClass)) {
+                return candidateMethod;
+            }
+            else if (previousMethod != null) {
+                sameSig = sameSig && Arrays.equals(
+                        candidateMethod.getGenericParameterTypes(), previousMethod.getGenericParameterTypes());
+            }
+            previousMethod = candidateMethod;
+        }
+        return (sameSig ? candidateMethods.get(0) : method);
+    }
+
+    private static boolean isBridgedCandidateFor(Method candidateMethod, Method bridgeMethod) {
+        return (!candidateMethod.isBridge() &&
+                candidateMethod.getName().equals(bridgeMethod.getName()) &&
+                candidateMethod.getParameterCount() == bridgeMethod.getParameterCount());
+    }
+
+    static boolean isBridgeMethodFor(Method bridgeMethod, Method candidateMethod, Class<?> targetClass) {
+        if (isResolvedTypeMatch(candidateMethod, bridgeMethod, targetClass)) {
+            return true;
+        }
+        Method method = findGenericDeclaration(bridgeMethod);
+        return (method != null && isResolvedTypeMatch(method, candidateMethod, targetClass));
+    }
+
+    private static boolean isResolvedTypeMatch(Method genericMethod, Method candidateMethod, Class<?> targetClass) {
+        Type[] genericParameters = genericMethod.getGenericParameterTypes();
+        if (genericParameters.length != candidateMethod.getParameterCount()) {
+            return false;
+        }
+        Class<?>[] candidateParameters = candidateMethod.getParameterTypes();
+        for (int i = 0; i < candidateParameters.length; i++) {
+            ResolvableType genericParameter = ResolvableType.forMethodParameter(genericMethod, i, targetClass);
+            Class<?> candidateParameter = candidateParameters[i];
+            if (candidateParameter.isArray()) {
+                if (!candidateParameter.getComponentType().equals(genericParameter.getComponentType().toClass())) {
+                    return false;
+                }
+            }
+            if (!ClassUtils.resolvePrimitiveIfNecessary(candidateParameter).equals(
+                    ClassUtils.resolvePrimitiveIfNecessary(genericParameter.toClass()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Nullable
+    private static Method findGenericDeclaration(Method bridgeMethod) {
+        if (!bridgeMethod.isBridge()) {
+            return bridgeMethod;
+        }
+        Class<?> superclass = bridgeMethod.getDeclaringClass().getSuperclass();
+        while (superclass != null && Object.class != superclass) {
+            Method method = searchForMatch(superclass, bridgeMethod);
+            if (method != null && !method.isBridge()) {
+                return method;
+            }
+            superclass = superclass.getSuperclass();
+        }
+
+        Class<?>[] interfaces = ClassUtils.getAllInterfacesForClass(bridgeMethod.getDeclaringClass());
+        return searchInterfaces(interfaces, bridgeMethod);
+    }
+
+    @Nullable
+    private static Method searchInterfaces(Class<?>[] interfaces, Method bridgeMethod) {
+        for (Class<?> ifc : interfaces) {
+            Method method = searchForMatch(ifc, bridgeMethod);
+            if (method != null && !method.isBridge()) {
+                return method;
+            }
+            else {
+                method = searchInterfaces(ifc.getInterfaces(), bridgeMethod);
+                if (method != null) {
+                    return method;
+                }
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private static Method searchForMatch(Class<?> type, Method bridgeMethod) {
+        try {
+            return type.getDeclaredMethod(bridgeMethod.getName(), bridgeMethod.getParameterTypes());
+        }
+        catch (NoSuchMethodException ex) {
+            return null;
+        }
+    }
+
+    public static boolean isVisibilityBridgeMethodPair(Method bridgeMethod, Method bridgedMethod) {
+        if (bridgeMethod == bridgedMethod) {
+            return true;
+        }
+        return (bridgeMethod.getReturnType().equals(bridgedMethod.getReturnType()) &&
+                bridgeMethod.getParameterCount() == bridgedMethod.getParameterCount() &&
+                Arrays.equals(bridgeMethod.getParameterTypes(), bridgedMethod.getParameterTypes()));
+    }
+
+}
+```
+
+### Explanation
+
+The refactored code introduces helper methods to encapsulate specific operations like finding candidate methods, determining the bridged method, and handling cache operations. This makes the main methods (`findBridgedMethod` and `getMostSpecificMethod`) more concise and easier to understand. Each extracted method performs a well-defined task, making the overall codebase more modular and maintainable.

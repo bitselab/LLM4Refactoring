@@ -1,0 +1,56 @@
+In the given code snippet, the attribute `certificates` is used to represent a `Supplier` of a list of `X509Certificate` objects. While the name `certificates` is not necessarily low-quality, it could potentially be misleading because it sounds like a direct collection of certificates, not a supplier that provides them. To improve clarity, we can rename this attribute to reflect its actual purpose more accurately.
+
+A suitable renaming would be `certificatesSupplier`, which clearly indicates that this attribute is a supplier for certificates, not the certificates themselves. This minor change can enhance the readability and understanding of the code.
+
+Refactored Code with Renamed Attribute:
+
+```java
+package org.springframework.boot.ssl.pem;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+import java.util.List;
+import java.util.function.Supplier;
+
+import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.function.SingletonSupplier;
+import org.springframework.util.function.ThrowingSupplier;
+
+final class LoadedPemSslStore implements PemSslStore {
+
+    private final PemSslStoreDetails details;
+
+    private final Supplier<List<X509Certificate>> certificatesSupplier; // Renamed from 'certificates'
+
+    private final Supplier<PrivateKey> privateKeySupplier;
+
+    LoadedPemSslStore(PemSslStoreDetails details) {
+        Assert.notNull(details, "Details must not be null");
+        this.details = details;
+        this.certificatesSupplier = supplier(() -> loadCertificates(details)); // Updated usage
+        this.privateKeySupplier = supplier(() -> loadPrivateKey(details));
+    }
+
+    private static <T> Supplier<T> supplier(ThrowingSupplier<T> supplier) {
+        return SingletonSupplier.of(supplier.throwing(LoadedPemSslStore::asUncheckedIOException));
+    }
+
+    // ... [rest of the code remains unchanged]
+
+    @Override
+    public List<X509Certificate> certificates() {
+        return this.certificatesSupplier.get(); // Updated usage
+    }
+
+    // ... [rest of the code remains unchanged]
+}
+```
+
+### Key Changes:
+- Renamed `certificates` to `certificatesSupplier`.
+- Updated all usages of the renamed attribute.
+
+This renaming makes it clearer that `certificatesSupplier` is a `Supplier` that provides a list of `X509Certificate` objects, enhancing the code's readability and maintainability.

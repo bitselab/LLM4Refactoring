@@ -1,0 +1,56 @@
+In the provided code snippet, there are a few opportunities for renaming variables to enhance readability and clarity. Here's a refactoring of the code with improved variable names:
+
+1. **Rename `matchesList` to `collectedMatches`**: This name more accurately reflects the purpose of the list, which is to collect matches from the iterator.
+
+2. **Rename `textFiles` to `sourceTextFiles`**: This clarifies that these files are source text files, distinguishing them from other possible file types.
+
+3. **Rename `paths` to `uniqueFilePaths`**: This name better describes what this set holds, which are unique file paths.
+
+4. **Rename `sourcManager` to `sourceManager`**: This corrects a typo and makes the variable name clearer.
+
+Here is the refactored code:
+
+```java
+package net.sourceforge.pmd.cpd;
+
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
+import java.util.*;
+
+import net.sourceforge.pmd.cpd.renderer.CPDRenderer;
+import net.sourceforge.pmd.lang.document.TextFile;
+import net.sourceforge.pmd.lang.java.JavaLanguageModule;
+
+final class RendererHelper {
+    private RendererHelper() {
+        // utility class
+    }
+
+    static void render(Iterator<Match> matches, Writer writer, CPDReportRenderer renderer) throws IOException {
+        List<Match> collectedMatches = new ArrayList<>();
+        matches.forEachRemaining(collectedMatches::add);
+
+        List<TextFile> sourceTextFiles = new ArrayList<>();
+        Set<String> uniqueFilePaths = new HashSet<>();
+        for (Match match : collectedMatches) {
+            for (Mark mark : match.getMarkSet()) {
+                uniqueFilePaths.add(mark.getFilename());
+            }
+        }
+        for (String path : uniqueFilePaths) {
+            sourceTextFiles.add(TextFile.forPath(Paths.get(path), StandardCharsets.UTF_8, JavaLanguageModule.getInstance().getDefaultVersion()));
+        }
+
+        try (SourceManager sourceManager = new SourceManager(sourceTextFiles)) {
+            CPDReport report = new CPDReport(sourceManager, collectedMatches, Collections.emptyMap());
+            renderer.render(report, writer);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+```
+
+These changes should make the code more readable and understandable, particularly for someone unfamiliar with the original context.

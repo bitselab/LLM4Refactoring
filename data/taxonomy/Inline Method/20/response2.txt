@@ -1,0 +1,50 @@
+In the given code snippet for `AbstractApplicationContext`, the method `restoreShutdownHook()` is a private method that is only called once within the class. This situation aligns with the inline method refactoring pattern described earlier, where private methods called only once may be inlined to improve readability and reduce unnecessary abstraction.
+
+### Original Method:
+```java
+private void restoreShutdownHook() {
+    if (this.shutdownHook != null) {
+        try {
+            Runtime.getRuntime().addShutdownHook(this.shutdownHook);
+        } catch (IllegalStateException | IllegalArgumentException ex) {
+            // ignore - VM is already shutting down or hook already registered
+        }
+    }
+}
+```
+
+### Method Call within `close()`:
+```java
+restoreShutdownHook();
+```
+
+### Proposed Refactoring:
+Inline the `restoreShutdownHook()` method directly into the `close()` method where it is called. This reduces one layer of method abstraction and directly incorporates the functionality where it is utilized, making the code more straightforward.
+
+### Refactored Code:
+```java
+public abstract class AbstractApplicationContext extends DefaultResourceLoader
+        implements ConfigurableApplicationContext {
+
+    @Override
+    public void close() {
+        if (this.startupShutdownLock.tryLock()) {
+            try {
+                doClose();
+                // Inline: restore shutdown hook directly here
+                if (this.shutdownHook != null) {
+                    try {
+                        Runtime.getRuntime().addShutdownHook(this.shutdownHook);
+                    } catch (IllegalStateException | IllegalArgumentException ex) {
+                        // ignore - VM is already shutting down or hook already registered
+                    }
+                }
+            } finally {
+                this.startupShutdownLock.unlock();
+            }
+        }
+    }
+}
+```
+
+This refactoring simplifies the class by removing the `restoreShutdownHook()` method, which is only used once, and embedding its logic directly where it's needed, thereby adhering to the inline method refactoring pattern.

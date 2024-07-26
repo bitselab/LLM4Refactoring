@@ -1,0 +1,49 @@
+The code provided shows several methods that follow a similar pattern, where each method adds a specific option to `fieldModelContributor`. We can extract this repeated logic into a new method to reduce duplication and improve readability. Here's the refactored code:
+
+```java
+class PropertyMappingVectorFieldStepImpl extends AbstractPropertyMappingFieldOptionsStep<PropertyMappingVectorFieldStepImpl>
+        implements PropertyMappingVectorFieldStep, PojoPropertyMetadataContributor {
+
+    @Override
+    public PropertyMappingVectorFieldStep projectable(Projectable projectable) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().projectable(projectable));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep searchable(Searchable searchable) {
+        // No operation needed as per original code
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep vectorSimilarity(VectorSimilarity vectorSimilarity) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().vectorSimilarity(vectorSimilarity));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep beamWidth(int beamWidth) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().beamWidth(beamWidth));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep maxConnections(int maxConnections) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().maxConnections(maxConnections));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep indexNullAs(String indexNullAs) {
+        addFieldModelContributor(c -> c.indexNullAs(indexNullAs));
+        return this;
+    }
+
+    private void addFieldModelContributor(Consumer<SomeType> consumer) {
+        fieldModelContributor.add(consumer);
+    }
+}
+```
+
+In this refactored code, the new method `addFieldModelContributor` is introduced to encapsulate the repeated logic of adding a consumer to `fieldModelContributor`. This reduces duplication and makes the code cleaner and easier to maintain.

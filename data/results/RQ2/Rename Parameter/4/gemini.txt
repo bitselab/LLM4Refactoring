@@ -1,0 +1,21 @@
+Absolutely! You can definitely improve the readability of the code by renaming the parameter "first". Here's the refactored code with a better parameter name:
+
+```java
+public DateFormat(
+  Source source,
+  @Param(optional = true, name = "dateFormat", type = { "keyword" }, description = "A valid date pattern") Expression dateFormat,  // Renamed parameter
+  @Param(name = "date", type = { "date" }, description = "Date expression") Expression date,
+  Configuration configuration
+) {
+  super(source, date != null ? List.of(dateFormat, date) : List.of(dateFormat), configuration);
+  this.field = date != null ? date : dateFormat;  // Update field assignment
+  this.format = date != null ? dateFormat : null;   // Update format assignment
+}
+```
+
+Changes made:
+
+1. Renamed the parameter `first` to `dateFormat`. This clearly indicates the purpose of the parameter.
+2. Updated the field and format assignments within the constructor to reflect the new parameter name.
+
+This refactoring improves code readability without affecting the functionality.

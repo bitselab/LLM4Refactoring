@@ -1,0 +1,29 @@
+Inline method refactorings are frequently employed to eliminate unnecessary methods to improve readability. As a developer, imagine your team leader requests you to review a piece of code to identify potential inline method refactoring opportunities. The original code snippet is as follows:
+```
+package org.apache.commons.lang3;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.apache.commons.lang3.builder.ToStringStyle;
+import org.junit.jupiter.api.AfterEach;
+
+/**
+ * All tests subclass this test.
+ */
+public class AbstractLangTest {
+
+    /**
+     * All tests should leave the {@link ToStringStyle} registry empty.
+     */
+    @AfterEach
+    public void after() {
+        validateNullToStringStyleRegistry();
+    }
+
+    void validateNullToStringStyleRegistry() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

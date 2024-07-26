@@ -1,0 +1,59 @@
+ **Here's the refactored code after extracting the repeated expression:**
+
+```java
+private static CharSequence escapeIgnoringCase(
+    CharSequence string, CharSequence sequence1, CharSequence escapeChar, Locale locale) {
+    if (escapeChar == null || sequence1 == null || string == null) throw new NullPointerException();
+
+    int count = string.length();
+    int sequence1Length = sequence1.length();
+
+    // Extract the repeated expression into a variable
+    String stringLower = string.toString().toLowerCase(locale);
+
+    // empty search string - escape every character
+    if (sequence1Length == 0) {
+        StringBuilder result = new StringBuilder(count * (1 + escapeChar.length()));
+        for (int i = 0; i < count; i++) {
+            result.append(escapeChar);
+            result.append(string.charAt(i));
+        }
+        return result;
+    }
+
+    // normal case
+    StringBuilder result = new StringBuilder();
+    char first = sequence1.charAt(0);
+    int start = 0, copyStart = 0, firstIndex;
+    while (start < count) {
+        if ((firstIndex = stringLower.indexOf(first, start)) == -1) break;
+        boolean found = true;
+        if (sequence1.length() > 1) {
+            if (firstIndex + sequence1Length > count) break;
+            for (int i = 1; i < sequence1Length; i++) {
+                if (stringLower.charAt(firstIndex + i) != sequence1.charAt(i)) {
+                    found = false;
+                    break;
+                }
+            }
+        }
+        if (found) {
+            result.append(string, copyStart, firstIndex);
+            result.append(escapeChar);
+            result.append(string, firstIndex, firstIndex + sequence1Length);
+            copyStart = start = firstIndex + sequence1Length;
+        } else {
+            start = firstIndex + 1;
+        }
+    }
+    if (result.isEmpty() && copyStart == 0) return string;
+    result.append(string, copyStart, string.length());
+    return result;
+}
+```
+
+**Key improvements in readability and maintainability:**
+
+- **Clearer intent:** The code is now easier to read because the purpose of the repeated expression is explicitly captured in the variable `stringLower`.
+- **Reduced redundancy:** Removing the duplicated code makes the method more concise and easier to understand.
+- **Easier maintenance:** If changes are needed to how the string is converted to lowercase, they can be made in a single place (the variable declaration), rather than multiple locations.

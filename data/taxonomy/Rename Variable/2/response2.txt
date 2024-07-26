@@ -1,0 +1,49 @@
+The provided code snippet is well-structured and the variable names are clear and descriptive. However, a potential rename variable refactoring can be made to align variable names better with common Java coding standards and to enhance readability. Here are the changes:
+
+1. Rename `position` to `initialPosition` - This change clarifies that this variable holds the starting position for reading operations, distinguishing it from the offsets applied during various operations.
+2. Rename `readlimit` to `readLimit` - This change improves readability by adhering to camelCase convention commonly used in Java for variable names.
+
+Here is the refactored code with these changes:
+
+```java
+@Test
+public void testMarkAndReset() throws Exception {
+    int initialPosition = 0;
+    final int readLimit = 10;
+    try (InputStream input = new TestNullInputStream(100, true, false)) {
+
+        assertTrue(input.markSupported(), "Mark Should be Supported");
+
+        // No Mark
+        final IOException noMarkException = assertThrows(IOException.class, input::reset);
+        assertEquals("No position has been marked", noMarkException.getMessage(), "No Mark IOException message");
+
+        for (; initialPosition < 3; initialPosition++) {
+            assertEquals(initialPosition, input.read(), "Read Before Mark [" + initialPosition + "]");
+        }
+
+        // Mark
+        input.mark(readLimit);
+
+        // Read further
+        for (int i = 0; i < 3; i++) {
+            assertEquals(initialPosition + i, input.read(), "Read After Mark [" + i + "]");
+        }
+
+        // Reset
+        input.reset();
+
+        // Read From marked position
+        for (int i = 0; i < readLimit + 1; i++) {
+            assertEquals(initialPosition + i, input.read(), "Read After Reset [" + i + "]");
+        }
+
+        // Reset after read limit passed
+        final IOException resetException = assertThrows(IOException.class, input::reset, "Read limit exceeded, expected IOException");
+        assertEquals("Marked position [" + initialPosition + "] is no longer valid - passed the read limit [" + readLimit + "]", resetException.getMessage(),
+                "Read limit IOException message");
+    }
+}
+```
+
+These changes are minor but improve the overall quality and readability of the code by ensuring consistency with Java naming conventions.

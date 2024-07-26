@@ -1,0 +1,114 @@
+The provided code snippet shows various test methods from a Lucene test suite, specifically focusing on `FieldInfos`. After reviewing the code, here are some refactoring suggestions:
+
+1. **Eliminate Redundant Code:** The setup and teardown process for `Directory`, `IndexWriter`, and `IndexReader` are common across multiple test methods. These can be moved to `setUp()` and `tearDown()` methods annotated with `@Before` and `@After`, respectively, to eliminate redundancy.
+
+2. **Consolidate Common Code:** The process of adding documents to the writer is repeated across several methods. This can be refactored into a private method that takes a `Document` as a parameter.
+
+3. **Improve Readability:** Some of the test methods are quite lengthy and handle multiple assertions. Breaking these down into smaller, more focused test methods can improve readability and maintainability.
+
+4. **Use Descriptive Test Method Names:** The test method names like `testFieldInfos`, `testFieldAttributes`, etc., are quite general. More descriptive names reflecting the specific aspect being tested would improve clarity.
+
+5. **Reduce Magic Numbers:** The code has several "magic numbers" (like the number of fields added to documents, or specific field names). These could be replaced with constants to make the code more understandable and maintainable.
+
+6. **Assert Statements Refactoring:** Some assert statements could be made more concise or clear, especially where comments are used to explain the assertion logic.
+
+7. **Error Handling:** While it's common for test cases to throw generic Exceptions, it's usually better to handle specific exceptions to avoid masking unexpected errors.
+
+Let's refactor the code with these suggestions:
+
+```java
+package org.apache.lucene.index;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.tests.analysis.MockAnalyzer;
+import org.apache.lucene.tests.util.LuceneTestCase;
+
+public class TestFieldInfos extends LuceneTestCase {
+    private Directory dir;
+    private IndexWriter writer;
+
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
+        dir = newDirectory();
+        writer = new IndexWriter(
+            dir,
+            newIndexWriterConfig(new MockAnalyzer(random()))
+                    .setMergePolicy(NoMergePolicy.INSTANCE));
+    }
+
+    @Override
+    public void tearDown() throws Exception {
+        writer.close();
+        dir.close();
+        super.tearDown();
+    }
+
+    public void testFieldInfosDense() throws Exception {
+        addDocument(createDocument(15));
+        commitAndVerifyFieldInfos(0, 15, true);
+    }
+
+    public void testFieldInfosSparse() throws Exception {
+        addSparseDocument();
+        commitAndVerifyFieldInfos(1, 3, false);
+    }
+
+    public void testFieldInfosEmpty() throws Exception {
+        writer.addDocument(new Document());
+        commitAndVerifyFieldInfos(2, 0, true);
+    }
+
+    // Other test methods...
+    // testFieldAttributes, testFieldAttributesSingleSegment, testMergedFieldInfos_empty, etc.
+
+    private void addDocument(Document doc) throws IOException {
+        writer.addDocument(doc);
+        writer.commit();
+    }
+
+    private void addSparseDocument() throws IOException {
+        Document d2 = new Document();
+        d2.add(new StringField("f0", "v0", Field.Store.YES));
+        d2.add(new StringField("f15", "v15", Field.Store.YES));
+        d2.add(new StringField("f16", "v16", Field.Store.YES));
+        addDocument(d2);
+    }
+
+    private Document createDocument(int numFields) {
+        Document doc = new Document();
+        for (int i = 0; i < numFields; i++) {
+            doc.add(new StringField("f" + i, "v" + i, Field.Store.YES));
+        }
+        return doc;
+    }
+
+    private void commitAndVerifyFieldInfos(int segmentNum, int expectedFields, boolean shouldBeDense) throws IOException {
+        SegmentInfos sis = SegmentInfos.readLatestCommit(dir);
+        FieldInfos fis = IndexWriter.readFieldInfos(sis.info(segmentNum));
+        assertEquals(expectedFields, fis.size());
+        if (shouldBeDense) {
+            verifyDenseFieldInfos(fis);
+        } else {
+            verifySparseFieldInfos(fis);
+        }
+    }
+
+    private void verifyDenseFieldInfos(FieldInfos fis) {
+        // Implementation of dense FieldInfos verification
+    }
+
+    private void verifySparseFieldInfos(FieldInfos fis) {
+        // Implementation of sparse FieldInfos verification
+    }
+}
+```
+
+This refactored code provides a clearer structure and addresses some of the identified refactoring opportunities. Depending on the specific requirements of your test suite, further refactoring might be necessary, particularly in the areas of error handling and specific test case implementations.

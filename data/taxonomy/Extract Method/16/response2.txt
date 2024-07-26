@@ -1,0 +1,42 @@
+In the provided code snippet from `MvcUriComponentsBuilder`, a potential opportunity for the extract method refactoring is present. Both methods, `getClassMapping` and `getMethodMapping`, contain duplicate logic for processing the paths array retrieved from the `RequestMapping` annotation. This repeated logic can be extracted into a separate method to reduce duplication and improve maintainability.
+
+Here's the refactored code with the extracted method to handle the path logic:
+
+```java
+public class MvcUriComponentsBuilder {
+
+    private static String getClassMapping(Class<?> controllerType) {
+        Assert.notNull(controllerType, "'controllerType' must not be null");
+        RequestMapping mapping = AnnotatedElementUtils.findMergedAnnotation(controllerType, RequestMapping.class);
+        if (mapping == null) {
+            return "";
+        }
+        return processPaths(mapping.path(), controllerType.getName());
+    }
+
+    private static String getMethodMapping(Method method) {
+        Assert.notNull(method, "'method' must not be null");
+        RequestMapping requestMapping = AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class);
+        if (requestMapping == null) {
+            throw new IllegalArgumentException("No @RequestMapping on: " + method.toGenericString());
+        }
+        return processPaths(requestMapping.path(), method.toGenericString());
+    }
+
+    private static String processPaths(String[] paths, String sourceName) {
+        if (ObjectUtils.isEmpty(paths) || !StringUtils.hasLength(paths[0])) {
+            return "";
+        }
+        if (paths.length > 1 && logger.isTraceEnabled()) {
+            logger.trace("Using first of multiple paths on " + sourceName);
+        }
+        return resolveEmbeddedValue(paths[0]);
+    }
+}
+```
+
+### Changes Made:
+1. **Extracted Method `processPaths`**: This new method encapsulates the logic for checking and processing the paths obtained from the `RequestMapping` annotation. It reduces duplication by using the same logic for both class and method mapping.
+2. **Parameterization**: The `processPaths` method takes the paths array and the name of the source (either a class or method name) to provide contextual logging.
+
+This refactoring improves the clarity and reusability of the code and adheres to the DRY (Don't Repeat Yourself) principle.

@@ -1,0 +1,22 @@
+The suggested refactoring involves inlining the `threadPool` variable in the `LocalAction` constructor. This change will streamline the code by directly assigning the `retentionExecutor` without the intermediate step of assigning `threadPool`. Here's the refactored version of the `LocalAction` constructor:
+
+Original Code:
+```java
+public LocalAction(TransportService transportService, RepositoriesService repositoriesService, ActionFilters actionFilters) {
+    super(INSTANCE.name(), actionFilters, transportService.getTaskManager());
+    this.repositoriesService = repositoriesService;
+    final var threadPool = transportService.getThreadPool();
+    this.retentionExecutor = threadPool.executor(ThreadPool.Names.MANAGEMENT);
+}
+```
+
+Refactored Code:
+```java
+public LocalAction(TransportService transportService, RepositoriesService repositoriesService, ActionFilters actionFilters) {
+    super(INSTANCE.name(), actionFilters, transportService.getTaskManager());
+    this.repositoriesService = repositoriesService;
+    this.retentionExecutor = transportService.getThreadPool().executor(ThreadPool.Names.MANAGEMENT);
+}
+```
+
+In the refactored code, `transportService.getThreadPool().executor(ThreadPool.Names.MANAGEMENT)` is directly assigned to `this.retentionExecutor`. This change improves readability by reducing the number of lines and eliminating a variable that is used only once. It's a small but effective improvement in terms of code clarity and simplicity.

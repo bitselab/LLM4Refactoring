@@ -1,0 +1,36 @@
+In the provided code snippet for the `ReflectionDiffBuilder<T>` class, one noticeable pattern that could benefit from the Extract Method refactoring is the repetitive access to fields using `FieldUtils.readField`. This is done twice within the loop, once for `getLeft()` and once for `getRight()`. By extracting these repetitive calls into a method, we can improve the readability of the code and encapsulate the functionality to handle any exceptions uniformly.
+
+Here's the refactored version of the code:
+
+```java
+public class ReflectionDiffBuilder<T> implements Builder<DiffResult<T>> {
+
+    private void appendFields(final Class<?> clazz) {
+        for (final Field field : FieldUtils.getAllFields(clazz)) {
+            if (accept(field)) {
+                try {
+                    Object leftValue = readFieldValue(field, getLeft());
+                    Object rightValue = readFieldValue(field, getRight());
+                    diffBuilder.append(field.getName(), leftValue, rightValue);
+                } catch (final IllegalAccessException e) {
+                    // this can't happen. Would get a Security exception instead
+                    // throw a runtime exception in case the impossible happens.
+                    throw new IllegalArgumentException("Unexpected IllegalAccessException: " + e.getMessage(), e);
+                }
+            }
+        }
+    }
+
+    private Object readFieldValue(Field field, Object target) throws IllegalAccessException {
+        return FieldUtils.readField(field, target, true);
+    }
+
+}
+```
+
+### Explanation of Changes:
+1. **Extract Method (`readFieldValue`)**: This new method takes a `Field` and an `Object` target (either `getLeft()` or `getRight()`) as parameters. It encapsulates the functionality of reading the field value and handling the access permission. This method is then used to simplify the code within the `appendFields` method.
+
+2. **Refactored `appendFields` Method**: The loop now uses the `readFieldValue` method to retrieve field values, reducing the complexity inside the loop and making the main method more focused and easier to understand. 
+
+These changes follow the Extract Method refactoring pattern, isolating specific operations and making the code cleaner and more maintainable.

@@ -1,0 +1,99 @@
+In the provided code snippet, several opportunities for the "Extract Method" refactoring are evident. This refactoring technique involves breaking down a method into smaller methods to improve readability, reusability, and maintainability. Here are the refactorings I suggest:
+
+1. **Extract Property Mapping Logic**: The repeated use of `PropertyMapper` in various `customize` methods indicates a pattern that can be extracted into a separate method.
+
+2. **Refactor `customizeAuthentication` Method**: This method contains complex logic that can be broken down into smaller methods for better clarity and error handling.
+
+3. **Simplify Timeout Property Conversion**: The `timeoutProperty` method can be refactored to improve readability.
+
+4. **Generalize Property Mapping for Different Builders**: The property mapping logic is similar across different builder customization methods (`customizeProducerBuilder`, `customizeConsumerBuilder`, etc.). This can be refactored into a generic method.
+
+Here is the refactored code:
+
+```java
+package org.springframework.boot.autoconfigure.pulsar;
+
+// Import statements remain the same
+
+final class PulsarPropertiesMapper {
+    // Other members and constructors remain the same
+
+    void customizeClientBuilder(ClientBuilder clientBuilder, PulsarConnectionDetails connectionDetails) {
+        mapClientProperties(clientBuilder, connectionDetails);
+    }
+
+    void customizeAdminBuilder(PulsarAdminBuilder adminBuilder, PulsarConnectionDetails connectionDetails) {
+        mapAdminProperties(adminBuilder, connectionDetails);
+    }
+
+    private void mapClientProperties(ClientBuilder clientBuilder, PulsarConnectionDetails connectionDetails) {
+        PulsarProperties.Client properties = this.properties.getClient();
+        PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
+        // Property mapping logic remains the same
+    }
+
+    private void mapAdminProperties(PulsarAdminBuilder adminBuilder, PulsarConnectionDetails connectionDetails) {
+        PulsarProperties.Admin properties = this.properties.getAdmin();
+        PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
+        // Property mapping logic remains the same
+    }
+
+    private void customizeAuthentication(AuthenticationConsumer authentication, PulsarProperties.Authentication properties) {
+        if (StringUtils.hasText(properties.getPluginClassName())) {
+            handleAuthentication(authentication, properties);
+        }
+    }
+
+    private void handleAuthentication(AuthenticationConsumer authentication, PulsarProperties.Authentication properties) {
+        try {
+            Map<String, String> sortedParams = new TreeMap<>(params);
+            String encodedParams = encodeParams(sortedParams);
+            authentication.accept(properties.getPluginClassName(), encodedParams);
+        } catch (UnsupportedAuthenticationException | IllegalStateException ex) {
+            throw new IllegalStateException("Unable to configure Pulsar authentication", ex);
+        }
+    }
+
+    private String encodeParams(Map<String, String> params) throws IllegalStateException {
+        try {
+            return ObjectMapperFactory.create().writeValueAsString(params);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Could not convert auth parameters to encoded string", ex);
+        }
+    }
+
+    <T> void customizeProducerBuilder(ProducerBuilder<T> producerBuilder) {
+        mapProducerProperties(producerBuilder);
+    }
+
+    <T> void customizeConsumerBuilder(ConsumerBuilder<T> consumerBuilder) {
+        mapConsumerProperties(consumerBuilder);
+    }
+
+    // Similar refactoring for customizeReaderBuilder and other methods...
+
+    private <T> void mapProducerProperties(ProducerBuilder<T> producerBuilder) {
+        PulsarProperties.Producer properties = this.properties.getProducer();
+        PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
+        // Property mapping logic remains the same
+    }
+
+    private <T> void mapConsumerProperties(ConsumerBuilder<T> consumerBuilder) {
+        PulsarProperties.Consumer properties = this.properties.getConsumer();
+        PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
+        // Property mapping logic remains the same
+    }
+
+    // Other methods remain mostly the same...
+
+    private Consumer<Duration> timeoutProperty(BiConsumer<Integer, TimeUnit> setter) {
+        return duration -> setter.accept((int) duration.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private interface AuthenticationConsumer {
+        void accept(String authPluginClassName, String authParamString) throws UnsupportedAuthenticationException;
+    }
+}
+```
+
+In this refactored version, we have extracted the property mapping logic into separate methods (`mapClientProperties`, `mapAdminProperties`, `mapProducerProperties`, `mapConsumerProperties`, etc.), which makes the code more modular and easier to read. Additionally, the `customizeAuthentication` method has been broken down into `handleAuthentication` and `encodeParams` for better clarity and separation of concerns.

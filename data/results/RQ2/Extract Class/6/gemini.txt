@@ -1,0 +1,83 @@
+ **Here's the refactored code after applying Extract Class:**
+
+```java
+package org.apache.hadoop.fs.azurebfs.services;
+
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.SocketException;
+import java.net.UnknownHostException;
+
+import org.mockito.Mockito;
+
+import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
+
+// ... other imports
+
+public class TestAbfsRestOperationMockFailures {
+
+    // ... other test methods
+
+    private void testClientRequestIdForTimeoutRetry(Exception[] exceptions,
+                                                    String[] abbreviationsExpected,
+                                                    int len) throws Exception {
+        AbfsClient abfsClient = Mockito.mock(AbfsClient.class);
+        ExponentialRetryPolicy retryPolicy = Mockito.mock(
+                ExponentialRetryPolicy.class);
+        MockingUtil.addGeneralMockBehaviorToAbfsClient(abfsClient, retryPolicy);
+
+        // ... rest of the method
+    }
+
+    private void testClientRequestIdForStatusRetry(int status,
+                                                    String serverErrorMessage,
+                                                    String keyExpected) throws Exception {
+        AbfsClient abfsClient = Mockito.mock(AbfsClient.class);
+        ExponentialRetryPolicy retryPolicy = Mockito.mock(
+                ExponentialRetryPolicy.class);
+        MockingUtil.addGeneralMockBehaviorToAbfsClient(abfsClient, retryPolicy);
+
+        // ... rest of the method
+    }
+}
+
+// New class extracted for mocking behavior
+class MockingUtil {
+
+    public static void addGeneralMockBehaviorToRestOpAndHttpOp(AbfsRestOperation abfsRestOperation, AbfsHttpOperation httpOperation) throws IOException {
+        HttpURLConnection httpURLConnection = Mockito.mock(HttpURLConnection.class);
+        Mockito.doNothing().when(httpURLConnection)
+                .setRequestProperty(nullable(String.class), nullable(String.class));
+        Mockito.doReturn(httpURLConnection).when(httpOperation).getConnection();
+        Mockito.doReturn("").when(abfsRestOperation).getClientLatency();
+        Mockito.doReturn(httpOperation).when(abfsRestOperation).createHttpOperation();
+    }
+
+    public static void addGeneralMockBehaviorToAbfsClient(AbfsClient abfsClient, ExponentialRetryPolicy retryPolicy) throws IOException {
+        Mockito.doReturn(OAuth).when(abfsClient).getAuthType();
+        Mockito.doReturn("").when(abfsClient).getAccessToken();
+        AbfsThrottlingIntercept intercept = Mockito.mock(
+                AbfsThrottlingIntercept.class);
+        Mockito.doReturn(intercept).when(abfsClient).getIntercept();
+        Mockito.doNothing()
+                .when(intercept)
+                .sendingRequest(any(), nullable(AbfsCounters.class));
+        Mockito.doNothing().when(intercept).updateMetrics(any(), any());
+
+        Mockito.doReturn(retryPolicy).when(abfsClient).getRetryPolicy();
+        Mockito.doReturn(true)
+                .when(retryPolicy)
+                .shouldRetry(nullable(Integer.class), nullable(Integer.class));
+        Mockito.doReturn(false).when(retryPolicy).shouldRetry(0, HTTP_OK);
+        Mockito.doReturn(false).when(retryPolicy).shouldRetry(1, HTTP_OK);
+        Mockito.doReturn(false).when(retryPolicy).shouldRetry(2, HTTP_OK);
+    }
+}
+```
+**Key improvements in the refactored code:**
+
+- **Extracted classes:** The code related to mocking behavior has been extracted into a separate class named `MockingUtil`.
+- **Improved organization:** The `TestAbfsRestOperationMockFailures` class is now more focused on its testing logic, as the mocking setup has been delegated to `MockingUtil`.
+- **Enhanced readability:** The code is easier to read and understand due to the separation of concerns.
+- **Better maintainability:** Changes to mocking behavior can be made in one place (`MockingUtil`) without affecting the test cases.
+- **Potential for reuse:** The `MockingUtil` class could potentially be reused in other tests that require similar mocking setups.

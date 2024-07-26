@@ -1,0 +1,62 @@
+To improve the readability of the `MSBRadixSorter` class, we can employ inline method refactoring on the `introSort` method. This method is a simple one-line wrapper around `getFallbackSorter(k).sort(from, to)`. By inlining this method directly into the call site within the `sort` method, we can eliminate the unnecessary indirection, making the code more straightforward.
+
+Here's the refactored version of the `MSBRadixSorter` class with `introSort` inlined:
+
+```java
+package org.apache.lucene.util;
+
+import java.util.Arrays;
+
+/**
+ * Radix sorter for variable-length strings. This class sorts based on the most significant byte
+ * first and falls back to {@link IntroSorter} when the size of the buckets to sort becomes small.
+ *
+ * <p>This algorithm is <b>NOT</b> stable. Worst-case memory usage is about {@code 2.3 KB}.
+ *
+ * @lucene.internal
+ */
+public abstract class MSBRadixSorter extends Sorter {
+
+    // ... [omitting unchanged class fields and constructor for brevity]
+
+    protected abstract int byteAt(int i, int k);
+
+    protected Sorter getFallbackSorter(int k) {
+        // ... [omitting unchanged method implementation]
+    }
+
+    @Override
+    protected final int compare(int i, int j) {
+        // ... [omitting unchanged method implementation]
+    }
+
+    @Override
+    public void sort(int from, int to) {
+        checkRange(from, to);
+        sort(from, to, 0, 0);
+    }
+
+    protected void sort(int from, int to, int k, int l) {
+        if (shouldFallback(from, to, l)) {
+            // Inlined the content of introSort method
+            getFallbackSorter(k).sort(from, to);
+        } else {
+            radixSort(from, to, k, l);
+        }
+    }
+
+    // ... [omitting other methods for brevity]
+
+    private void radixSort(int from, int to, int k, int l) {
+        // ... [omitting unchanged method implementation]
+    }
+
+    // ... [omitting additional methods for brevity]
+}
+```
+
+### Explanation of Changes
+- The `introSort` method has been removed.
+- The single line of code from `introSort` has been directly placed in the `sort` method where `introSort` was previously called.
+
+This change simplifies the code structure without impacting the readability or functionality, adhering to the principle of keeping code as simple and direct as possible.

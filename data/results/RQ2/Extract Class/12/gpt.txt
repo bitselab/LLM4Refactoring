@@ -1,0 +1,80 @@
+To improve the given code snippet through extract class refactoring, we can focus on extracting a new class that deals with Object ID (OID) versioning. Currently, `OID_VERSION_SHA1` is a constant within `PackReverseIndexWriterV1`, but if we anticipate further expansion or variations in OID versions, encapsulating this functionality in its own class would make sense. This would improve readability and maintainability, particularly if more OID versions are added in the future.
+
+Let's create a new class, `OidVersion`, and move the OID version-related constant and logic to this new class.
+
+**New `OidVersion` Class:**
+```java
+package org.eclipse.jgit.internal.storage.file;
+
+public class OidVersion {
+    public static final int OID_VERSION_SHA1 = 1;
+
+    // Additional methods related to OID version can be added here.
+    // For example, if there are methods to handle different versions, they should be placed here.
+}
+```
+
+**Modified `PackReverseIndexWriterV1` Class:**
+```java
+package org.eclipse.jgit.internal.storage.file;
+
+import static org.eclipse.jgit.internal.storage.file.PackReverseIndex.MAGIC;
+import static org.eclipse.jgit.internal.storage.file.PackReverseIndex.VERSION_1;
+import static org.eclipse.jgit.internal.storage.file.OidVersion.OID_VERSION_SHA1;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.List;
+
+import org.eclipse.jgit.transport.PackedObjectInfo;
+import org.eclipse.jgit.util.IntList;
+import org.eclipse.jgit.util.IntList.IntComparator;
+
+final class PackReverseIndexWriterV1 extends PackReverseIndexWriter {
+    private static final int DEFAULT_OID_VERSION = OID_VERSION_SHA1;
+
+    PackReverseIndexWriterV1(final OutputStream dst) {
+        super(dst);
+    }
+
+    @Override
+    protected void writeHeader() throws IOException {
+        out.write(MAGIC);
+        dataOutput.writeInt(VERSION_1);
+        dataOutput.writeInt(DEFAULT_OID_VERSION);
+    }
+
+    @Override
+    protected void writeBody(List<? extends PackedObjectInfo> objectsByIndexPos) throws IOException {
+        IntList positionsByOffset = IntList.filledWithRange(0, objectsByIndexPos.size());
+        positionsByOffset.sort(new IndexPositionsByOffsetComparator(objectsByIndexPos));
+
+        for (int i = 0; i < positionsByOffset.size(); i++) {
+            int indexPosition = positionsByOffset.get(i);
+            dataOutput.writeInt(indexPosition);
+        }
+    }
+
+    private static class IndexPositionsByOffsetComparator implements IntComparator {
+        private final List<? extends PackedObjectInfo> objectsByIndexPos;
+
+        private IndexPositionsByOffsetComparator(List<? extends PackedObjectInfo> objectsByIndexPos) {
+            this.objectsByIndexPos = objectsByIndexPos;
+        }
+
+        @Override
+        public int compare(int firstIndexPosition, int secondIndexPosition) {
+            return Long.compare(getOffset(firstIndexPosition), getOffset(secondIndexPosition));
+        }
+
+        private long getOffset(int indexPosition) {
+            return objectsByIndexPos.get(indexPosition).getOffset();
+        }
+    }
+}
+```
+
+In this refactoring:
+
+- The `OidVersion` class is now responsible for defining OID versions. This class can be expanded in the future with additional versions or related methods.
+- The `PackReverseIndexWriterV1` class uses the `OidVersion.OID_VERSION_SHA1` constant, adhering to the principle of single responsibility by delegating OID version-related details to the `OidVersion` class.

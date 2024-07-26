@@ -1,0 +1,52 @@
+Absolutely, there's an opportunity to apply the Extract Variable refactoring in the provided code snippet! Here's the breakdown:
+
+The code repeatedly constructs a cache key using the following elements:
+
+1. `id`: This is the identifier of the entity being refreshed.
+2. `persister`: This is the EntityPersister for the entity being refreshed.
+3. `source.getFactory()`: This is the SessionFactory associated with the current session.
+4. `source.getTenantIdentifier()`: This is the tenant identifier for the current operation (if applicable).
+
+These elements are used to create the cache key in multiple locations within the `evictEntity` and `evictCachedCollections` methods. 
+
+Here's the refactored code with the variable extraction:
+
+```java
+public class DefaultRefreshEventListener implements RefreshEventListener {
+
+  // ... other methods ...
+
+  private static void evictEntity(Object object, EntityPersister persister, Object id, EventSource source) {
+    if (persister.canWriteToCache()) {
+      Object previousVersion = null;
+      if (persister.isVersionPropertyGenerated()) {
+        // ... (unchanged)
+      }
+      
+      // Extract variable for cache key generation
+      final Object cacheKey = generateCacheKey(source, id, persister);
+      
+      final EntityDataAccess cache = persister.getCacheAccessStrategy();
+      final SoftLock lock = cache.lockItem(source, cacheKey, previousVersion);
+      cache.remove(source, cacheKey);
+      source.getActionQueue().registerProcess((success, session) -> cache.unlockItem(session, cacheKey, lock));
+    }
+  }
+
+  private static Object generateCacheKey(EventSource source, Object id, EntityPersister persister) {
+    final SessionFactoryImplementor factory = source.getFactory();
+    final Object tenantIdentifier = source.getTenantIdentifier();
+    return persister.getCacheAccessStrategy().generateCacheKey(id, persister, factory, tenantIdentifier);
+  }
+
+  // ... other methods ...
+
+  private static void evictCachedCollections(EntityPersister persister, Object id, EventSource source) {
+    evictCachedCollections(persister.getPropertyTypes(), id, source);
+  }
+
+  // ... (unchanged) ...
+}
+```
+
+In the refactored code, we've extracted the logic for generating the cache key into a separate method called `generateCacheKey`. This method takes `source`, `id`, and `persister` as parameters and returns the cache key. The `evictEntity` and `evictCachedCollections` methods now call this method to generate the cache key instead of duplicating the logic. This improves code readability and maintainability.

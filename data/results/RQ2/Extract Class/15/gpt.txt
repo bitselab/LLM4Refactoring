@@ -1,0 +1,48 @@
+To refactor the given code snippet using the Extract Class refactoring technique, we will create a new class to encapsulate the logic of creating `TransactionManagerCustomizers`. This approach will make the `TransactionAutoConfiguration` class more focused and modular, enhancing its readability and maintainability.
+
+Here's the refactored code:
+
+1. **Original `TransactionAutoConfiguration` Class**:
+   - We remove the method `platformTransactionManagerCustomizers` and keep the rest of the class as is.
+
+   ```java
+   package org.springframework.boot.autoconfigure.transaction;
+
+   // Import statements remain the same
+
+   @AutoConfiguration
+   @ConditionalOnClass(PlatformTransactionManager.class)
+   @EnableConfigurationProperties(TransactionProperties.class)
+   public class TransactionAutoConfiguration {
+       // Other bean definitions remain the same
+
+       // TransactionTemplateConfiguration and EnableTransactionManagementConfiguration
+       // inner classes remain the same
+   }
+   ```
+
+2. **New `TransactionManagerCustomizersConfiguration` Class**:
+   - This new class will contain the extracted method.
+
+   ```java
+   package org.springframework.boot.autoconfigure.transaction;
+
+   import org.springframework.beans.factory.ObjectProvider;
+   import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+   import org.springframework.context.annotation.Bean;
+   import org.springframework.context.annotation.Configuration;
+   import org.springframework.transaction.PlatformTransactionManager;
+
+   @Configuration
+   public class TransactionManagerCustomizersConfiguration {
+
+       @Bean
+       @ConditionalOnMissingBean
+       public TransactionManagerCustomizers platformTransactionManagerCustomizers(
+               ObjectProvider<PlatformTransactionManagerCustomizer<?>> customizers) {
+           return new TransactionManagerCustomizers(customizers.orderedStream().toList());
+       }
+   }
+   ```
+
+By extracting the `platformTransactionManagerCustomizers` method into a new class, we have made the `TransactionAutoConfiguration` class less complex. The new class `TransactionManagerCustomizersConfiguration` is solely responsible for providing the bean definition related to `TransactionManagerCustomizers`. This separation adheres to the Single Responsibility Principle and improves the modularity of the codebase.

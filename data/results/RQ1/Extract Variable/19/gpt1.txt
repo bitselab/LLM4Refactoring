@@ -1,0 +1,87 @@
+The provided code snippet demonstrates good coding practices overall, but there are a few minor refactoring opportunities that can enhance its readability, maintainability, and efficiency. Let's walk through these potential changes:
+
+1. **Use Optional for `findManager` Method:** The `findManager` method returns `null` if no suitable `DeploymentManager` is found. In modern Java, it's a better practice to use `Optional<DeploymentManager>` to avoid potential `NullPointerExceptions`.
+
+2. **Simplify `getStartLogMessage` Method:** The `StringBuilder` is being used to construct a string in `getStartLogMessage`. This can be simplified with a single line return statement using string concatenation, which is more readable.
+
+3. **Class-Level JavaDoc Enhancement:** The JavaDoc for the class could include a brief description of the class's purpose and usage, enhancing readability for other developers.
+
+4. **Check for `null` in Constructor:** Although it's not clear how `httpHandlerFactories` is used throughout the rest of the system, adding a null check for `httpHandlerFactories` in the constructor might prevent potential runtime errors.
+
+Here's the refactored code:
+
+```java
+package org.springframework.boot.web.embedded.undertow;
+
+import io.undertow.Handlers;
+import io.undertow.Undertow.Builder;
+import io.undertow.server.HttpHandler;
+import io.undertow.servlet.api.DeploymentManager;
+
+import org.springframework.boot.web.server.WebServer;
+import org.springframework.util.StringUtils;
+
+import java.util.Optional;
+
+/**
+ * {@link WebServer} that controls an embedded Undertow server. It's typically
+ * created using {@link UndertowServletWebServerFactory} and not directly.
+ * This server supports servlet-based web applications.
+ *
+ * @author Ivan Sopov
+ * @author Andy Wilkinson
+ * @author Eddú Meléndez
+ * @author Christoph Dreis
+ * @author Kristine Jetzke
+ * @since 2.0.0
+ * @see UndertowServletWebServerFactory
+ */
+public class UndertowServletWebServer extends UndertowWebServer {
+
+    private final String contextPath;
+    private final DeploymentManager manager;
+
+    public UndertowServletWebServer(Builder builder, Iterable<HttpHandlerFactory> httpHandlerFactories,
+                                    String contextPath, boolean autoStart) {
+        super(builder, httpHandlerFactories, autoStart);
+        if (httpHandlerFactories == null) {
+            throw new IllegalArgumentException("httpHandlerFactories cannot be null");
+        }
+        this.contextPath = contextPath;
+        this.manager = findManager(httpHandlerFactories).orElse(null);
+    }
+
+    private Optional<DeploymentManager> findManager(Iterable<HttpHandlerFactory> httpHandlerFactories) {
+        for (HttpHandlerFactory httpHandlerFactory : httpHandlerFactories) {
+            if (httpHandlerFactory instanceof DeploymentManagerHttpHandlerFactory deploymentManagerFactory) {
+                return Optional.of(deploymentManagerFactory.getDeploymentManager());
+            }
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    protected HttpHandler createHttpHandler() {
+        HttpHandler handler = super.createHttpHandler();
+        if (StringUtils.hasLength(this.contextPath)) {
+            handler = Handlers.path().addPrefixPath(this.contextPath, handler);
+        }
+        return handler;
+    }
+
+    @Override
+    protected String getStartLogMessage() {
+        return super.getStartLogMessage() +
+                " with context path '" +
+                (StringUtils.hasText(this.contextPath) ? this.contextPath : "/") +
+                "'";
+    }
+
+    public DeploymentManager getDeploymentManager() {
+        return this.manager;
+    }
+
+}
+```
+
+These changes are suggestions to enhance the code, and depending on the overall project context, some might be more relevant than others.

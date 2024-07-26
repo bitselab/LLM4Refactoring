@@ -1,0 +1,69 @@
+Analyzing the provided code snippet, there are opportunities for "Extract Method" refactoring to improve code readability and reduce redundancy. Here are the identified areas and the refactored code:
+
+1. **Refactor `accept` Method Logic:**
+   - The `accept` method contains multiple checks to determine if a field is acceptable. This logic can be extracted into smaller, well-named methods to improve readability and maintainability.
+
+2. **Refactor Repeated Exception Handling:**
+   - The exception handling in the `appendFields` method is repeated for reading left and right object fields. This can be extracted into a separate method.
+
+Here's the refactored version of the code:
+
+```java
+package org.apache.commons.lang3.builder;
+
+// ... [import statements remain the same] ...
+
+public class ReflectionDiffBuilder<T> implements Builder<DiffResult<T>> {
+
+    // ... [class members and other methods remain the same] ...
+
+    private boolean accept(final Field field) {
+        return isNotInnerClass(field) && isNotTransient(field) && isNotStatic(field) && isNotExcluded(field) && isNotAnnotatedWithDiffExclude(field);
+    }
+
+    private boolean isNotInnerClass(Field field) {
+        return field.getName().indexOf(ClassUtils.INNER_CLASS_SEPARATOR_CHAR) == -1;
+    }
+
+    private boolean isNotTransient(Field field) {
+        return !Modifier.isTransient(field.getModifiers());
+    }
+
+    private boolean isNotStatic(Field field) {
+        return !Modifier.isStatic(field.getModifiers());
+    }
+
+    private boolean isNotExcluded(Field field) {
+        return this.excludeFieldNames == null || Arrays.binarySearch(this.excludeFieldNames, field.getName()) < 0;
+    }
+
+    private boolean isNotAnnotatedWithDiffExclude(Field field) {
+        return !field.isAnnotationPresent(DiffExclude.class);
+    }
+
+    private void appendFields(final Class<?> clazz) {
+        for (final Field field : FieldUtils.getAllFields(clazz)) {
+            if (accept(field)) {
+                appendField(field);
+            }
+        }
+    }
+
+    private void appendField(Field field) {
+        try {
+            diffBuilder.append(field.getName(), readFieldSafely(field, getLeft()), readFieldSafely(field, getRight()));
+        } catch (final IllegalAccessException e) {
+            throw new IllegalArgumentException("Unexpected IllegalAccessException: " + e.getMessage(), e);
+        }
+    }
+
+    private Object readFieldSafely(Field field, T object) throws IllegalAccessException {
+        return FieldUtils.readField(field, object, true);
+    }
+
+    // ... [rest of the methods remain the same] ...
+
+}
+```
+
+This refactoring breaks down complex methods into smaller, more understandable units, and centralizes the common exception handling logic. It enhances the maintainability and clarity of the code without altering its functionality.

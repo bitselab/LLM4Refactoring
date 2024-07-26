@@ -1,0 +1,85 @@
+Absolutely, you can refactor the provided code using the Extract Class refactoring technique. Here's the refactored code with a new class named `ByteSlicePool`:
+
+```java
+public class ByteSlicePool {
+  public static final int[] LEVEL_SIZE_ARRAY = {5, 14, 20, 30, 40, 40, 80, 80, 120, 200};
+  public static final int[] NEXT_LEVEL_ARRAY = {1, 2, 3, 4, 5, 6, 7, 8, 9, 9};
+  public static final int FIRST_LEVEL_SIZE = LEVEL_SIZE_ARRAY[0];
+
+  private byte[] buffer;
+  private int byteUpto;
+
+  public ByteSlicePool() {
+    buffer = new byte[ByteBlockPool.BYTE_BLOCK_SIZE];
+  }
+
+  public int newSlice(final int size) {
+    if (size > ByteBlockPool.BYTE_BLOCK_SIZE) {
+      throw new IllegalArgumentException(
+          "Slice size " + size + " should be less than the block size " + ByteBlockPool.BYTE_BLOCK_SIZE);
+    }
+
+    if (byteUpto > ByteBlockPool.BYTE_BLOCK_SIZE - size) {
+      nextBuffer();
+    }
+    final int upto = byteUpto;
+    byteUpto += size;
+    buffer[byteUpto - 1] = 16; // This codifies level 0.
+    return upto;
+  }
+
+  public int allocSlice(final byte[] slice, final int upto) {
+    return allocKnownSizeSlice(slice, upto) >> 8;
+  }
+
+  public int allocKnownSizeSlice(final byte[] slice, final int upto) {
+    final int level = slice[upto] & 15; // The last 4 bits codify the level.
+    final int newLevel = NEXT_LEVEL_ARRAY[level];
+    final int newSize = LEVEL_SIZE_ARRAY[newLevel];
+
+    // Maybe allocate another block
+    if (byteUpto > ByteBlockPool.BYTE_BLOCK_SIZE - newSize) {
+      nextBuffer();
+    }
+
+    final int newUpto = byteUpto;
+    final int offset = newUpto + poolOffset;
+    byteUpto += newSize;
+
+    // Copy forward the past 3 bytes (which we are about to overwrite with the forwarding address).
+    // We actually copy 4 bytes at once since VarHandles make it cheap.
+    int past3Bytes = ((int) BitUtil.VH_LE_INT.get(slice, upto - 3)) & 0xFFFFFF;
+    // Ensure we're not changing the content of `buffer` by setting 4 bytes instead of 3. This
+    // should never happen since the next `newSize` bytes must be equal to 0.
+    assert buffer[newUpto + 3] == 0;
+    BitUtil.VH_LE_INT.set(buffer, newUpto, past3Bytes);
+
+    // Write forwarding address at end of last slice:
+    BitUtil.VH_LE_INT.set(slice, upto - 3, offset);
+
+    // Write new level:
+    buffer[byteUpto - 1] = (byte) (16 | newLevel);
+
+    return ((newUpto + 3) << 8) | (newSize - 3);
+  }
+
+  private void nextBuffer() {
+    byteUpto = 0;
+  }
+
+  private int poolOffset;
+
+  public void setPoolOffset(int poolOffset) {
+    this.poolOffset = poolOffset;
+  }
+}
+```
+
+The extracted class `ByteSlicePool` encapsulates the logic related to byte slice allocation and management. This improves the readability and maintainability of the original `TermsHashPerField` class.
+
+Here's a breakdown of the changes made:
+  - The constants and helper methods related to byte slice management are moved to a new class `ByteSlicePool`.
+  - The `TermsHashPerField` class now has a private member of type `ByteSlicePool` to manage its byte slices.
+  - Methods like `newSlice`, `allocSlice`, and `allocKnownSizeSlice` are no longer part of `TermsHashPerField` and are instead delegated to the `ByteSlicePool` instance.
+
+This refactoring promotes better code organization and reduces code duplication in the `TermsHashPerField` class. 

@@ -1,0 +1,31 @@
+In the provided code snippet, the refactoring focus should be on ensuring that attribute names accurately reflect the data they hold and are consistent with their types. The current code is:
+
+```java
+private static final class WorkspaceEntitiesRootsChangedRescanningInfo implements RootsChangeRescanningInfo {
+    @NotNull
+    private final List<EntityPointer<WorkspaceEntity>> references;
+
+    private WorkspaceEntitiesRootsChangedRescanningInfo(@NotNull List<EntityPointer<WorkspaceEntity>> entities) {
+        this.references = entities;
+    }
+}
+```
+
+The attribute `references` holds a list of `EntityPointer<WorkspaceEntity>`. The name `references` is somewhat generic and does not convey the specific nature of the data. Since these are pointers to `WorkspaceEntity` instances, a more descriptive name could be used to reflect this.
+
+### Suggested Refactoring
+We could rename `references` to `entityPointers` to make it clear that the list contains pointers to `WorkspaceEntity` objects, enhancing readability and maintaining consistency with the type of data held.
+
+### Refactored Code
+```java
+private static final class WorkspaceEntitiesRootsChangedRescanningInfo implements RootsChangeRescanningInfo {
+    @NotNull
+    private final List<EntityPointer<WorkspaceEntity>> entityPointers;
+
+    private WorkspaceEntitiesRootsChangedRescanningInfo(@NotNull List<EntityPointer<WorkspaceEntity>> entities) {
+        this.entityPointers = entities;
+    }
+}
+```
+
+This renaming provides clearer insight into what the list contains, making the code easier to understand at a glance.

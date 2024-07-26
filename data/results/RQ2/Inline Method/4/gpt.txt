@@ -1,0 +1,35 @@
+In the provided code snippet, the `initParameters` method is a candidate for inline refactoring. This method is simple and used in only one place, making it a good candidate for inlining to improve readability. Here's how the refactored code would look with the `initParameters` method inlined:
+
+```java
+// ... [rest of the imports and package declaration]
+
+public class AggregatorImplementer {
+    // ... [field declarations and other methods remain the same]
+
+    private CodeBlock callInit() {
+        CodeBlock.Builder builder = CodeBlock.builder();
+        String initParams = init.getParameters()
+                                .stream()
+                                .map(p -> TypeName.get(p.asType()).equals(BIG_ARRAYS) ? "driverContext.bigArrays()" : p.getSimpleName().toString())
+                                .collect(joining(", "));
+
+        if (init.getReturnType().toString().equals(stateType.toString())) {
+            builder.add("$T.$L($L)", declarationType, init.getSimpleName(), initParams);
+        } else {
+            builder.add("new $T($T.$L($L))", stateType, declarationType, init.getSimpleName(), initParams);
+        }
+        return builder.build();
+    }
+
+    // ... [rest of the methods remain the same]
+}
+
+// ... [rest of the class]
+```
+
+In this refactoring:
+
+- The logic from `initParameters` is moved directly into `callInit`.
+- The temporary variable `initParams` is used to hold the result of the stream operation previously in `initParameters`.
+
+This change makes the `callInit` method slightly longer but reduces the overall number of methods and improves the readability by showing the relevant logic directly in the context where it's used. This is a typical trade-off in inline refactoring where the aim is to simplify the overall structure of the code by reducing the number of methods, especially those that are simple and used only once.

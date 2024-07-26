@@ -1,0 +1,24 @@
+To improve the readability and clarity of the `findLibraryNodes` method in the provided code, we can rename it to better reflect its functionality. The current name `findLibraryNodes` is somewhat vague and doesn't clearly convey what the method is doing. A more descriptive name would be beneficial. Here's the refactored code snippet with the method renamed:
+
+```java
+@Nullable
+private static ModuleNode mapLibraryToModuleNode(@NotNull Map<String, Set<ModuleNode>> packagesDeclaredInModules,
+                                                 @NotNull Map<PsiJavaModule, ModuleNode> nodesByDescriptor,
+                                                 @NotNull Project project,
+                                                 @NotNull Library library) {
+    final VirtualFile[] libraryFiles = library.getFiles(OrderRootType.CLASSES);
+    if (libraryFiles.length == 0) return null;
+
+    final PsiJavaModule descriptor = ReadAction.compute(() -> JavaModuleGraphUtil.findDescriptorByFile(libraryFiles[0], project));
+    if (descriptor == null) return null;
+
+    final ModuleNode node = nodesByDescriptor.computeIfAbsent(descriptor, d -> new ModuleNode(d));
+    for (PsiPackageAccessibilityStatement export : descriptor.getExports()) {
+        final String packageName = export.getPackageName();
+        if (packageName != null) packagesDeclaredInModules.computeIfAbsent(packageName, l -> new HashSet<>()).add(node);
+    }
+    return node;
+}
+```
+
+The new method name `mapLibraryToModuleNode` more accurately describes the process of taking a library and mapping it to a `ModuleNode`, while also updating the declared packages in modules. This change should make the code easier to understand for anyone reading or maintaining it in the future.

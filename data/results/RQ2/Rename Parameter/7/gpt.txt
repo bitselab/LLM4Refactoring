@@ -1,0 +1,45 @@
+In the provided code snippet, the parameter `mutationTarget` in the method `createStatementDetailsMap` could be renamed to better reflect its purpose and improve code readability. The name `mutationTarget` might be misleading as it suggests that the parameter is of type `MutationTarget`, but it's actually a `GeneratedValuesMutationDelegate`. A more appropriate name could be `valuesDelegate` or `generatedValuesDelegate`, aligning with its type and role.
+
+Here's the refactored method with the parameter name changed:
+
+```java
+private static SortedMap<String, PreparedStatementDetails> createStatementDetailsMap(
+        List<PreparableMutationOperation> jdbcMutations,
+        MutationType mutationType,
+        GeneratedValuesMutationDelegate valuesDelegate,
+        SharedSessionContractImplementor session) {
+    final Comparator<String> comparator;
+
+    if (mutationType == MutationType.DELETE) {
+        // reverse order
+        comparator = Comparator.comparingInt((tableName) -> {
+            final TableMapping tableMapping = locateTableMapping(jdbcMutations, tableName);
+            if (tableMapping == null) {
+                return -1;
+            }
+            return jdbcMutations.size() - tableMapping.getRelativePosition();
+        });
+    } else {
+        comparator = Comparator.comparingInt((tableName) -> {
+            final TableMapping tableMapping = locateTableMapping(jdbcMutations, tableName);
+            if (tableMapping == null) {
+                return -1;
+            }
+            return tableMapping.getRelativePosition();
+        });
+    }
+
+    final TreeMap<String, PreparedStatementDetails> map = new TreeMap<>(comparator);
+
+    for (final PreparableMutationOperation jdbcMutation : jdbcMutations) {
+        map.put(
+                jdbcMutation.getTableDetails().getTableName(),
+                createPreparedStatementDetails(jdbcMutation, valuesDelegate, session)
+        );
+    }
+
+    return map;
+}
+```
+
+In this refactoring, I renamed the `mutationTarget` parameter to `valuesDelegate`. This new name better indicates that the parameter is a delegate related to generated values, thus enhancing the overall readability and maintainability of the code.

@@ -1,0 +1,89 @@
+ I've reviewed the code and identified a few refactoring opportunities:
+
+1. **Extract Helper Methods:** The `testWithType`, `testWithoutType`, and `testList` methods have some similar code blocks that can be extracted into helper methods to reduce duplication and improve readability.
+
+2. **Address Exception Handling:** The `setupDocumentBuilder` method throws a `RuntimeException` if a `ParserConfigurationException` occurs. However, it's generally better practice to handle exceptions more specifically in test cases.
+
+3. **Consider Using a Testing Framework's XML Assertion Features:** If available, using a testing framework's built-in features for XML assertions can make the tests more concise and less prone to errors.
+
+Here's the refactored code with these changes:
+
+```java
+package com.github.javaparser.printer;
+
+import com.github.javaparser.ast.expr.Expression;
+import org.junit.jupiter.api.Test;
+
+import static com.github.javaparser.StaticJavaParser.parseExpression;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeAll;
+import org.w3c.dom.Document;
+import org.xml.sax.SAXException;
+
+class XmlPrinterTest {
+
+  private static DocumentBuilderFactory documentBuilderFactory;
+  private static DocumentBuilder db;
+
+  @BeforeAll
+  public static void setupDocumentBuilder() throws ParserConfigurationException {
+    documentBuilderFactory = DocumentBuilderFactory.newInstance();
+    configureDocumentBuilderFactory(); // Helper method for configuration
+    db = documentBuilderFactory.newDocumentBuilder();
+  }
+
+  private static void configureDocumentBuilderFactory() throws ParserConfigurationException {
+    documentBuilderFactory.setNamespaceAware(true);
+    documentBuilderFactory.setCoalescing(true);
+    documentBuilderFactory.setIgnoringElementContentWhitespace(true);
+    documentBuilderFactory.setIgnoringComments(true);
+  }
+
+  private Document getDocument(String xml) throws SAXException, IOException {
+    InputStream inputStream = new ByteArrayInputStream(xml.getBytes());
+    Document result = db.parse(inputStream);
+    result.normalizeDocument();
+    return result;
+  }
+
+  private void assertXMLEquals(String xml1, String xml2) throws SAXException, IOException {
+    assertTrue(getDocument(xml1).isEqualNode(getDocument(xml2)));
+  }
+
+  private String getExpectedXml(String expressionString, boolean withType) {
+   Expression expression = parseExpression(expressionString);
+    XmlPrinter xmlOutput = new XmlPrinter(withType);
+    return xmlOutput.output(expression);
+  }
+
+  @Test
+  void testWithType() throws SAXException, IOException {
+    String expressionString = "1+1";
+    String expectedXml = /* ... */;
+
+    assertXMLEquals(expectedXml, getExpectedXml(expressionString, true));
+  }
+
+  @Test
+  void testWithoutType() throws SAXException, IOException {
+    String expressionString = "1+1";
+    String expectedXml = /* ... */;
+
+    assertXMLEquals(expectedXml, getExpectedXml(expressionString, false));
+  }
+
+  @Test
+  void testList() throws SAXException, IOException {
+    String expressionString = "a(1,2)";
+    String expectedXml = /* ... */;
+
+    // ...
+  }
+}
+```

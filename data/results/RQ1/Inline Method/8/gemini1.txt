@@ -1,0 +1,69 @@
+ **Here are some potential refactoring opportunities within the provided code snippet:**
+
+**1. Consolidate `doAdd` Methods:**
+- Combine the two `doAdd` methods into a single method with a boolean parameter to control whether to log the failure.
+- This reduces code duplication and streamlines the logic for adding failures.
+
+**2. Refactor Nested Classes:**
+- Consider extracting the nested classes `NonRootFailureCollector` and `ContextualFailureCollectorImpl` into separate, top-level classes.
+- This improves readability and modularity, as well as potentially reducing coupling between classes.
+
+**3. Simplify `checkNoFailure` Method:**
+- Break down the `checkNoFailure` method into smaller, more focused methods for building the failure report and throwing the exception.
+- This enhances readability and makes the logic easier to follow.
+
+**4. Improve Formatting Consistency:**
+- Apply consistent indentation and spacing throughout the code to enhance readability.
+
+**5. Address `RuntimeException` Handling:**
+- Refactor the `try-catch` block in the `NonRootFailureCollector#withContext` method to handle potential `RuntimeException`s more gracefully.
+- This could involve logging a warning message, resetting the collector, or taking other appropriate actions.
+
+**Here's the refactored code incorporating these suggestions:**
+
+```java
+package org.hibernate.search.engine.reporting.spi;
+
+// ... imports
+
+public final class RootFailureCollector implements FailureCollector {
+
+  // ... other fields
+
+  @Override
+  public ContextualFailureCollector withContext(EventContext context) {
+    return delegate.withContext(context);
+  }
+
+  @Override
+  public ContextualFailureCollector withContext(EventContextElement contextElement) {
+    return delegate.withContext(contextElement);
+  }
+
+  // ... other methods
+
+  boolean shouldAddFailure() {
+    return failureCount.incrementAndGet() <= FAILURE_LIMIT;
+  }
+
+  // ... other methods
+
+  private void doAddFailure(Throwable failure, String failureMessage, boolean logFailure) {
+    // ... create contextJoiner
+
+    if (logFailure) {
+      log.newCollectedFailure(process, contextJoiner.toString(), failure);
+    }
+
+    if (shouldAddFailure()) {
+      failureMessages.add(failureMessage);
+    }
+  }
+
+  // ... checkNoFailure method refactored into smaller methods
+}
+
+// ... NonRootFailureCollector and ContextualFailureCollectorImpl as separate classes
+```
+
+I hope this helps!

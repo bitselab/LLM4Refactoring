@@ -1,0 +1,42 @@
+In the provided code snippet, the method `doAdd(Throwable failure, String failureMessage)` delegates part of its functionality to another overloaded method `doAdd(String failureMessage)`. This is a clear candidate for inline method refactoring, similar to the pattern demonstrated in the OpenSslSession example. The goal here is to improve readability and reduce the method call overhead by consolidating the functionality into a single method.
+
+Here's how the refactoring would look:
+
+### Original Code
+```java
+private static class ContextualFailureCollectorImpl extends NonRootFailureCollector implements ContextualFailureCollector {
+
+    private void doAdd(Throwable failure, String failureMessage) {
+        StringJoiner contextJoiner = new StringJoiner(CommonEventContextMessages.INSTANCE.contextSeparator());
+        appendContextTo(contextJoiner);
+        log.newCollectedFailure(root.process, contextJoiner.toString(), failure);
+
+        doAdd(failureMessage);
+    }
+
+    private void doAdd(String failureMessage) {
+        if (root.shouldAddFailure()) {
+            failureMessages.add(failureMessage);
+        }
+    }
+}
+```
+
+### Refactored Code
+```java
+private static class ContextualFailureCollectorImpl extends NonRootFailureCollector implements ContextualFailureCollector {
+
+    private void doAdd(Throwable failure, String failureMessage) {
+        StringJoiner contextJoiner = new StringJoiner(CommonEventContextMessages.INSTANCE.contextSeparator());
+        appendContextTo(contextJoiner);
+        log.newCollectedFailure(root.process, contextJoiner.toString(), failure);
+
+        // Inline method here
+        if (root.shouldAddFailure()) {
+            failureMessages.add(failureMessage);
+        }
+    }
+}
+```
+
+In the refactored code, I've eliminated the `doAdd(String failureMessage)` method by moving its logic directly into the `doAdd(Throwable failure, String failureMessage)` method. This reduces the method calls and keeps the logic contained within a single method, improving readability and potentially enhancing performance by avoiding an extra method call.

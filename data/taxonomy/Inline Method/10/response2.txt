@@ -1,0 +1,44 @@
+Analyzing the provided code snippet from `PathUtilEx`, the two methods `chooseJdk(Project project, Collection<? extends Module> modules)` and `chooseJdk(Collection<? extends Module> modules)` are related but serve slightly different purposes.
+
+1. **Method Overloading**: The method `chooseJdk(Project project, Collection<? extends Module> modules)` first attempts to retrieve a JDK from the project settings. If that fails, it delegates to the other overloaded method `chooseJdk(Collection<? extends Module> modules)`.
+
+2. **Inline Potential**: The method `chooseJdk(Project project, Collection<? extends Module> modules)` calls the other method `chooseJdk(Collection<? extends Module> modules)` directly if the project's JDK is not found. This direct delegation is a candidate for inlining since it's just a fallback and both methods are marked as `@Deprecated` suggesting a phase-out or simplification might be in order.
+
+### Refactoring Decision
+Given that the only reason to keep the first method `chooseJdk(Project project, Collection<? extends Module> modules)` is to initially try to get the JDK from the project, and since the only other operation it performs is a direct call to `chooseJdk(Collection<? extends Module> modules)`, we can consolidate these operations into a single method.
+
+By inlining this method, we remove an unnecessary layer of method invocation, simplifying the codebase, especially since both methods are marked for removal. Thus, the refactoring involves removing the first method and enhancing the second to optionally take a `Project` object and perform all operations internally.
+
+Here's the refactored code:
+
+```java
+public final class PathUtilEx {
+
+    /**
+     * @deprecated the meaning of this method is unclear, choose a JDK using explicit criteria instead
+     */
+    @Deprecated(forRemoval = true)
+    @Nullable
+    public static Sdk chooseJdk(@NotNull Project project, @NotNull Collection<? extends Module> modules) {
+        Sdk projectJdk = ProjectRootManager.getInstance(project).getProjectSdk();
+        if (projectJdk != null && projectJdk.getSdkType() instanceof JavaSdkType) {
+            return projectJdk;
+        }
+
+        List<Sdk> jdks = ContainerUtil.mapNotNull(modules, module -> {
+            if (module == null) return null;
+            Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
+            if (sdk == null || !(sdk.getSdkType() instanceof JavaSdkType)) return null;
+            return sdk;
+        });
+        if (jdks.isEmpty()) {
+            return null;
+        }
+        return jdks.stream().max(Comparator.comparing(jdk -> JavaVersion.tryParse(jdk.getVersionString()), Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(null);
+    }
+}
+```
+
+### Explanation
+- I consolidated the logic into a single method that first tries to get the JDK from the project. If that fails, it proceeds with the logic previously in the standalone method for modules.
+- By eliminating the delegation and handling everything in one place, the code is simplified, especially given its deprecated status which indicates an intent to streamline or remove it eventually.

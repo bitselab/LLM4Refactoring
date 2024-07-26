@@ -1,0 +1,88 @@
+There is a refactoring opportunity to extract a variable to improve readability and maintainability of the code. The variable `stripped` is calculated multiple times throughout the class. Here's the refactored code:
+
+```java
+public class Checker extends AbstractAutomaticBean implements MessageDispatcher, RootModule {
+
+  // ... existing code ...
+
+  private static final String EXTENSION_SEPARATOR = ".";
+
+  private final Log log;
+  private final SeverityLevelCounter counter = new SeverityLevelCounter(SeverityLevel.ERROR);
+  private final List<AuditListener> listeners = new ArrayList<>();
+  private final List<FileSetCheck> fileSetChecks = new ArrayList<>();
+  private final BeforeExecutionFileFilterSet beforeExecutionFileFilters = new BeforeExecutionFileFilterSet();
+  private final FilterSet filters = new FilterSet();
+  private String basedir;
+  private String localeCountry = Locale.getDefault().getCountry();
+  private String localeLanguage = Locale.getDefault().getLanguage();
+  private ModuleFactory moduleFactory;
+  private ClassLoader moduleClassLoader;
+  private Context childContext;
+  private String[] fileExtensions;
+  private SeverityLevel severity = SeverityLevel.ERROR;
+  private String charset = StandardCharsets.UTF_8.name();
+  private PropertyCacheFile cacheFile;
+  private boolean haltOnException = true;
+  private int tabWidth = CommonUtil.DEFAULT_TAB_WIDTH;
+
+  public Checker() {
+    addListener(counter);
+    log = LogFactory.getLog(Checker.class);
+  }
+
+  // ... existing code ...
+
+  private String getStrippedPath(String fileName) {
+    return CommonUtil.relativizeAndNormalizePath(basedir, fileName);
+  }
+
+  private boolean acceptFileStarted(String fileName) {
+    final String stripped = getStrippedPath(fileName);
+    return beforeExecutionFileFilters.accept(stripped);
+  }
+
+  @Override
+  public void fireFileStarted(String fileName) {
+    final String stripped = getStrippedPath(fileName);
+    final AuditEvent event = new AuditEvent(this, stripped);
+    for (final AuditListener listener : listeners) {
+      listener.fileStarted(event);
+    }
+  }
+
+  // ... existing code ...
+
+  @Override
+  public void fireErrors(String fileName, SortedSet<Violation> errors) {
+    final String stripped = getStrippedPath(fileName);
+    boolean hasNonFilteredViolations = false;
+    for (final Violation element : errors) {
+      final AuditEvent event = new AuditEvent(this, stripped, element);
+      if (filters.accept(event)) {
+        hasNonFilteredViolations = true;
+        for (final AuditListener listener : listeners) {
+          listener.addError(event);
+        }
+      }
+    }
+    if (hasNonFilteredViolations && cacheFile != null) {
+      cacheFile.remove(fileName);
+    }
+  }
+
+  // ... existing code ...
+
+  @Override
+  public void fireFileFinished(String fileName) {
+    final String stripped = getStrippedPath(fileName);
+    final AuditEvent event = new AuditEvent(this, stripped);
+    for (final AuditListener listener : listeners) {
+      listener.fileFinished(event);
+    }
+  }
+
+  // ... existing code ...
+}
+```
+The refactored code creates a new private method `getStrippedPath` to avoid code duplication and improves readability. 

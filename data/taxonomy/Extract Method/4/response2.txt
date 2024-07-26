@@ -1,0 +1,75 @@
+Upon reviewing the provided code for the `RemoteClusterCredentialsManager` class, we can identify a potential opportunity for the "Extract Method" refactoring pattern. This pattern aims to improve readability, reduce duplication, and enhance modularity.
+
+In the given code, there is repeated logging logic used to output debug information about updated cluster credentials. This logging operation can be extracted into a separate method to clarify the main method's logic and reuse the logging functionality if needed elsewhere in the future.
+
+Here is how you can refactor the code:
+
+### Original Code Snippet
+```java
+public class RemoteClusterCredentialsManager {
+
+    public final synchronized UpdateRemoteClusterCredentialsResult updateClusterCredentials(Settings settings) {
+        final Map<String, SecureString> newClusterCredentials = REMOTE_CLUSTER_CREDENTIALS.getAsMap(settings);
+        if (clusterCredentials.isEmpty()) {
+            clusterCredentials = newClusterCredentials;
+            logger.debug(
+                    () -> Strings.format(
+                            "Updated remote cluster credentials for clusters: [%s]",
+                            Strings.collectionToCommaDelimitedString(clusterCredentials.keySet())
+                    )
+            );
+            return new UpdateRemoteClusterCredentialsResult(Set.copyOf(newClusterCredentials.keySet()), Collections.emptySet());
+        }
+
+        final Set<String> addedClusterAliases = Sets.difference(newClusterCredentials.keySet(), clusterCredentials.keySet());
+        final Set<String> removedClusterAliases = Sets.difference(clusterCredentials.keySet(), newClusterCredentials.keySet());
+        clusterCredentials = newClusterCredentials;
+        logger.debug(
+                () -> Strings.format(
+                        "Updated remote cluster credentials for clusters: [%s]",
+                        Strings.collectionToCommaDelimitedString(clusterCredentials.keySet())
+                )
+        );
+        assert Sets.haveEmptyIntersection(removedClusterAliases, addedClusterAliases);
+        return new UpdateRemoteClusterCredentialsResult(addedClusterAliases, removedClusterAliases);
+    }
+
+}
+```
+
+### Refactored Code Snippet
+```java
+public class RemoteClusterCredentialsManager {
+
+    public final synchronized UpdateRemoteClusterCredentialsResult updateClusterCredentials(Settings settings) {
+        final Map<String, SecureString> newClusterCredentials = REMOTE_CLUSTER_CREDENTIALS.getAsMap(settings);
+        if (clusterCredentials.isEmpty()) {
+            clusterCredentials = newClusterCredentials;
+            logUpdatedCredentials();
+            return new UpdateRemoteClusterCredentialsResult(Set.copyOf(newClusterCredentials.keySet()), Collections.emptySet());
+        }
+
+        final Set<String> addedClusterAliases = Sets.difference(newClusterCredentials.keySet(), clusterCredentials.keySet());
+        final Set<String> removedClusterAliases = Sets.difference(clusterCredentials.keySet(), newClusterCredentials.keySet());
+        clusterCredentials = newClusterCredentials;
+        logUpdatedCredentials();
+        assert Sets.haveEmptyIntersection(removedClusterAliases, addedClusterAliases);
+        return new UpdateRemoteClusterCredentialsResult(addedClusterAliases, removedClusterAliases);
+    }
+
+    private void logUpdatedCredentials() {
+        logger.debug(
+                () -> Strings.format(
+                        "Updated remote cluster credentials for clusters: [%s]",
+                        Strings.collectionToCommaDelimitedString(clusterCredentials.keySet())
+                )
+        );
+    }
+}
+```
+
+### Changes Made
+- Extracted the logging logic into a method called `logUpdatedCredentials`.
+- Replaced the original logging calls with a call to the new method in both places where logging occurred.
+
+This refactoring simplifies the main method and adheres to the DRY (Don't Repeat Yourself) principle by centralizing the logging logic into a single method, which improves the maintainability of the code.

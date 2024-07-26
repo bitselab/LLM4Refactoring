@@ -1,0 +1,35 @@
+To improve the readability of the code, I'll refactor the attribute name `interfaceParameterAnnotations` to a more descriptive and clear name. This name should effectively convey the purpose and use of the attribute. Based on the code context, it seems this attribute is used to store annotations for method parameters inherited from interfaces. A more descriptive name could be `inheritedInterfaceMethodParameterAnnotations`.
+
+Here is the refactored code with the updated attribute name:
+
+```java
+package org.springframework.core.annotation;
+
+// ... [imports remain unchanged]
+
+public class AnnotatedMethod {
+
+    // ... [other attributes and methods remain unchanged]
+
+    @Nullable
+    private volatile List<Annotation[][]> inheritedInterfaceMethodParameterAnnotations;
+
+    // ... [constructors remain unchanged]
+
+    private List<Annotation[][]> getInheritedParameterAnnotations() {
+        List<Annotation[][]> parameterAnnotations = this.inheritedInterfaceMethodParameterAnnotations;
+        if (parameterAnnotations == null) {
+            parameterAnnotations = new ArrayList<>();
+            Class<?> clazz = this.method.getDeclaringClass();
+            // ... [rest of the method remains unchanged]
+            this.inheritedInterfaceMethodParameterAnnotations = parameterAnnotations;
+        }
+        return parameterAnnotations;
+    }
+
+    // ... [rest of the class remains unchanged]
+
+}
+```
+
+In this refactoring, I've only changed the attribute name `interfaceParameterAnnotations` to `inheritedInterfaceMethodParameterAnnotations`. This name more clearly indicates that the annotations are related to method parameters and are inherited from interfaces, improving the readability and understandability of the code.

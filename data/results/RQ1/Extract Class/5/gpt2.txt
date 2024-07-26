@@ -1,0 +1,117 @@
+Analyzing the provided `InternalSinkWriterMetricGroup` class from the Apache Flink project, it seems that the class is responsible for both managing metric counters and acting as a metric group. An "Extract Class" refactoring could be beneficial here to improve the Single Responsibility Principle by separating the concerns. 
+
+The metrics management (initialization and access of `Counter` objects) can be extracted into a separate class. This refactoring would lead to a more modular and maintainable code structure.
+
+### Refactoring Steps:
+1. **Create a new class** (e.g., `MetricsManager`) to handle the initialization and management of metric counters (`numRecordsOutErrors`, `numRecordsSendErrors`, `numRecordsWritten`, `numBytesWritten`).
+2. **Move the relevant fields and methods** from `InternalSinkWriterMetricGroup` to `MetricsManager`.
+3. **Integrate the `MetricsManager`** within `InternalSinkWriterMetricGroup` by having an instance of `MetricsManager` and delegating metric-related operations to it.
+
+Let's refactor the code based on these steps.
+
+### Refactored Code
+
+First, let's create the new `MetricsManager` class:
+
+```java
+package org.apache.flink.runtime.metrics.groups;
+
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.runtime.metrics.MetricNames;
+
+/**
+ * Manages the metrics for Sink Writer.
+ */
+class MetricsManager {
+    private final Counter numRecordsOutErrors;
+    private final Counter numRecordsSendErrors;
+    private final Counter numRecordsWritten;
+    private final Counter numBytesWritten;
+
+    MetricsManager(MetricGroup parentMetricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        numRecordsOutErrors = parentMetricGroup.counter(MetricNames.NUM_RECORDS_OUT_ERRORS);
+        numRecordsSendErrors = parentMetricGroup.counter(MetricNames.NUM_RECORDS_SEND_ERRORS);
+        numRecordsWritten = parentMetricGroup.counter(MetricNames.NUM_RECORDS_SEND);
+        numBytesWritten = parentMetricGroup.counter(MetricNames.NUM_BYTES_SEND);
+    }
+
+    Counter getNumRecordsOutErrors() {
+        return numRecordsOutErrors;
+    }
+
+    Counter getNumRecordsSendErrors() {
+        return numRecordsSendErrors;
+    }
+
+    Counter getNumRecordsWritten() {
+        return numRecordsWritten;
+    }
+
+    Counter getNumBytesWritten() {
+        return numBytesWritten;
+    }
+}
+```
+
+Now, let's refactor the `InternalSinkWriterMetricGroup` class to integrate the `MetricsManager`:
+
+```java
+package org.apache.flink.runtime.metrics.groups;
+
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.MetricGroup;
+
+/**
+ * Special {@link org.apache.flink.metrics.MetricGroup} representing an Operator.
+ */
+@Internal
+public class InternalSinkWriterMetricGroup extends ProxyMetricGroup<MetricGroup>
+        implements SinkWriterMetricGroup {
+
+    private final OperatorIOMetricGroup operatorIOMetricGroup;
+    private final MetricsManager metricsManager;
+
+    @VisibleForTesting
+    InternalSinkWriterMetricGroup(
+            MetricGroup parentMetricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        super(parentMetricGroup);
+        this.operatorIOMetricGroup = operatorIOMetricGroup;
+        this.metricsManager = new MetricsManager(parentMetricGroup, operatorIOMetricGroup);
+    }
+
+    // ... [Other Methods] ...
+
+    @Override
+    public Counter getNumRecordsOutErrorsCounter() {
+        return metricsManager.getNumRecordsOutErrors();
+    }
+
+    @Override
+    public Counter getNumRecordsSendErrorsCounter() {
+        return metricsManager.getNumRecordsSendErrors();
+    }
+
+    @Override
+    public Counter getNumRecordsSendCounter() {
+        return metricsManager.getNumRecordsWritten();
+    }
+
+    @Override
+    public Counter getNumBytesSendCounter() {
+        return metricsManager.getNumBytesWritten();
+    }
+
+    // ... [Other Methods] ...
+}
+```
+
+### Summary of Changes
+- Extracted metrics management into a separate `MetricsManager` class.
+- Integrated `MetricsManager` within `InternalSinkWriterMetricGroup` to handle metric-related responsibilities.
+- Refactored `InternalSinkWriterMetricGroup` to delegate metrics operations to the `MetricsManager`.
+
+These changes should enhance the clarity, maintainability, and separation of concerns in the code.

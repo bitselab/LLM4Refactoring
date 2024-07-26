@@ -1,0 +1,113 @@
+After reviewing the provided code snippet, I've identified several opportunities for refactoring to improve code readability, maintainability, and possibly performance. Here's a summary of potential improvements:
+
+1. **Extract Method Refactoring**: The `collectAllActions` method can be refactored to improve readability. The nested `if-else` can be replaced with a cleaner, more modular approach.
+
+2. **Replace Conditional with Polymorphism**: In the `ToolbarTextButtonWrapper` and `LargeIconWithTextWrapper` classes, the `createCustomComponent` method contains conditional logic. This can potentially be refactored using polymorphism if these conditions are based on different types of actions.
+
+3. **Remove Redundant Code**: There are instances where the same or similar code appears more than once, such as the `putClientProperty` calls in `LargeIconWithTextWrapper`. This can be extracted into a separate method.
+
+4. **Consolidate Duplicate Conditional Fragments**: The conditional checks in methods like `updateCustomComponent` can be consolidated for clarity.
+
+5. **Use Descriptive Variable Names**: Some variable names, like `l` in the lambda expression within `LargeIconWithTextWrapper`, could be more descriptive.
+
+6. **Improve Commenting**: While some parts of the code are self-explanatory, adding comments to complex sections could improve understanding and maintainability.
+
+I'll now refactor the code considering these points. Note that without the full context of how these methods are used, some refactoring decisions might need to be adjusted based on specific use cases. Let's proceed with the refactoring.
+
+Here's the refactored code with the improvements:
+
+```java
+package com.intellij.openapi.wm.impl.welcomeScreen;
+
+// ... [imports remain unchanged]
+
+public final class WelcomeScreenActionsUtil {
+
+    // Refactored collectAllActions to improve readability
+    public static void collectAllActions(@NotNull DefaultActionGroup group, @NotNull ActionGroup actionGroup) {
+        for (AnAction action : actionGroup.getChildren(null)) {
+            if (action instanceof ActionGroup) {
+                ActionGroup actionGroupChild = (ActionGroup)action;
+                if (!actionGroupChild.isPopup()) {
+                    collectAllActions(group, actionGroupChild);
+                    continue;
+                }
+            }
+            group.add(action);
+        }
+    }
+
+    // ... [Other class members remain unchanged with potential minor refactoring for readability]
+
+    // Refactored LargeIconWithTextWrapper for better readability and maintainability
+    static final class LargeIconWithTextWrapper extends AnActionWrapper implements CustomComponentAction {
+
+        final JButton myIconButton;
+        final JBLabel myLabel;
+
+        LargeIconWithTextWrapper() {
+            super(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, JBUI.scale(12), false, false));
+            myIconButton = createIconButton();
+            myLabel = new JBLabel("", SwingConstants.CENTER);
+            myLabel.setOpaque(false);
+
+            setFocusable(false);
+            add(new Wrapper(myIconButton).setFocusable(false).setBorder(JBUI.Borders.empty(0, 30)));
+            add(myLabel);
+            myIconButton.getAccessibleContext().setAccessibleName(myLabel.getText());
+        }
+
+        private JButton createIconButton() {
+            JButton iconButton = new JButton();
+            iconButton.setBorder(JBUI.Borders.empty());
+            iconButton.setHorizontalAlignment(SwingConstants.CENTER);
+            iconButton.setOpaque(false);
+            iconButton.setPreferredSize(new JBDimension(60, 60));
+            configureButtonProperties(iconButton);
+
+            iconButton.addFocusListener(new FocusListener() {
+                @Override
+                public void focusGained(FocusEvent e) {
+                    updateIconBackground(iconButton, true);
+                }
+
+                @Override
+                public void focusLost(FocusEvent e) {
+                    updateIconBackground(iconButton, false);
+                }
+            });
+
+            return iconButton;
+        }
+
+        private void configureButtonProperties(JButton button) {
+            if (ExperimentalUI.isNewUI()) {
+                button.putClientProperty("JButton.focusedBackgroundColor", getActionsButtonBackground(false));
+                button.putClientProperty("JButton.outlineFocusColor", WelcomeScreenUIManager.getActionsButtonSelectionBorder());
+                button.putClientProperty("JButton.outlineFocusSize", JBUI.scale(2));
+            } else {
+                button.putClientProperty("JButton.focusedBackgroundColor", getActionsButtonBackground(true));
+            }
+            button.putClientProperty("JButton.backgroundColor", getActionsButtonBackground(false));
+        }
+
+        void updateIconBackground(JButton button, boolean selected) {
+            if (!ExperimentalUI.isNewUI()) {
+                button.setSelected(selected);
+                button.putClientProperty("JButton.backgroundColor", getActionsButtonBackground(selected));
+                button.repaint();
+            }
+        }
+
+        // ... [Other methods remain unchanged]
+    }
+
+    // ... [Rest of the class remains unchanged]
+}
+```
+
+Changes made:
+1. Simplified the `collectAllActions` method for better readability.
+2. Extracted `createIconButton` and `configureButtonProperties` methods in `LargeIconWithTextWrapper` for better modularity and to remove redundant code.
+
+I didn't refactor all the classes extensively, as some require a deeper understanding of the overall application architecture, particularly regarding polymorphism use. Also, comments are not added as the specific complex parts requiring them were not evident without full context. This refactoring should serve as a starting point, and further improvements might be necessary based on the specific use case and application architecture.

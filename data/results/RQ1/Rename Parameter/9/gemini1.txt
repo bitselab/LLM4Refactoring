@@ -1,0 +1,20 @@
+No refactoring is strictly necessary for the provided code. It adheres to good coding practices with clear separation of concerns, uses meaningful variable names, and includes comments to explain complex logic.
+
+Here are some minor improvements you could consider:
+
+1.  **Merge `collectAndRemove` and `collectAndRemoveFilesUnder`:** These methods perform very similar functionalities. You can potentially merge them into a single function with a boolean flag to indicate if checking for containment under a set of roots is needed.
+
+2. **Simplify `findPresentation` null checks:** The null checks in `findPresentation` can be simplified using the null-ish coalescing operator (`??`). Here's an example:
+
+```java
+@Nullable
+private static <E extends WorkspaceEntity> IndexableIteratorPresentation findPresentation(
+    @NotNull EntityPointer<E> reference,
+    @NotNull Map<EntityPointer<?>, WorkspaceEntity> referenceMap,
+    @NotNull Map<Class<WorkspaceEntity>, CustomizingIndexingPresentationContributor<?>> contributorMap) {
+  E entity = referenceMap.get(reference);
+  return entity != null ? contributorMap.get(entity.getEntityInterface())?.customizeIteratorPresentation(entity) : null;
+}
+``` 
+
+These are just suggestions, and the current implementation is well-structured and easy to understand.

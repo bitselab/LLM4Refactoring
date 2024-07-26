@@ -1,0 +1,104 @@
+In the given code snippet, there are opportunities for extract method refactorings to improve readability and maintainability. Here, we can extract the inner block of the `if` statement and the main logic of the `for` loop into separate methods.
+
+### Original Code
+```java
+static class ManagedFileChannel {
+
+    int read(ByteBuffer dst, long position) throws IOException {
+        synchronized (this.lock) {
+            if (position < this.bufferPosition || position >= this.bufferPosition + this.bufferSize) {
+                for (int i = 0; i < 10; i++) {
+                    boolean interrupted = (i != 0) ? Thread.interrupted() : false;
+                    try {
+                        this.buffer.clear();
+                        this.bufferSize = this.fileChannel.read(this.buffer, position);
+                        this.bufferPosition = position;
+                        return;
+                    }
+                    catch (ClosedByInterruptException ex) {
+                        repairFileChannel();
+                    }
+                    finally {
+                        if (interrupted) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                }
+                throw new ClosedByInterruptException();
+            }
+            if (this.bufferSize <= 0) {
+                return this.bufferSize;
+            }
+            int offset = (int) (position - this.bufferPosition);
+            int length = Math.min(this.bufferSize - offset, dst.remaining());
+            dst.put(dst.position(), this.buffer, offset, length);
+            dst.position(dst.position() + length);
+            return length;
+        }
+    }
+}
+```
+
+### Refactored Code
+```java
+static class ManagedFileChannel {
+
+    int read(ByteBuffer dst, long position) throws IOException {
+        synchronized (this.lock) {
+            if (isPositionOutsideBuffer(position)) {
+                handleBufferRepositioning(position);
+            }
+            if (this.bufferSize <= 0) {
+                return this.bufferSize;
+            }
+            return transferDataToBuffer(dst, position);
+        }
+    }
+
+    private boolean isPositionOutsideBuffer(long position) {
+        return position < this.bufferPosition || position >= this.bufferPosition + this.bufferSize;
+    }
+
+    private void handleBufferRepositioning(long position) throws IOException {
+        for (int i = 0; i < 10; i++) {
+            boolean interrupted = (i != 0) ? Thread.interrupted() : false;
+            try {
+                this.buffer.clear();
+                this.bufferSize = this.fileChannel.read(this.buffer, position);
+                this.bufferPosition = position;
+                return;
+            }
+            catch (ClosedByInterruptException ex) {
+                repairFileChannel();
+            }
+            finally {
+                if (interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        throw new ClosedByInterruptException();
+    }
+
+    private int transferDataToBuffer(ByteBuffer dst, long position) {
+        int offset = (int) (position - this.bufferPosition);
+        int length = Math.min(this.bufferSize - offset, dst.remaining());
+        dst.put(dst.position(), this.buffer, offset, length);
+        dst.position(dst.position() + length);
+        return length;
+    }
+}
+```
+
+### Explanation of Refactoring
+1. **Extracted Method `isPositionOutsideBuffer`**:
+   - Checks if the position is outside the current buffer range.
+   
+2. **Extracted Method `handleBufferRepositioning`**:
+   - Handles the logic for repositioning the buffer and reading from the file channel.
+   - Contains the `for` loop and `try-catch-finally` block.
+
+3. **Extracted Method `transferDataToBuffer`**:
+   - Manages the data transfer from the buffer to the destination `ByteBuffer`.
+
+This refactoring improves readability by breaking down the complex method into smaller, more focused methods.

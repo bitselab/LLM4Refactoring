@@ -1,0 +1,99 @@
+Certainly! The parameter `severityLevelNameLength` in the `initStringBuilderWithOptimalBuffer` method is misleading because it implies that it's a length value (like an integer), but in fact, it's a string representing the severity level name. A more appropriate name for this parameter would be something like `severityLevelName` to accurately reflect its content. Here's the refactored code with this change:
+
+```java
+package com.puppycrawl.tools.checkstyle;
+
+import java.util.Locale;
+
+import com.puppycrawl.tools.checkstyle.api.AuditEvent;
+import com.puppycrawl.tools.checkstyle.api.SeverityLevel;
+
+/**
+ * Represents the default formatter for log message.
+ * Default log message format is:
+ * [SEVERITY LEVEL] filePath:lineNo:columnNo: message. [CheckName]
+ * When the module id of the message has been set, the format is:
+ * [SEVERITY LEVEL] filePath:lineNo:columnNo: message. [ModuleId]
+ */
+public class AuditEventDefaultFormatter implements AuditEventFormatter {
+
+    /** Length of all separators. */
+    private static final int LENGTH_OF_ALL_SEPARATORS = 10;
+
+    /** Suffix of module names like XXXXCheck. */
+    private static final String SUFFIX = "Check";
+
+    @Override
+    public String format(AuditEvent event) {
+        final String fileName = event.getFileName();
+        final String message = event.getMessage();
+
+        final SeverityLevel severityLevel = event.getSeverityLevel();
+        final String severityLevelName;
+        if (severityLevel == SeverityLevel.WARNING) {
+            // We change the name of severity level intentionally
+            // to shorten the length of the log message.
+            severityLevelName = "WARN";
+        }
+        else {
+            severityLevelName = severityLevel.getName().toUpperCase(Locale.US);
+        }
+
+        final StringBuilder sb = initStringBuilderWithOptimalBuffer(event, severityLevelName);
+
+        sb.append('[').append(severityLevelName).append("] ")
+                .append(fileName).append(':').append(event.getLine());
+        if (event.getColumn() > 0) {
+            sb.append(':').append(event.getColumn());
+        }
+        sb.append(": ").append(message).append(" [");
+        if (event.getModuleId() == null) {
+            final String checkShortName = getCheckShortName(event);
+            sb.append(checkShortName);
+        }
+        else {
+            sb.append(event.getModuleId());
+        }
+        sb.append(']');
+
+        return sb.toString();
+    }
+
+    /**
+     * Returns the StringBuilder that should avoid StringBuffer.expandCapacity.
+     * bufferLength = fileNameLength + messageLength + lengthOfAllSeparators +
+     * + severityLevelNameLength + checkNameLength.
+     * Method is excluded from pitest validation.
+     *
+     * @param event audit event.
+     * @param severityLevelName severity level name.
+     * @return optimal StringBuilder.
+     */
+    private static StringBuilder initStringBuilderWithOptimalBuffer(AuditEvent event,
+                                                                    String severityLevelName) {
+        final int bufLen = LENGTH_OF_ALL_SEPARATORS + event.getFileName().length()
+                + event.getMessage().length() + severityLevelName.length()
+                + getCheckShortName(event).length();
+        return new StringBuilder(bufLen);
+    }
+
+    /**
+     * Returns check name without 'Check' suffix.
+     *
+     * @param event audit event.
+     * @return check name without 'Check' suffix.
+     */
+    private static String getCheckShortName(AuditEvent event) {
+        final String checkFullName = event.getSourceName();
+        String checkShortName = checkFullName.substring(checkFullName.lastIndexOf('.') + 1);
+        if (checkShortName.endsWith(SUFFIX)) {
+            final int endIndex = checkShortName.length() - SUFFIX.length();
+            checkShortName = checkShortName.substring(0, endIndex);
+        }
+        return checkShortName;
+    }
+
+}
+```
+
+This change enhances the readability and clarity of the code by using a parameter name that accurately reflects its purpose and content.

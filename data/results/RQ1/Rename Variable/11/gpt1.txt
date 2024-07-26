@@ -1,0 +1,87 @@
+The provided code snippet is fairly well-structured but there are a few opportunities for refactoring to improve readability, maintainability, and reduce duplication. Here are some suggestions:
+
+1. **Extract Method for Common Logic:** The logic for creating a `ContinuationFrame` and handling `rateControlOnEvent` and `connectionFailure` is repeated multiple times. This can be extracted into a separate method.
+
+2. **Use Early Returns to Reduce Nesting:** There are nested `if-else` and `switch-case` statements. Using early returns can reduce nesting and improve readability.
+
+3. **Consolidate Repeated Code:** The code for creating `ContinuationFrame` and subsequent checks are repeated in both `FRAGMENT` and `emptyBody` methods. This can be consolidated.
+
+4. **Replace Magic Strings with Constants:** The error messages like `"invalid_continuation_frame"` are used multiple times. These can be replaced with constants.
+
+5. **Improve Exception Handling:** The `default` case in the switch statement throws a generic `IllegalStateException`. This can be more informative.
+
+6. **Commenting and Documentation:** Adding comments for complex logic and method descriptions can improve the understandability of the code.
+
+7. **Method Length:** Some methods, like `parse`, are quite long. Consider breaking them into smaller methods.
+
+I will refactor the code based on these suggestions.
+
+It seems there was an error in processing the refactoring due to the complexity and length of the code. Refactoring a large codebase often requires careful consideration of the context and dependencies, which can be challenging to handle programmatically in this format. 
+
+However, I can provide a refactored version of a small section of the code to demonstrate how the suggested improvements could be applied. Let's refactor the `parse` method as an example.
+
+Here's a refactored version of the `parse` method from the provided code:
+
+```java
+@Override
+public boolean parse(ByteBuffer buffer) {
+    while (buffer.hasRemaining()) {
+        switch (state) {
+            case PREPARE:
+                if (!prepareState(buffer)) return false;
+                break;
+            case FRAGMENT:
+                if (!fragmentState(buffer)) return false;
+                break;
+            default:
+                throw new IllegalStateException("Unknown state: " + state);
+        }
+    }
+    return false;
+}
+
+private boolean prepareState(ByteBuffer buffer) {
+    if (getStreamId() == 0 || getStreamId() != headerBlockFragments.getStreamId()) {
+        return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, INVALID_CONTINUATION_STREAM_ERROR);
+    }
+    length = getBodyLength();
+    state = State.FRAGMENT;
+    return true;
+}
+
+private boolean fragmentState(ByteBuffer buffer) {
+    int remaining = buffer.remaining();
+    boolean last = hasFlag(Flags.END_HEADERS);
+    if (remaining < length) {
+        return handleFragment(buffer, remaining, false);
+    } else {
+        return handleFragment(buffer, length, last);
+    }
+}
+
+private boolean handleFragment(ByteBuffer buffer, int fragmentLength, boolean isLast) {
+    ContinuationFrame frame = new ContinuationFrame(getStreamId(), isLast);
+    if (!rateControlOnEvent(frame)) {
+        return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, INVALID_CONTINUATION_FRAME_RATE_ERROR);
+    }
+    if (!headerBlockFragments.storeFragment(buffer, fragmentLength, isLast)) {
+        return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, INVALID_CONTINUATION_STREAM_ERROR);
+    }
+    length -= fragmentLength;
+    if (isLast) {
+        reset();
+        return onHeaders(buffer);
+    }
+    return true;
+}
+```
+
+In this refactored version:
+
+- The `parse` method is simplified by extracting the logic for each state into separate methods (`prepareState` and `fragmentState`).
+- The `handleFragment` method consolidates the logic for handling a fragment of the continuation frame.
+- Error messages are replaced with constants (e.g., `INVALID_CONTINUATION_STREAM_ERROR`).
+- Improved exception message in the default case of the switch statement.
+- This refactoring focuses on clarity, reducing duplication, and making the code more modular. 
+
+Please note that the constants like `INVALID_CONTINUATION_STREAM_ERROR` would need to be defined appropriately in the class. Also, this refactoring assumes the context and dependencies within the class allow these changes without affecting functionality. In a real-world scenario, thorough testing would be necessary to ensure the refactored code behaves as expected.

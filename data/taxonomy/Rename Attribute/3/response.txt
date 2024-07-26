@@ -1,0 +1,95 @@
+Upon reviewing the provided code snippet from the `DiffBuilder` class, the primary focus of the review is to identify renaming opportunities for attributes that would align them better with the naming conventions or improve consistency across the codebase.
+
+### Assessment and Recommendations:
+
+1. **Attribute Naming Consistency:**
+   The attributes such as `leftS` and `rightS` within the `SDiff` static nested class use abbreviated names which can be slightly ambiguous and inconsistent with other naming practices in the class which are more descriptive. For instance:
+   - `leftS` could be renamed to `leftSupplier` 
+   - `rightS` could be renamed to `rightSupplier`
+
+   These changes will enhance readability by making the variables' purposes clearer in the context of their usage.
+
+2. **Use of Abbreviations:**
+   The variable `objectsEquals` might be more clearly named `objectsAreEqual` to more precisely reflect its usage as a boolean status flag.
+
+3. **General Readability:**
+   The variable `toStringFormat` is used to specify a format for output strings. It could be renamed to `outputFormat` to align with its purpose more clearly, especially given that it is used in contexts where output formatting is relevant.
+
+### Refactored Code:
+
+Here’s how the code would look after applying the suggested refactorings:
+
+```java
+package org.apache.commons.lang3.builder;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
+
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.ObjectUtils;
+
+public class DiffBuilder<T> implements Builder<DiffResult<T>> {
+
+    private static final class SDiff<T> extends Diff<T> {
+
+        private static final long serialVersionUID = 1L;
+        private final transient Supplier<T> leftSupplier;
+        private final transient Supplier<T> rightSupplier;
+
+        private SDiff(final String fieldName, final Supplier<T> leftSupplier, final Supplier<T> rightSupplier, final Class<T> type) {
+            super(fieldName, type);
+            this.leftSupplier = leftSupplier;
+            this.rightSupplier = rightSupplier;
+        }
+
+        @Override
+        public T getLeft() {
+            return leftSupplier.get();
+        }
+
+        @Override
+        public T getRight() {
+            return rightSupplier.get();
+        }
+
+    }
+    static final String TO_STRING_FORMAT = "%s differs from %s";
+
+    private final List<Diff<?>> diffs;
+    private final boolean objectsAreEqual;
+    private final T left;
+    private final T right;
+    private final ToStringStyle style;
+    private final String outputFormat;
+
+    public DiffBuilder(final T lhs, final T rhs, final ToStringStyle style) {
+        this(lhs, rhs, style, true);
+    }
+
+    public DiffBuilder(final T lhs, final T rhs, final ToStringStyle style, final boolean testObjectsEquals) {
+        this.left = Objects.requireNonNull(lhs, "lhs");
+        this.right = Objects.requireNonNull(rhs, "rhs");
+        this.diffs = new ArrayList<>();
+        this.outputFormat = DiffBuilder.TO_STRING_FORMAT;
+        this.style = style != null ? style : ToStringStyle.DEFAULT_STYLE;
+        this.objectsAreEqual = testObjectsEquals && Objects.equals(lhs, rhs);
+    }
+
+    private <F> DiffBuilder<T> add(final String fieldName, final Supplier<F> left, final Supplier<F> right, final Class<F> type) {
+        diffs.add(new SDiff<>(Objects.requireNonNull(fieldName, "fieldName"), left, right, type));
+        return this;
+    }
+
+    // Remaining methods continue as before with adjusted variable names where appropriate.
+
+    @Override
+    public DiffResult<T> build() {
+        return new DiffResult<>(left, right, diffs, style, outputFormat);
+    }
+}
+```
+
+This refactoring primarily improves the readability and clarity of the code by enhancing the descriptiveness of variable names.

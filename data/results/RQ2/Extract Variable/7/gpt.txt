@@ -1,0 +1,67 @@
+To improve the readability and maintainability of the `onRefresh` method in the provided code, we can apply the "Extract Variable" refactoring technique. This technique involves introducing new variables to replace complex expressions or duplicate code fragments, making the code more understandable.
+
+Let's refactor the `onRefresh` method:
+
+### Refactored Code
+
+```java
+public class DefaultRefreshEventListener implements RefreshEventListener {
+    // ... [other members and methods remain unchanged]
+
+    public void onRefresh(RefreshEvent event, RefreshContext refreshedAlready) {
+        final EventSource source = event.getSession();
+        final PersistenceContext persistenceContext = source.getPersistenceContextInternal();
+        final Object object = event.getObject();
+
+        boolean isProxyUninitialized = persistenceContext.reassociateIfUninitializedProxy(object);
+        if (isProxyUninitialized) {
+            handleUninitializedProxy(event, source, object, persistenceContext);
+        } else {
+            handleNonProxyEntity(event, refreshedAlready, persistenceContext, object);
+        }
+    }
+
+    private void handleUninitializedProxy(RefreshEvent event, EventSource source, Object object, PersistenceContext persistenceContext) {
+        LazyInitializer lazyInitializer = HibernateProxy.extractLazyInitializer(object);
+        EntityPersister persister = source.getEntityPersister(lazyInitializer.getEntityName(), object);
+        Object identifier = persister.getIdentifier(object, event.getSession());
+
+        refresh(event, null, source, persister, lazyInitializer, null, identifier, persistenceContext);
+
+        boolean isObjectTransient = isTransient(event, source, object);
+        if (isObjectTransient) {
+            source.setReadOnly(object, source.isDefaultReadOnly());
+        }
+    }
+
+    private void handleNonProxyEntity(RefreshEvent event, RefreshContext refreshedAlready, PersistenceContext persistenceContext, Object object) {
+        Object entity = persistenceContext.unproxyAndReassociate(object);
+        boolean isAlreadyRefreshed = !refreshedAlready.add(entity);
+        if (isAlreadyRefreshed) {
+            LOG.trace("Already refreshed");
+        } else {
+            refresh(event, refreshedAlready, entity);
+        }
+    }
+
+    // ... [Other methods remain unchanged or are refactored similarly]
+}
+```
+
+### Key Changes Made
+
+1. **Extracted `isProxyUninitialized` Variable**: This variable captures whether the object is an uninitialized proxy.
+
+2. **Split `onRefresh` into Smaller Methods**: The method `handleUninitializedProxy` and `handleNonProxyEntity` are extracted to handle different branches of the if-else logic in `onRefresh`. This makes the main method more readable and each part of the logic more focused.
+
+3. **Extracted `isObjectTransient` Variable**: In `handleUninitializedProxy`, this variable determines if the object is transient.
+
+4. **Extracted `isAlreadyRefreshed` Variable**: In `handleNonProxyEntity`, this variable checks if the entity has already been refreshed.
+
+This refactoring improves the readability of the code by breaking down complex operations into simpler, named parts. Each new method and variable acts as a form of documentation, making the purpose of each part of the code clearer. Remember to thoroughly test the refactored code to ensure that it maintains the original functionality. Refactoring should not change the behavior of the code but should improve its internal
+
+structure and readability. 
+
+By applying these refactorings, the `onRefresh` method becomes more modular and easier to understand. Each extracted method now has a single responsibility, which aligns with the principles of clean code. Additionally, the extracted variables clarify what each condition checks, enhancing the overall readability of the method. 
+
+Always ensure to run unit tests and integration tests after such refactorings to confirm that the behavior of the code remains unchanged. These tests are crucial for validating that the refactoring has not introduced any new bugs or altered the intended functionality of the code.

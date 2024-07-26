@@ -1,0 +1,71 @@
+There are a few potential refactoring opportunities in the provided code:
+
+1. **Simplify Field Initialization:**
+   - The `DEFAULT_MAX_CONN` and `DEFAULT_BEAM_WIDTH` constants are only used in the constructor to initialize their corresponding fields. Consider initializing these fields directly in the constructor arguments to simplify the code.
+
+2. **Delegate Early for Reader/Writer:**
+   - In `fieldsReader` and `fieldsWriter`, the delegate's method is called directly. These methods could potentially be simplified by delegating the call to the constructor during object creation. 
+
+3. **Consider Configuration Options:**
+   - The comment in `getMaxDimensions` suggests making it configurable. You could introduce setter methods or a builder pattern to configure `maxDimensions` during object creation.
+
+Here's the refactored code incorporating the suggestions:
+
+```java
+package org.apache.lucene.search.backend.lucene.lowlevel.codec.impl;
+
+import static org.apache.lucene.util.hnsw.HnswGraphBuilder.DEFAULT_BEAM_WIDTH;
+
+import java.io.IOException;
+import java.util.Objects;
+
+import org.apache.lucene.codecs.KnnVectorsFormat;
+import org.apache.lucene.codecs.KnnVectorsReader;
+import org.apache.lucene.codecs.KnnVectorsWriter;
+import org.apache.lucene.codecs.lucene95.Lucene95HnswVectorsFormat;
+import org.apache.lucene.index.SegmentReadState;
+import org.apache.lucene.index.SegmentWriteState;
+
+public class HibernateSearchKnnVectorsFormat extends KnnVectorsFormat {
+
+  public static final int DEFAULT_MAX_DIMENSIONS = KnnVectorsFormat.DEFAULT_MAX_DIMENSIONS;
+  private static final KnnVectorsFormat DEFAULT_KNN_VECTORS_FORMAT = new HibernateSearchKnnVectorsFormat(DEFAULT_BEAM_WIDTH);
+
+  public static KnnVectorsFormat defaultFormat() {
+    return DEFAULT_KNN_VECTORS_FORMAT;
+  }
+
+  private final KnnVectorsFormat delegate;
+  private final int beamWidth;
+  private int maxDimensions = DEFAULT_MAX_DIMENSIONS; // Make configurable?
+
+  public HibernateSearchKnnVectorsFormat(int beamWidth) {
+    super(HibernateSearchKnnVectorsFormat.class.getSimpleName());
+    this.delegate = new Lucene95HnswVectorsFormat(Lucene95HnswVectorsFormat.DEFAULT_MAX_CONN, beamWidth);
+    this.beamWidth = beamWidth;
+  }
+
+  // ... other methods (delegate calls potentially moved to constructor) ...
+
+  @Override
+  public KnnVectorsWriter fieldsWriter(SegmentWriteState state) throws IOException {
+    // Potentially delegate to constructor-initialized delegate here
+    return delegate.fieldsWriter(state);
+  }
+
+  @Override
+  public KnnVectorsReader fieldsReader(SegmentReadState state) throws IOException {
+    // Potentially delegate to constructor-initialized delegate here
+    return delegate.fieldsReader(state);
+  }
+
+  @Override
+  public int getMaxDimensions(String fieldName) {
+    return maxDimensions;
+  }
+
+  // ... other methods ...
+}
+```
+
+These changes improve code readability and potentially reduce redundancy. Remember to consider the trade-offs of introducing setter methods or a builder pattern for configuration options based on the application's needs and complexity. 

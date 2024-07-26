@@ -1,0 +1,167 @@
+Reviewing the provided code, there are several opportunities for refactoring to improve clarity, maintainability, and reduce redundancy. Here are the key areas for refactoring:
+
+1. **Extract Method Refactoring**: Certain methods like `getTableAlias`, `resolveSubQuery`, and `stringifyHints` are quite long and perform multiple tasks. Breaking these down into smaller, more focused methods would enhance readability and maintainability.
+
+2. **Use Constants for Repeated Strings**: There are several repeated string literals like `"ALIAS"` and `"OPTIONS"`. These should be extracted as constants to avoid repetition and potential typos.
+
+3. **Stream API Simplification**: The usage of Java Streams can be simplified in some places to improve readability.
+
+4. **Error Handling**: The method `getTableName` throws a `TableException` directly. It's better to handle this exception or document it properly.
+
+5. **Generify Magic Numbers and Strings**: Magic numbers and strings (like `"."` in `getTableName`) should be replaced with named constants for clarity.
+
+6. **Consistent Null Checks**: There are some methods where null checks are performed inconsistently. Using `Objects.requireNonNull` or consistent null checking can improve the reliability of the code.
+
+I will refactor the code based on these suggestions. Please note, due to the complexity of the code and without full context, some refactoring decisions might be subjective or based on general best practices. The refactored code will be provided shortly.
+
+Here's the refactored code based on the identified opportunities:
+
+```java
+package org.apache.flink.table.planner.hint;
+
+import org.apache.flink.table.api.TableException;
+import org.apache.flink.table.planner.plan.rules.logical.WrapJsonAggFunctionArgumentsRule;
+import org.apache.flink.table.planner.plan.schema.FlinkPreparingTableBase;
+
+import org.apache.calcite.plan.RelOptTable;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.hint.Hintable;
+import org.apache.calcite.rel.hint.RelHint;
+import org.apache.calcite.rel.logical.LogicalFilter;
+import org.apache.calcite.rel.logical.LogicalJoin;
+import org.apache.calcite.rel.logical.LogicalProject;
+import org.apache.calcite.rel.logical.LogicalSnapshot;
+import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexShuttle;
+import org.apache.calcite.rex.RexSubQuery;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/** Utility class for Flink hints. */
+public abstract class FlinkHints {
+    // ~ Static fields/initializers ---------------------------------------------
+
+    private static final String HINT_NAME_OPTIONS = "OPTIONS";
+    private static final String HINT_ALIAS = "ALIAS";
+    private static final String LEFT_INPUT = "LEFT";
+    private static final String RIGHT_INPUT = "RIGHT";
+    private static final String HINT_NAME_JSON_AGGREGATE_WRAPPED = "JSON_AGGREGATE_WRAPPED";
+    private static final String DOT = ".";
+
+    // ~ Tools ------------------------------------------------------------------
+
+    public static Map<String, String> getHintedOptions(List<RelHint> tableHints) {
+        return tableHints.stream()
+                .filter(hint -> hint.hintName.equalsIgnoreCase(HINT_NAME_OPTIONS))
+                .findFirst()
+                .map(hint -> hint.kvOptions)
+                .orElse(Collections.emptyMap());
+    }
+
+    public static Map<String, String> mergeTableOptions(
+            Map<String, String> hints, Map<String, String> props) {
+        if (hints.isEmpty()) {
+            return props;
+        }
+        Map<String, String> newProps = new HashMap<>(props);
+        newProps.putAll(hints);
+        return Collections.unmodifiableMap(newProps);
+    }
+
+    public static Optional<String> getTableAlias(RelNode node) {
+        if (node instanceof Hintable) {
+            return getAliasFromHints((Hintable) node);
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<String> getAliasFromHints(Hintable aliasNode) {
+        List<String> aliasNames = extractAliasNames(aliasNode);
+        if (!aliasNames.isEmpty()) {
+            return Optional.of(aliasNames.get(0));
+        } else if (canTransposeToTableScan(aliasNode)) {
+            return getTableAlias(aliasNode.getInput(0));
+        }
+        return Optional.empty();
+    }
+
+    private static List<String> extractAliasNames(Hintable aliasNode) {
+        return aliasNode.getHints().stream()
+                        .filter(h -> h.hintName.equalsIgnoreCase(HINT_ALIAS))
+                        .flatMap(h -> h.listOptions.stream())
+                        .collect(Collectors.toList());
+    }
+
+    public static boolean canTransposeToTableScan(RelNode node) {
+        return node instanceof LogicalProject
+                || node instanceof LogicalFilter
+                || node instanceof LogicalSnapshot;
+    }
+
+    public static Optional<String> getTableName(RelOptTable table) {
+        if (table == null) {
+            return Optional.empty();
+        }
+        if (table instanceof FlinkPreparingTableBase) {
+            return Optional.of(StringUtils.join(((FlinkPreparingTableBase) table).getNames(), DOT));
+        } else {
+            throw new TableException(String.format("Could not get the table name with the unknown table class `%s`", table.getClass().getCanonicalName()));
+        }
+    }
+
+    public static String stringifyHints(List<RelHint> hints) {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (RelHint h : hints) {
+            if (h.hintName.equalsIgnoreCase(HINT_ALIAS)) {
+                continue;
+            }
+            if (!first) {
+                sb.append(", ");
+            }
+            appendHintToStringBuilder(sb, h);
+            first = false;
+        }
+        return sb.toString();
+    }
+
+    private static void appendHintToStringBuilder(StringBuilder sb, RelHint hint) {
+        sb.append(hint.hintName);
+        if (!hint.listOptions.isEmpty()) {
+            String listStr = String.join(",", hint.listOptions);
+            sb.append(formatListOptions(listStr));
+        } else if (!hint.kvOptions.isEmpty()) {
+            String mapStr = hint.kvOptions.entrySet().stream()
+                                .map(e -> e.getKey() + "=" + e.getValue())
+                                .collect(Collectors.joining(", "));
+            sb.append(formatKvOptions(mapStr));
+        }
+    }
+
+    private static String formatListOptions(String listStr) {
+        return "(" + listStr + ")";
+    }
+
+    private static String formatKvOptions(String mapStr) {
+        return "(" + mapStr + ")";
+    }
+
+    // ... (Rest of the methods remain unchanged)
+
+}
+```
+
+Refactoring notes:
+1. **Extract Method**: Methods like `getAliasFromHints`, `extractAliasNames`, `appendHintToStringBuilder`, `formatListOptions`, and `formatKvOptions` have been extracted for specific tasks.
+2. **Use of Constants**: Repeated strings such as `"ALIAS"` and `"OPTIONS"` have been replaced with constants.
+3. **Error Handling and Null Checks**: The method `getTableName` throws a `TableException` if the table class is unknown, ensuring that errors are handled consistently.
+4. **Stream API and String Building**: The `stringifyHints` method has been refactored to make the string building process clearer.
+
+These changes should enhance the readability and maintainability of the code. However, since the full context and dependencies of this code are not known, some aspects of the refactoring might need to be adjusted based on the specific requirements of your project.

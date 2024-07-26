@@ -1,0 +1,53 @@
+ **I've reviewed the code and identified several refactoring opportunities:**
+
+1. **Extract a method for handling UTF-8 BOM:** 
+   - The process of checking for a BOM and removing it if present is repeated within both `load()` and `save()` methods. Extract this logic into a separate method for better reuse and readability:
+
+   ```java
+   private String handleUtf8Bom(byte[] in) {
+       if (isUtf8(in)) {
+           return RawParseUtils.decode(UTF_8, in, 3, in.length);
+       } else {
+           return RawParseUtils.decode(in);
+       }
+   }
+   ```
+
+2. **Consider using a StringBuilder for BOM:**
+   - Instead of using `ByteArrayOutputStream` to add the BOM in `save()`, consider using a `StringBuilder` and its `insert()` method to prepend the BOM bytes, potentially improving efficiency.
+
+3. **Refactor `readIncludedConfig()`:**
+   - The method can be simplified by using streams for file handling and exception processing:
+
+   ```java
+   @Override
+   protected byte[] readIncludedConfig(String relPath) throws ConfigInvalidException {
+       File file = getFileForRelPath(relPath);
+       try (InputStream in = Files.newInputStream(file.toPath())) {
+           return IO.readFully(in);
+       } catch (IOException e) {
+           if (e instanceof FileNotFoundException) {
+               return null;
+           }
+           throw new ConfigInvalidException(MessageFormat.format(JGitText.get().cannotReadFile, relPath), e);
+       }
+   }
+   ```
+
+4. **Create a method for file path resolution:**
+   - Extract the logic of determining the `File` object from a relative path into a separate method:
+
+   ```java
+   private File getFileForRelPath(String relPath) {
+       if (relPath.startsWith("~/")) {
+           return fs.resolve(fs.userHome(), relPath.substring(2));
+       } else {
+           return fs.resolve(configFile.getParentFile(), relPath);
+       }
+   }
+   ```
+
+5. **Add comments for clarity:**
+   - Include comments to explain the purpose of variables and complex logic sections, enhancing code readability and maintainability.
+
+**I recommend implementing these refactoring steps to improve code structure and maintainability.**

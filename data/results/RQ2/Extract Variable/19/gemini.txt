@@ -1,0 +1,35 @@
+Certainly! Here's the refactored code using Extract Variable refactoring to address the expression in `getStartLogMessage`:
+
+```java
+package org.springframework.boot.web.embedded.undertow;
+
+// ... existing imports ...
+
+public class UndertowServletWebServer extends UndertowWebServer {
+
+  // ... existing code ...
+
+  @Override
+  protected String getStartLogMessage() {
+    StringBuilder message = new StringBuilder(super.getStartLogMessage());
+    message.append(" with context path '");
+
+    // Extract the expression into a variable
+    String contextPathToUse = StringUtils.hasText(this.contextPath) ? this.contextPath : "/";
+
+    message.append(contextPathToUse);
+    message.append("'");
+    return message.toString();
+  }
+
+  // ... existing code ...
+}
+```
+
+**Benefits of this refactoring:**
+
+* **Improved Readability:** The code becomes more readable by separating the logic for determining the context path into a dedicated variable.
+* **Enhanced Maintainability:** If the logic for handling the context path changes in the future, it only needs to be modified in one place.
+* **Reduced Complexity:** The original expression can be difficult to understand at a glance. Extracting it reduces cognitive load and improves code comprehension.
+
+This refactoring clarifies the code's intent and makes it easier to maintain in the long run. 

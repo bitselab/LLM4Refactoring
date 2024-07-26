@@ -1,0 +1,27 @@
+In the provided code snippet, the method `put` in the `PositionCheckingMap` class uses the parameter name `value`, which is a generic name and does not convey much information about its purpose. A better approach is to use a more descriptive name that reflects the nature and usage of the parameter.
+
+The `value` parameter represents a `WeightedSpanTerm` object that is being inserted into the map. A more descriptive name could be `weightedSpanTerm` which clearly indicates the type of value being passed and its relevance in the context of the method.
+
+Let's refactor the `put` method with the improved parameter name:
+
+```java
+protected static class PositionCheckingMap<K> extends HashMap<K, WeightedSpanTerm> {
+
+    @Override
+    public WeightedSpanTerm put(K key, WeightedSpanTerm weightedSpanTerm) {
+        WeightedSpanTerm prevTerm = super.put(key, weightedSpanTerm);
+        if (prevTerm != null && !prevTerm.positionSensitive) {
+            weightedSpanTerm.positionSensitive = false;
+        }
+        return prevTerm;
+    }
+
+    // Other methods and class content...
+}
+```
+
+In this refactoring:
+- The parameter `value` is renamed to `weightedSpanTerm`, which clearly describes the object being added to the map.
+- I also replaced `prevTerm.positionSensitive == false` with `!prevTerm.positionSensitive` for improved readability.
+
+This change makes the code clearer and more understandable, especially for future maintainers or readers who might not be familiar with the specifics of the implementation.

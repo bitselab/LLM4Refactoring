@@ -1,0 +1,61 @@
+Upon reviewing the provided code snippet, we can observe a common pattern in the three `guessMimeType` methods of the `FileTypeMagicUtil` class. Each method retrieves the MIME type based on different input types but shares the same logic to determine the returned MIME type based on the result of `util.findMatch`.
+
+### Original Code Repetition
+
+Each method has a similar block:
+```java
+if (contentInfo == null) {
+    return ContentType.OTHER.getMimeType();
+} else {
+    return contentInfo.getContentType().getMimeType();
+}
+```
+This code is repeated in all three methods, making it a prime candidate for extraction into a separate method to reduce duplication and enhance clarity.
+
+### Refactored Code
+
+Here’s how you might refactor the code to encapsulate the common logic into a private helper method:
+
+```java
+public class FileTypeMagicUtil implements ContentInfoUtil.ErrorCallBack {
+    
+    public String guessMimeType(Path file) {
+        try {
+            ContentInfo contentInfo = util.findMatch(file.toFile());
+            return determineMimeType(contentInfo);
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+        }
+    }
+
+    String guessMimeType(InputStream stream) {
+        try {
+            ContentInfo contentInfo = util.findMatch(stream);
+            return determineMimeType(contentInfo);
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
+        }
+    }
+
+    public String guessMimeType(byte[] bytes) {
+        ContentInfo contentInfo = util.findMatch(bytes);
+        return determineMimeType(contentInfo);
+    }
+
+    private String determineMimeType(ContentInfo contentInfo) {
+        if (contentInfo == null) {
+            return ContentType.OTHER.getMimeType();
+        } else {
+            return contentInfo.getContentType().getMimeType();
+        }
+    }
+}
+```
+
+### Benefits of Refactoring
+
+1. **Reduces Code Duplication**: By extracting the repeated if-else blocks into a single method, you reduce the amount of duplicate code, making the codebase easier to maintain.
+2. **Improves Readability**: The main methods become cleaner and more focused on their primary tasks (finding the match based on different input types), while the decision logic regarding what MIME type to return is neatly tucked away in its own method.
+3. **Eases Future Modifications**: If the logic for determining the MIME type needs to change, you only have to update one method instead of three.
+
+This refactoring adheres to the principle of DRY (Don't Repeat Yourself) and enhances the maintainability of the code.

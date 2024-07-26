@@ -1,0 +1,125 @@
+After reviewing the provided code, there are several opportunities for renaming attributes to enhance code readability and clarity. The current names, while not incorrect, could be improved to better convey their purpose and usage. Here are the proposed changes:
+
+1. Rename `ps` in `bindParameters` method to `preparedStatement`. This makes it immediately clear that the variable is a `PreparedStatement`.
+
+2. Rename `uniqueKeyPropertyNames` to `uniqueKeyPropertyNamesArray`. Since this is an array, adding "Array" to the name clarifies its data structure.
+
+3. Rename `uniqueKeyTypes` to `uniqueKeyTypeArray`. Similar to the previous point, adding "Array" makes the data structure more explicit.
+
+4. Rename `idSelectString` to `identifierSelectSQL`. This change makes it clearer that the variable holds a SQL string related to identifier selection.
+
+5. In the constructor, rename `persister` to `entityPersister`. This provides a clearer context that the persister is related to an entity.
+
+6. Rename `index` in `bindParameters` to `parameterIndex`. This makes its purpose in the context of setting parameters in a `PreparedStatement` more explicit.
+
+7. Rename `i` in the for-loop inside the constructor and `bindParameters` method to a more descriptive name, such as `propertyIndex`. This enhances the readability of the loop.
+
+Let's apply these refactorings to the code:
+
+```java
+package org.hibernate.id.insert;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.hibernate.dialect.Dialect;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.EventType;
+import org.hibernate.generator.values.GeneratedValueBasicResultBuilder;
+import org.hibernate.id.PostInsertIdentityPersister;
+import org.hibernate.jdbc.Expectation;
+import org.hibernate.metamodel.mapping.EntityRowIdMapping;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.sql.model.ast.builder.TableInsertBuilderStandard;
+import org.hibernate.sql.model.ast.builder.TableMutationBuilder;
+import org.hibernate.type.Type;
+
+import static org.hibernate.generator.values.internal.GeneratedValuesHelper.getActualGeneratedModelPart;
+
+/**
+ * Uses a unique key of the inserted entity to locate the newly inserted row.
+ *
+ * @author Gavin King
+ */
+public class UniqueKeySelectingDelegate extends AbstractSelectingDelegate {
+    private final String[] uniqueKeyPropertyNamesArray;
+    private final Type[] uniqueKeyTypeArray;
+
+    private final String identifierSelectSQL;
+
+    /**
+     * @deprecated Use {@link #UniqueKeySelectingDelegate(EntityPersister, String[], EventType)} instead.
+     */
+    @Deprecated( forRemoval = true, since = "6.5" )
+    public UniqueKeySelectingDelegate(PostInsertIdentityPersister persister, Dialect dialect, String[] uniqueKeyPropertyNames) {
+        this(persister, uniqueKeyPropertyNames, EventType.INSERT);
+    }
+
+    public UniqueKeySelectingDelegate(
+            EntityPersister entityPersister,
+            String[] uniqueKeyPropertyNames,
+            EventType timing) {
+        super(entityPersister, timing, true, true);
+
+        this.uniqueKeyPropertyNamesArray = uniqueKeyPropertyNames;
+
+        uniqueKeyTypeArray = new Type[uniqueKeyPropertyNamesArray.length];
+        for (int propertyIndex = 0; propertyIndex < uniqueKeyPropertyNamesArray.length; propertyIndex++) {
+            uniqueKeyTypeArray[propertyIndex] = entityPersister.getPropertyType(uniqueKeyPropertyNamesArray[propertyIndex]);
+        }
+
+        final EntityRowIdMapping rowIdMapping = entityPersister.getRowIdMapping();
+        if (!entityPersister.isIdentifierAssignedByInsert()
+                || entityPersister.getInsertGeneratedProperties().size() > 1
+                || rowIdMapping != null) {
+            final List<GeneratedValueBasicResultBuilder> resultBuilders = jdbcValuesMappingProducer.getResultBuilders();
+            final List<String> columnNames = new ArrayList<>(resultBuilders.size());
+            for (GeneratedValueBasicResultBuilder resultBuilder : resultBuilders) {
+                columnNames.add(getActualGeneratedModelPart(resultBuilder.getModelPart()).getSelectionExpression());
+            }
+            identifierSelectSQL = entityPersister.getSelectByUniqueKeyString(
+                    uniqueKeyPropertyNamesArray,
+                    columnNames.toArray(new String[0])
+            );
+        } else {
+            identifierSelectSQL = entityPersister.getSelectByUniqueKeyString(uniqueKeyPropertyNamesArray);
+        }
+    }
+
+    protected String getSelectSQL() {
+        return identifierSelectSQL;
+    }
+
+    @Override
+    public TableMutationBuilder<?> createTableMutationBuilder(
+            Expectation expectation,
+            SessionFactoryImplementor factory) {
+        return new TableInsertBuilderStandard(entityPersister, entityPersister.getIdentifierTableMapping(), factory);
+    }
+
+    protected void bindParameters(Object entity, PreparedStatement preparedStatement, SharedSessionContractImplementor session)
+            throws SQLException {
+        int parameterIndex = 1;
+        for (int propertyIndex = 0; propertyIndex < uniqueKeyPropertyNamesArray.length; propertyIndex++) {
+            uniqueKeyTypeArray[propertyIndex].nullSafeSet(preparedStatement, entityPersister.getPropertyValue(entity, uniqueKeyPropertyNamesArray[propertyIndex]), parameterIndex, session);
+            parameterIndex += uniqueKeyTypeArray[propertyIndex].getColumnSpan(session.getFactory());
+        }
+    }
+}
+```
+
+### Summary of Refactorings:
+- Renamed `ps` to `preparedStatement`.
+- Renamed `uniqueKeyPropertyNames` to `uniqueKeyPropertyNamesArray`.
+- Renamed `uniqueKeyTypes` to `uniqueKeyTypeArray`.
+- Renamed `idSelectString` to `identifierSelectSQL`.
+- Ren
+
+amed `persister` to `entityPersister` in the constructor.
+- Renamed `index` to `parameterIndex` in `bindParameters`.
+- Renamed `i` to `propertyIndex` in the for-loops for clearer context.
+
+These changes aim to make the code more readable and self-explanatory, improving overall code quality and maintainability.

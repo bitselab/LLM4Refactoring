@@ -1,0 +1,54 @@
+## Refactoring Opportunities in NFARunAutomaton.java
+
+Here are some refactoring opportunities in the provided code:
+
+1. **Reduce Code Duplication:**
+
+  - The `findDState` method and `DState#nextState` logic  share calculations for finding the next state based on character class. This logic can be extracted into a separate helper method to improve readability and maintainability.
+
+2. **Simplify `getCharClass`:**
+
+  - The `getCharClass` uses a binary search for finding the character class. Since `points` array is already sorted, a simpler linear search might be sufficient and potentially more performant for smaller alphabets.
+
+3. **Optimize `DState#determinize`:**
+
+  - The `DState#determinize` method involves iterating through transitions multiple times. Consider using a single pass through the sorted transitions to improve efficiency.
+
+4. **Use Meaningful Variable Names:**
+
+  - Some variable names like `a`, `b`, and `ord` could be more descriptive to enhance code readability.
+
+Here's an example of refactoring the `findDState` method and extracting the shared logic:
+
+```java
+private static int findOrComputeDState(DState dState) {
+  if (dState == null) {
+    return MISSING;
+  }
+  int ord = dStateToOrd.getOrDefault(dState, -1);
+  if (ord >= 0) {
+    return ord;
+  }
+  ord = dStateToOrd.size();
+  dStateToOrd.put(dState, ord);
+  if (ord >= dStates.length) {
+    dStates = ArrayUtil.grow(dStates, ord + 1);
+  }
+  dStates[ord] = dState;
+  return ord;
+}
+
+private int nextStateConsideringCharClass(int charClass) {
+  initTransitions();
+  if (transitions[charClass] == NOT_COMPUTED) {
+    assignTransition(charClass, findOrComputeDState(step(points[charClass])));
+  }
+  return transitions[charClass];
+}
+```
+
+The `DState#nextState` method can now be refactored to utilize this new method.
+
+**It's important to benchmark these changes to ensure they provide actual performance improvements.**
+
+The rest of the code is well-structured and includes comments explaining the logic.  For the remaining refactoring suggestions, a more detailed analysis might be required to determine the trade-offs between readability and potential performance gains.

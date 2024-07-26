@@ -1,0 +1,16 @@
+In the provided code snippet, the variable `r` represents the number of bytes actually read from the InputStream. The name `r` is not descriptive, which makes the code slightly harder to understand at first glance.
+
+Following the rename variable refactoring pattern, a better name for `r` would align it more closely with its purpose in the context of the `readNBytes` method. A suitable name could be `bytesRead`, which clearly communicates that the variable holds the count of bytes read by the method.
+
+Here is the refactored code:
+
+```java
+public static void readFully(final InputStream fd, final byte[] dst,
+                             int off, int len) throws IOException {
+    int bytesRead = fd.readNBytes(dst, off, len);
+    if (bytesRead != len)
+        throw new EOFException(JGitText.get().shortReadOfBlock);
+}
+```
+
+This renaming makes the code more readable by clearly indicating what the variable represents, thus enhancing the overall readability and maintainability of the code.

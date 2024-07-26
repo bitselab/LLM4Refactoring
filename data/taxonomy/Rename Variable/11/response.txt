@@ -1,0 +1,147 @@
+Upon reviewing the provided code snippet from the `ContinuationBodyParser` class, the primary task is to identify potential rename variable refactoring opportunities that improve readability by ensuring variable names are semantically appropriate. Here’s an analysis of the current variable names and any changes I propose:
+
+1. **Variable `length`** - This variable is used to store the length of the data to be processed in the `FRAGMENT` state. The current name `length` is generic, and it might be more informative to rename it to `expectedFragmentLength` to better describe its purpose, especially since it represents the length that the parser expects to process from the buffer.
+
+2. **Variable `remaining`** - In the `FRAGMENT` state, `remaining` represents the number of bytes remaining in the `ByteBuffer`. A more descriptive name could be `bytesRemaining`, which immediately indicates the nature of the data it holds.
+
+3. **Variable `last`** - This boolean variable is used to indicate whether the current header block fragment is the last one. Renaming `last` to `isLastFragment` can provide immediate context about what the boolean represents without needing to look up additional context.
+
+Here's the refactored code with these changes:
+
+```java
+package org.eclipse.jetty.http2.parser;
+
+import java.nio.ByteBuffer;
+
+import org.eclipse.jetty.http.MetaData;
+import org.eclipse.jetty.http2.ErrorCode;
+import org.eclipse.jetty.http2.Flags;
+import org.eclipse.jetty.http2.frames.ContinuationFrame;
+import org.eclipse.jetty.http2.frames.HeadersFrame;
+
+public class ContinuationBodyParser extends BodyParser
+{
+    private final HeaderBlockParser headerBlockParser;
+    private final HeaderBlockFragments headerBlockFragments;
+    private State state = State.PREPARE;
+    private int expectedFragmentLength; // Renamed from length
+
+    public ContinuationBodyParser(HeaderParser headerParser, Parser.Listener listener, HeaderBlockParser headerBlockParser, HeaderBlockFragments headerBlockFragments)
+    {
+        super(headerParser, listener);
+        this.headerBlockParser = headerBlockParser;
+        this.headerBlockFragments = headerBlockFragments;
+    }
+
+    @Override
+    protected void emptyBody(ByteBuffer buffer)
+    {
+        if (hasFlag(Flags.END_HEADERS))
+        {
+            onHeaders(buffer);
+        }
+        else
+        {
+            ContinuationFrame frame = new ContinuationFrame(getStreamId(), hasFlag(Flags.END_HEADERS));
+            if (!rateControlOnEvent(frame))
+                connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+        }
+    }
+
+    @Override
+    public boolean parse(ByteBuffer buffer)
+    {
+        while (buffer.hasRemaining())
+        {
+            switch (state)
+            {
+                case PREPARE:
+                {
+                    // SPEC: wrong streamId is treated as connection error.
+                    if (getStreamId() == 0)
+                        return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_frame");
+
+                    if (getStreamId() != headerBlockFragments.getStreamId())
+                        return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                    expectedFragmentLength = getBodyLength();
+                    state = State.FRAGMENT;
+                    break;
+                }
+                case FRAGMENT:
+                {
+                    int bytesRemaining = buffer.remaining(); // Renamed from remaining
+                    if (bytesRemaining < expectedFragmentLength)
+                    {
+                        ContinuationFrame frame = new ContinuationFrame(getStreamId(), false);
+                        if (!rateControlOnEvent(frame))
+                            return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+
+                        if (!headerBlockFragments.storeFragment(buffer, bytesRemaining, false))
+                            return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                        expectedFragmentLength -= bytesRemaining;
+                        break;
+                    }
+                    else
+                    {
+                        boolean isLastFragment = hasFlag(Flags.END_HEADERS); // Renamed from last
+                        ContinuationFrame frame = new ContinuationFrame(getStreamId(), isLastFragment);
+                        if (!rateControlOnEvent(frame))
+                            return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+
+                        if (!headerBlockFragments.storeFragment(buffer, expectedFragmentLength, isLastFragment))
+                            return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+
+                        reset();
+                        if (isLastFragment)
+                            return onHeaders(buffer);
+                        return true;
+                    }
+                }
+                default:
+                {
+                    throw new IllegalStateException();
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean onHeaders(ByteBuffer buffer)
+    {
+        ByteBuffer headerBlock = headerBlockFragments.complete();
+        MetaData metaData = headerBlockParser.parse(headerBlock, headerBlock.remaining());
+        headerBlockFragments.getByteBufferPool().release(headerBlock);
+        HeadersFrame frame = new HeadersFrame(getStreamId(), metaData, headerBlockFragments.getPriorityFrame(), headerBlockFragments.isEndStream());
+        headerBlockFragments.reset();
+
+        if (metaData == HeaderBlockParser.SESSION_FAILURE)
+            return false;
+
+        if (metaData != HeaderBlockParser.STREAM_FAILURE)
+        {
+            notifyHeaders(frame);
+        }
+        else
+        {
+            if (!rateControlOnEvent(frame))
+                return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_headers_frame_rate");
+        }
+        return true;
+    }
+
+    private void reset()
+    {
+        state = State.PREPARE;
+        expectedFragmentLength = 0; // Renamed from length
+    }
+
+    private enum State
+    {
+        PREPARE, FRAGMENT
+    }
+}
+```
+
+This refactoring should help improve the clarity and readability of the code by making variable purposes more immediately understandable.

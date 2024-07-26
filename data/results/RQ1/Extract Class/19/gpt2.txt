@@ -1,0 +1,65 @@
+The provided `JacksonProperties` class in the Spring Boot autoconfigure package for Jackson configuration demonstrates several areas where Extract Class refactoring can be beneficial. This refactoring aims to improve the code's readability, maintainability, and adherence to the Single Responsibility Principle. Here's a refactored version of the code:
+
+1. **Separation of Feature Configurations**: The class contains multiple maps for different Jackson features (serialization, deserialization, parser, generator, enums, JsonNode). These can be extracted into separate classes to encapsulate the configuration logic for each feature.
+
+2. **TimeZone and Locale Handling**: The timezone and locale fields are related to date and locale handling. They can be extracted into a separate class, such as `DateLocaleConfiguration`.
+
+3. **Property Naming Strategy and Constructor Detector Strategy**: These are specific configurations that can be encapsulated in their own classes.
+
+4. **Visibility Configuration**: The visibility map is a distinct aspect of Jackson configuration and can be separated.
+
+After applying these refactorings, the structure of the `JacksonProperties` class and the new classes would look like this:
+
+- `JacksonProperties`: Retains the core properties and references to the newly extracted classes.
+- `FeatureConfiguration` (for serialization, deserialization, mapper, parser, generator, enumFeatures, jsonNode).
+- `DateLocaleConfiguration` (for timezone and locale).
+- `PropertyNamingStrategyConfiguration`.
+- `ConstructorDetectorStrategyConfiguration`.
+- `VisibilityConfiguration`.
+
+Here is the refactored code:
+
+```java
+// Other imports remain the same
+
+/**
+ * Configuration properties to configure Jackson.
+ */
+@ConfigurationProperties(prefix = "spring.jackson")
+public class JacksonProperties {
+    private String dateFormat;
+    private JsonInclude.Include defaultPropertyInclusion;
+    private Boolean defaultLeniency;
+
+    private final FeatureConfiguration featureConfig = new FeatureConfiguration();
+    private final DateLocaleConfiguration dateLocaleConfig = new DateLocaleConfiguration();
+    private final VisibilityConfiguration visibilityConfig = new VisibilityConfiguration();
+
+    // Getter and setter methods...
+}
+
+class FeatureConfiguration {
+    private final Map<SerializationFeature, Boolean> serialization = new EnumMap<>(SerializationFeature.class);
+    private final Map<DeserializationFeature, Boolean> deserialization = new EnumMap<>(DeserializationFeature.class);
+    // Other feature maps...
+
+    // Getter and setter methods...
+}
+
+class DateLocaleConfiguration {
+    private TimeZone timeZone = null;
+    private Locale locale;
+
+    // Getter and setter methods...
+}
+
+class VisibilityConfiguration {
+    private final Map<PropertyAccessor, JsonAutoDetect.Visibility> visibility = new EnumMap<>(PropertyAccessor.class);
+
+    // Getter and setter methods...
+}
+
+// The ConstructorDetectorStrategy enum can remain inside JacksonProperties or be extracted if necessary
+```
+
+This refactored structure makes the `JacksonProperties` class more focused and modular, enhancing its readability and maintainability.

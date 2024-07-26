@@ -1,0 +1,55 @@
+ **Here's the refactored code with the extracted method:**
+
+```java
+package org.hibernate.event.internal;
+
+// ... other imports
+
+public class DefaultRefreshEventListener implements RefreshEventListener {
+
+    // ... other methods
+
+    private static Object refreshAndHandleNull(
+            EventSource source,
+            Object object,
+            EntityPersister persister,
+            LazyInitializer lazyInitializer,
+            Object id,
+            PersistenceContext persistenceContext
+    ) {
+        final Object result = source.getLoadQueryInfluencers().fromInternalFetchProfile(
+                CascadingFetchProfile.REFRESH,
+                () -> doRefresh(event, source, object, entry, persister, lazyInitializer, id, persistenceContext)
+        );
+        UnresolvableObjectException.throwIfNull(result, id, persister.getEntityName());
+        return result;
+    }
+
+    private static void refresh(RefreshEvent event, RefreshContext refreshedAlready, Object object) {
+        // ... other code
+
+        evictEntity(object, persister, id, source);
+        evictCachedCollections(persister, id, source);
+
+        final Object result = refreshAndHandleNull(source, object, persister, null, id, persistenceContext);
+
+        // ... other code
+    }
+
+    // ... other methods
+}
+```
+
+**Key changes:**
+
+1. **Extracted method:** A new method named `refreshAndHandleNull` is created to encapsulate the duplicate code snippet.
+2. **Method placement:** The extracted method is placed within the `DefaultRefreshEventListener` class to maintain context and accessibility.
+3. **Parameterization:** The extracted method takes necessary parameters (`source`, `object`, `persister`, `lazyInitializer`, `id`, `persistenceContext`) to handle different calling contexts.
+4. **Calling the extracted method:** The duplicate code snippet is replaced with a call to the `refreshAndHandleNull` method in both instances.
+
+**Benefits of this refactoring:**
+
+- **Improved readability:** The code becomes more concise and easier to read by removing redundancy.
+- **Enhanced reusability:** The extracted code can now be reused in other parts of the class if needed.
+- **Promotes maintainability:** Changes to the logic within the duplicate code can be made in a single place, reducing the risk of errors and inconsistencies.
+- **Encourages better code organization:** Extracting methods helps break down large code blocks into smaller, more manageable units.

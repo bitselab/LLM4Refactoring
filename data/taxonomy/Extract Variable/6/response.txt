@@ -1,0 +1,68 @@
+Analyzing the provided Java code snippet from the `ITestAbfsInputStreamReadFooter` class, it's clear the code is designed to test various aspects of reading from an Azure Blob File System (ABFS) stream under different configurations and circumstances.
+
+Here’s a summary of potential refactoring opportunities using the extract variable pattern:
+
+1. **Repeated Calculation Expressions:** The expressions `(int) Math.pow(2, i) * 256 * ONE_KB` and `(int) Math.pow(2, j) * 256 * ONE_KB` are repeated multiple times across different test methods. These expressions compute file sizes and footer read buffer sizes based on the loop variables `i` and `j`.
+
+2. **Extracting Variables for Clarity:** Extracting these expressions into descriptively named variables at the start of their respective loops would not only avoid redundant computation but also enhance the readability of the code.
+
+Below is the refactored version of the `testNumBackendCalls` and `testSeekAndReadWithConf` methods with these improvements:
+
+```java
+private void testNumBackendCalls(boolean optimizeFooterRead)
+        throws Exception {
+    int fileIdx = 0;
+    for (int i = 0; i <= 4; i++) {
+        int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+        for (int j = 0; j <= 2; j++) {
+            int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+            final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+            Path testFilePath = createPathAndFileWithContent(fs, fileIdx++, fileSize);
+            int length = AbfsInputStream.FOOTER_SIZE;
+            FutureDataInputStreamBuilder builder = getParameterizedBuilder(testFilePath, fs, footerReadBufferSize);
+            try (FSDataInputStream iStream = builder.build().get()) {
+                verifyConfigValueInStream(iStream, footerReadBufferSize);
+                byte[] buffer = new byte[length];
+
+                Map<String, Long> metricMap = getInstrumentationMap(fs);
+                long requestsMadeBeforeTest = metricMap.get(CONNECTIONS_MADE.getStatName());
+
+                iStream.seek(fileSize - 8);
+                iStream.read(buffer, 0, length);
+
+                iStream.seek(fileSize - (TEN * ONE_KB));
+                iStream.read(buffer, 0, length);
+
+                iStream.seek(fileSize - (TWENTY * ONE_KB));
+                iStream.read(buffer, 0, length);
+
+                metricMap = getInstrumentationMap(fs);
+                long requestsMadeAfterTest = metricMap.get(CONNECTIONS_MADE.getStatName());
+
+                if (optimizeFooterRead) {
+                    assertEquals(1, requestsMadeAfterTest - requestsMadeBeforeTest);
+                } else {
+                    assertEquals(3, requestsMadeAfterTest - requestsMadeBeforeTest);
+                }
+            }
+        }
+    }
+}
+
+private void testSeekAndReadWithConf(boolean optimizeFooterRead, SeekTo seekTo) throws Exception {
+    int fileIdx = 0;
+    for (int i = 0; i <= 4; i++) {
+        int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+        for (int j = 0; j <= 2; j++) {
+            int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+            final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+            String fileName = methodName.getMethodName() + fileIdx++;
+            byte[] fileContent = getRandomBytesArray(fileSize);
+            Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+            seekReadAndTest(fs, testFilePath, seekPos(seekTo, fileSize), HUNDRED, fileContent, footerReadBufferSize);
+        }
+    }
+}
+```
+
+These refactoring steps improve code clarity and ensure that repetitive expressions are handled more efficiently. This code refactoring aligns well with the goals of maintainability and readability, especially in the context of large-scale enterprise software like Hadoop.

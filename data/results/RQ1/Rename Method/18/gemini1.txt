@@ -1,0 +1,39 @@
+ **Here are some refactoring opportunities I've identified in the code:**
+
+**1. Simplifying Retry Logic:**
+
+- Extract the complex retry logic within `asyncReq` into a separate method for better readability and testability.
+- Consider using a dedicated error-handling library or a custom exception hierarchy to manage different retry scenarios more gracefully.
+
+**2. Extracting Common Code:**
+
+- Create a separate method for handling the common cancellation logic within `asyncReq` and its inner `Cancellable` implementation.
+- Extract the nested try-finally blocks within `asyncReq` and `doRequest` into separate methods to improve structure and reduce nesting.
+
+**3. Improving Variable Naming:**
+
+- Use more descriptive variable names in some cases, such as `currentCancellable` could be renamed to `currentRequestCancellable`.
+
+**4. Leveraging Language Features:**
+
+- If possible, explore using Java 8 streams or lambda expressions to simplify certain code blocks.
+
+**Additional Considerations:**
+
+- **Dependency Injection:** Consider using dependency injection to manage the `Http2SolrClient` dependency for better testability and flexibility.
+- **Error Handling:** Explore using a custom exception hierarchy or a dedicated error-handling library for more structured error management.
+- **Testing:** Write unit tests to ensure that refactoring changes maintain the code's correctness and functionality.
+
+**Refactored Code (Example):**
+
+**Note:** I'll provide a refactored code snippet for one of the suggestions:
+
+```java
+private RetryListener createRetryListener(Req req, Rsp rsp, boolean isNonRetryable, boolean isZombie) {
+    return new RetryListener() {
+        // ... (original retry logic within the listener)
+    };
+}
+```
+
+Incorporating these refactoring suggestions would enhance the code's readability, maintainability, and testability. It's crucial to carefully assess the impact of refactoring on the codebase and conduct thorough testing after any changes.

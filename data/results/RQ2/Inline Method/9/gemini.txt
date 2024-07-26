@@ -1,0 +1,37 @@
+Here's the refactored code with the `createNonCustomizedTextField` method inlined:
+
+```java
+public class NewItemSimplePopupPanel extends JBPanel implements Disposable {
+  // ... other code ...
+
+  protected ExtendableTextField createTextField(boolean liveErrorValidation) {
+    ExtendableTextField res = new ExtendableTextField(); // Inline createNonCustomizedTextField
+
+    Dimension minSize = res.getMinimumSize();
+    Dimension prefSize = res.getPreferredSize();
+    minSize.height = JBUIScale.scale(28);
+    prefSize.height = JBUIScale.scale(28);
+    res.setMinimumSize(minSize);
+    res.setPreferredSize(prefSize);
+    res.setColumns(30);
+
+    // ... rest of the method logic ...
+
+    return res;
+  }
+
+  // ... other code ...
+}
+```
+
+The `createNonCustomizedTextField` method has been removed, and its logic to create a new `ExtendableTextField` instance has been directly integrated into the `createTextField` method.
+
+**Benefits of inlining:**
+
+- **Improved readability:** The code becomes more concise and easier to follow by eliminating the extra method call.
+- **Reduced code size:**  There's one less method to maintain.
+- **Potentially improved performance:** While usually minimal, removing a method call can slightly improve performance.
+
+**Things to consider:**
+
+- If the logic within `createNonCustomizedTextField` becomes more complex in the future, it might be beneficial to keep it as a separate method for better maintainability.

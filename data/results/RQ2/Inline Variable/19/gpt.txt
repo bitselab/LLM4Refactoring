@@ -1,0 +1,19 @@
+To apply inline variable refactoring to the `getUnderlyingFile` method in the provided code, we can remove the temporary variable `file` and return the result directly. This makes the code more concise without affecting its readability or functionality.
+
+Here's the refactored `getUnderlyingFile` method:
+
+```java
+private File getUnderlyingFile(Resource resource) {
+    try {
+        if (resource instanceof ClassPathResource || resource instanceof FileSystemResource
+                || resource instanceof FileUrlResource) {
+            return resource.getFile().getAbsoluteFile();
+        }
+    } catch (IOException ex) {
+        // Ignore
+    }
+    return null;
+}
+```
+
+In this refactored version, the temporary `file` variable is eliminated, and `resource.getFile().getAbsoluteFile()` is returned directly. This change streamlines the method, making it more straightforward.

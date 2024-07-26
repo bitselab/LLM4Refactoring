@@ -1,0 +1,88 @@
+Reviewing the provided code, there are several opportunities for refactoring to improve readability, maintainability, and efficiency. Here are the changes I propose:
+
+1. **Extract Method for Duplicate Code:** The code in `guessUltimateHome` and `guessCommunityHome` methods have similar logic for checking the existence of files in different directories. This repetitive code can be extracted into a separate method.
+
+2. **Use Early Return:** The method `getPathFromClass` uses nested if-conditions. This can be refactored using early return to reduce nesting and improve readability.
+
+3. **Constant for Repeated Strings:** There are repeated string literals like `"ultimate"` and `"community"` used in the code. These can be extracted as constants to avoid repetition and facilitate easier updates.
+
+4. **Refactor Exception Messages:** The exception messages are constructed using concatenation. This can be replaced with `String.format` for better readability.
+
+5. **Optional Improvements:** Consider using Java's Optional API for handling nullable paths. This is more of a stylistic choice and depends on the overall codebase style.
+
+Here is the refactored code:
+
+```java
+package org.jetbrains.intellij.build;
+
+import com.intellij.util.lang.UrlClassLoader;
+import org.jetbrains.intellij.build.dependencies.BuildDependenciesCommunityRoot;
+
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public final class IdeaProjectLoaderUtil {
+    private static final String JPS_BOOTSTRAP_COMMUNITY_HOME_ENV_NAME = "JPS_BOOTSTRAP_COMMUNITY_HOME";
+    private static final String ULTIMATE_REPO_MARKER_FILE = ".ultimate.root.marker";
+    private static final String COMMUNITY_REPO_MARKER_FILE = "intellij.idea.community.main.iml";
+    private static final String ULTIMATE_DIR = "ultimate";
+    private static final String COMMUNITY_DIR = "community";
+
+    public static Path guessUltimateHome(Class<?> klass) {
+        final Path start = getSomeRoot(klass);
+        return findProjectHome(start, ULTIMATE_REPO_MARKER_FILE, ULTIMATE_DIR)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        String.format("Cannot guess ultimate project home from root '%s', marker file '%s'", start, ULTIMATE_REPO_MARKER_FILE)));
+    }
+
+    public static BuildDependenciesCommunityRoot guessCommunityHome(Class<?> klass) {
+        final Path start = getSomeRoot(klass);
+        return findProjectHome(start, COMMUNITY_REPO_MARKER_FILE, COMMUNITY_DIR)
+                .map(BuildDependenciesCommunityRoot::new)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        String.format("Cannot guess community project home from root '%s', marker file '%s'", start, COMMUNITY_REPO_MARKER_FILE)));
+    }
+
+    private static Path getSomeRoot(Class<?> klass) {
+        String communityHome = System.getenv(JPS_BOOTSTRAP_COMMUNITY_HOME_ENV_NAME);
+        if (communityHome != null) {
+            return Path.of(communityHome).normalize();
+        }
+
+        Path classPath = getPathFromClass(klass);
+        if (!classPath.toString().endsWith("class")) {
+            throw new IllegalArgumentException(
+                    String.format("To guess idea home, you must provide a class in a .class file inside the idea home dir. Provided class: %s resides in %s", klass, classPath));
+        }
+        return classPath;
+    }
+
+    private static Path getPathFromClass(Class<?> klass) {
+        URL classFileURL = klass.getResource(klass.getSimpleName() + ".class");
+        if (classFileURL == null) {
+            throw new IllegalStateException("Could not get .class file location from class " + klass.getName());
+        }
+        return Path.of(UrlClassLoader.urlToFilePath(classFileURL.getPath()));
+    }
+
+    private static Optional<Path> findProjectHome(Path start, String markerFile, String... additionalPaths) {
+        Path home = start;
+        while (home != null) {
+            if (Files.exists(home.resolve(markerFile))) {
+                return Optional.of(home);
+            }
+            for (String path : additionalPaths) {
+                Path resolvedPath = home.resolve(path).resolve(markerFile);
+                if (Files.exists(resolvedPath)) {
+                    return Optional.of(home.resolve(path));
+                }
+            }
+            home = home.getParent();
+        }
+        return Optional.empty();
+    }
+}
+```
+
+These refactorings are meant to enhance the code quality and should be tested thoroughly to ensure they don't introduce any regressions.

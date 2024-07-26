@@ -1,0 +1,121 @@
+Upon reviewing the provided Java code snippet, the primary opportunities for refactorings using the "Extract Method" pattern seem to center around abstracting repetitive tasks or complex conditional checks into their own methods. Here's a breakdown of potential refactoring opportunities:
+
+1. **Extracting Table Creation Logic**:
+   The methods `createTestSourceTable` and `createTestNonInsertOnlyValuesSinkTable` are used to define table structures in the database. Currently, the method invocations are directly embedded within the test methods, which could be refactored for better readability and reuse if similar patterns of table creation occur frequently in other tests.
+
+2. **JSON Processing Logic**:
+   The JSON processing within lambdas such as handling exceptions and setting metadata could be extracted into a dedicated method. This would improve readability and make the lambda expressions cleaner.
+
+3. **Result Assertion and Configuration Setting**:
+   The configuration setup (in the `getProperties` method) and the result assertion logic used at the end of test methods are other candidates. Particularly, `getProperties` already abstracts setting properties but is defined inline as an anonymous class. This could be refined for clarity or extended for more generic use.
+
+Given these points, let's refactor the provided snippet by extracting repeated JSON processing and result assertion logic into separate methods. Here's the refactored code:
+
+```java
+package org.apache.flink.table.planner.runtime.stream.jsonplan;
+
+import org.apache.flink.table.api.TableException;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.planner.factories.TestValuesTableFactory;
+import org.apache.flink.table.planner.utils.JsonPlanTestBase;
+import org.apache.flink.table.planner.utils.JsonTestUtils;
+
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
+
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
+/**
+ * Tests for configuring operator-level state TTL via {@link
+ * org.apache.flink.table.api.CompiledPlan}.
+ */
+class ConfigureOperatorLevelStateTtlJsonITCase extends JsonPlanTestBase {
+
+    @Test
+    void testDifferentStateTtlForDifferentOneInputOperator() throws Exception {
+        setupTestEnvironment("Orders", "OrdersStats");
+        String sqlQuery = buildSqlQuery();
+        executeSqlPlanWithJsonTransformation(sqlQuery, this::transformJsonForStateMetadata);
+
+        List<String> expected = buildExpectedResults();
+        assertResults(expected);
+    }
+
+    @Test
+    void testDifferentStateTtlForSameTwoInputStreamOperator() throws Exception {
+        innerTestRegularJoin(
+                "INSERT INTO OrdersShipInfo \n"
+                        + "SELECT a.order_id, a.line_order_id, b.ship_mode FROM Orders a JOIN LineOrders b ON a.line_order_id = b.line_order_id",
+                json -> transformJsonForStateMetadata(json, "stream-exec-join", new long[]{3000L, 9000L}));
+    }
+
+    @Test
+    void testDifferentStateTtlThroughSqlHintForSameTwoInputStreamOperator() throws Exception {
+        innerTestRegularJoin(
+                "INSERT INTO OrdersShipInfo \n"
+                        + "SELECT /*+ STATE_TTL('a' = '3s', 'b' = '9s') */\n"
+                        + " a.order_id, a.line_order_id, b.ship_mode "
+                        + "FROM Orders a JOIN LineOrders b ON a.line_order_id = b.line_order_id",
+                this::transformJsonNoOp);
+    }
+
+    private void setupTestEnvironment(String sourceTableName, String sinkTableName) {
+        String dataId = registerSourceData();
+        createTestSourceTable(sourceTableName, new String[]{"`order_id` INT", "`buyer` STRING", "`quantity` INT", "`amount` DOUBLE"}, null, getProperties(dataId, 1, "2s"));
+        createTestNonInsertOnlyValuesSinkTable(sinkTableName, "`buyer` STRING", "`ord_cnt` BIGINT", "`quantity_cnt` BIGINT", "`total_amount` DOUBLE");
+    }
+
+    private String buildSqlQuery() {
+        return "INSERT INTO OrdersStats \n"
+               + "SELECT buyer, COUNT(1) AS ord_cnt, SUM(quantity) AS quantity_cnt, SUM(amount) AS total_amount FROM (\n"
+               + "SELECT *, ROW_NUMBER() OVER(PARTITION BY order_id, buyer, quantity, amount ORDER BY proctime() ASC) AS rk FROM Orders) tmp\n"
+               + "WHERE rk = 1\n"
+               + "GROUP BY buyer";
+    }
+
+    private String transformJsonForStateMetadata(String json) {
+        try {
+            JsonNode target = JsonTestUtils.readFromString(json);
+            JsonTestUtils.setExecNodeStateMetadata(target, "stream-exec-deduplicate", 0, 6000L);
+            JsonTestUtils.setExecNodeStateMetadata(target, "stream-exec-group-aggregate", 0, 9000L);
+            return JsonTestUtils.writeToString(target);
+        } catch (IOException e) {
+            throw new TableException("Cannot modify compiled json plan.", e);
+        }
+    }
+
+    private List<String> buildExpectedResults() {
+        return Arrays.asList(
+                "+I[Tom, 2, 2, 229.8]",
+                "+I[Jerry, 1, 2, 99.9]",
+                "+I[Jerry, 1, 2, 99.9]",
+                "+I[Olivia, 2, 4, 1100.0]",
+                "+I[Michael, 1, 3, 599.9]");
+    }
+
+    private void assertResults(List<String> expectedResults) {
+        List<String> actualResults = TestValuesTableFactory.getResultsAsStrings("OrdersStats");
+        assertResult(expected, actualResults);
+    }
+
+    private static Map<String, String> getProperties(String dataId, int sleepAfterElements, String sleepTime) {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("connector", "values");
+        properties.put("bounded", "false");
+        properties.put("register-internal-data", "true");
+        properties.put("source.sleep-after-elements", String.valueOf(sleepAfterElements));
+        properties.put("source.sleep-time", sleepTime);
+        properties.put("data-id", dataId);
+        return properties;
+    }
+}
+```
+
+In this refactor, I have created methods to encapsulate operations such as setting up the test environment, building SQL queries, transforming JSON for state metadata, building expected results, and asserting these results. This makes the main test methods cleaner and the code more modular and easier to maintain.

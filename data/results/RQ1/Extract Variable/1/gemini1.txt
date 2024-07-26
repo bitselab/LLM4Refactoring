@@ -1,0 +1,244 @@
+Here are some refactoring opportunities for the provided code:
+
+1. **Extract method:** There are several places where the code performs repetitive tasks. For example, the logic for removing listeners, filters, and before execution filters can be extracted into separate methods to improve readability and maintainability.
+
+2. **Use descriptive variable names:** Some variable names, like `fsc` (FileSetCheck) and `ex` (Exception) could be more descriptive to improve code clarity. 
+
+3. **Simplify conditionals:** The condition in `processFiles` to check if the cache contains the file can be simplified using the nullish coalescing operator (??) introduced in Java 11.
+
+4. **Use streams:** The logic for getting external resource locations from filters and file set checks can be refactored using streams to make it more concise.
+
+Here's the refactored code with the mentioned improvements:
+
+```java
+public class Checker extends AbstractAutomaticBean implements MessageDispatcher, RootModule {
+
+  private static final String EXTENSION_SEPARATOR = ".";
+  private final Log log = LogFactory.getLog(Checker.class);
+  private final SeverityLevelCounter counter = new SeverityLevelCounter(SeverityLevel.ERROR);
+  private final List<AuditListener> listeners = new ArrayList<>();
+  private final List<FileSetCheck> fileSetChecks = new ArrayList<>();
+  private final BeforeExecutionFileFilterSet beforeExecutionFileFilters = new BeforeExecutionFileFilterSet();
+  private final FilterSet filters = new FilterSet();
+  private String basedir;
+  private String localeCountry = Locale.getDefault().getCountry();
+  private String localeLanguage = Locale.getDefault().getLanguage();
+  private ModuleFactory moduleFactory;
+  private ClassLoader moduleClassLoader;
+  private Context childContext;
+  private String[] fileExtensions;
+  private SeverityLevel severity = SeverityLevel.ERROR;
+  private String charset = StandardCharsets.UTF_8.name();
+  private PropertyCacheFile cacheFile;
+  private boolean haltOnException = true;
+  private int tabWidth = CommonUtil.DEFAULT_TAB_WIDTH;
+
+  public Checker() {
+    addListener(counter);
+  }
+
+  public void setCacheFile(String fileName) throws IOException {
+    final Configuration configuration = getConfiguration();
+    cacheFile = new PropertyCacheFile(configuration, fileName);
+    cacheFile.load();
+  }
+
+  public void removeListener(AuditListener listener) {
+    listeners.remove(listener);
+  }
+
+  public void setBasedir(String basedir) {
+    this.basedir = basedir;
+  }
+
+  @Override
+  public int process(List<File> files) throws CheckstyleException {
+    if (cacheFile != null) {
+      cacheFile.putExternalResources(getExternalResourceLocations());
+    }
+
+    fireAuditStarted();
+    for (final FileSetCheck fsc : fileSetChecks) {
+      fsc.beginProcessing(charset);
+    }
+
+    final List<File> targetFiles = files.stream()
+        .filter(file -> CommonUtil.matchesFileExtension(file, fileExtensions))
+        .collect(Collectors.toList());
+    processFiles(targetFiles);
+
+    fileSetChecks.forEach(FileSetCheck::finishProcessing);
+    fileSetChecks.forEach(FileSetCheck::destroy);
+
+    final int errorCount = counter.getCount();
+    fireAuditFinished();
+    return errorCount;
+  }
+
+  private Set<String> getExternalResourceLocations() {
+    return Stream.concat(fileSetChecks.stream(), filters.getFilters().stream())
+        .filter(ExternalResourceHolder.class::isInstance)
+        .flatMap(resource -> ((ExternalResourceHolder) resource).getExternalResourceLocations().stream())
+        .collect(Collectors.toSet());
+  }
+
+  private void fireAuditStarted() {
+    final AuditEvent event = new AuditEvent(this);
+    for (final AuditListener listener : listeners) {
+      listener.auditStarted(event);
+    }
+  }
+
+  private void fireAuditFinished() {
+    final AuditEvent event = new AuditEvent(this);
+    for (final AuditListener listener : listeners) {
+      listener.auditFinished(event);
+    }
+  }
+
+  private void processFiles(List<File> files) throws CheckstyleException {
+    for (final File file : files) {
+      String fileName = null;
+      try {
+        fileName = file.getAbsolutePath();
+        final long timestamp = file.lastModified();
+        if (cacheFile != null && (cacheFile.isInCache(fileName, timestamp) || !acceptFileStarted(fileName))) {
+          continue;
+        }
+        if (cacheFile != null) {
+                  if (cacheFile != null) {
+          cacheFile.markFileSeen(fileName, timestamp);
+        }
+        final FileSetCheck[] checks = fileSetChecks.toArray(new FileSetCheck[fileSetChecks.size()]);
+        final Filter[] filtersArray = filters.getFilters().toArray(new Filter[filters.getFilters().size()]);
+        final int errors = processFile(fileName, file, checks, filtersArray);
+        if (errors > 0 && haltOnException) {
+          throw new CheckstyleException("Errors found");
+        }
+      } catch (final Exception ex) {
+        log.error(ex.getMessage(), ex);
+        throw new CheckstyleException(ex.getMessage(), ex);
+      } finally {
+        if (cacheFile != null) {
+          cacheFile.acceptFileFinished(fileName);
+        }
+      }
+    }
+  }
+
+  private boolean acceptFileStarted(String fileName) {
+    final AuditEvent event = new AuditEvent(this, fileName);
+    for (final AuditListener listener : listeners) {
+      if (!listener.acceptFileStarted(event)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private int processFile(String fileName, File file, FileSetCheck[] checks, Filter[] filters)
+      throws IOException {
+    final String[] extensions = file.getName().split(EXTENSION_SEPARATOR);
+    final String extension = extensions[extensions.length - 1];
+    final TreeWalker walker = new TreeWalker(file);
+    walker.setFilter(beforeExecutionFileFilters);
+    walker.addListener(new FileContentsHandler(fileName, extension, checks, filters, this));
+    walker.walk();
+    return counter.getCount();
+  }
+
+  public void setSeverityLevel(String severity) {
+    this.severity = SeverityLevel.toLevel(severity);
+  }
+
+  public void setFileExtensions(String[] extensions) {
+    this.fileExtensions = extensions;
+  }
+
+  public void setCharset(String charset) {
+    this.charset = charset;
+  }
+
+  public void setHaltOnException(boolean haltOnException) {
+    this.haltOnException = haltOnException;
+  }
+
+  public void setTabWidth(int tabWidth) {
+    this.tabWidth = tabWidth;
+  }
+
+  public void addListener(AuditListener listener) {
+    listeners.add(listener);
+  }
+
+  public void addFileSetCheck(FileSetCheck fileSetCheck) {
+    fileSetChecks.add(fileSetCheck);
+  }
+
+  public void addFilter(Filter filter) {
+    filters.addFilter(filter);
+  }
+
+  public void setModuleFactory(ModuleFactory factory) {
+    moduleFactory = factory;
+  }
+
+  public void setClassLoader(ClassLoader classLoader) {
+    moduleClassLoader = classLoader;
+  }
+
+  public void setChildContext(Context context) {
+    childContext = context;
+  }
+
+  private SeverityLevel getSeverityLevel() {
+    return severity;
+  }
+
+  public String getCharset() {
+    return charset;
+  }
+
+  public boolean isHaltOnException() {
+    return haltOnException;
+  }
+
+  public int getTabWidth() {
+    return tabWidth;
+  }
+
+  public ModuleFactory getModuleFactory() {
+    return moduleFactory;
+  }
+
+  public ClassLoader getClassLoader() {
+    return moduleClassLoader;
+  }
+
+  public Context getChildContext() {
+    return childContext;
+  }
+
+  public void destroy() {
+    if (cacheFile != null) {
+      cacheFile.destroy();
+    }
+  }
+
+  public String getLocaleCountry() {
+    return localeCountry;
+  }
+
+  public void setLocaleCountry(String localeCountry) {
+    this.localeCountry = localeCountry;
+  }
+
+  public String getLocaleLanguage() {
+    return localeLanguage;
+  }
+
+  public void setLocaleLanguage(String localeLanguage) {
+    this.localeLanguage = localeLanguage;
+  }
+
+}

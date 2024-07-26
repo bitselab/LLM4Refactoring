@@ -1,0 +1,28 @@
+The extract variable refactoring is intended to make the code more readable and maintainable by reducing complexity and repetition. In the `testMaxAttempts` method, the expression `new ManualClock()` is repeated, which is a good candidate for this refactoring. We can extract this repeated instantiation of `ManualClock` into a single variable at the start of the method. This makes the code cleaner and avoids unnecessary object creation.
+
+Here's the refactored version of the `testMaxAttempts` method:
+
+```java
+void testMaxAttempts() {
+    int maxAttempts = 13;
+    long maxBackoffMS = 3L;
+    ManualClock clock = new ManualClock();
+    final ExponentialDelayRestartBackoffTimeStrategy restartStrategy =
+            new ExponentialDelayRestartBackoffTimeStrategy(
+                    clock, 1L, maxBackoffMS, 1.2, 10L, 0.25, maxAttempts);
+
+    for (int i = 0; i <= maxAttempts; i++) {
+        assertThat(restartStrategy.canRestart()).isTrue();
+        restartStrategy.notifyFailure(failure);
+        clock.advanceTime(Duration.ofMillis(maxBackoffMS + 1));
+    }
+    assertThat(restartStrategy.canRestart()).isFalse();
+}
+```
+
+In this refactored code:
+- A new `ManualClock` object is created once at the beginning of the method and assigned to the variable `clock`.
+- This `clock` variable is then used both in the instantiation of `ExponentialDelayRestartBackoffTimeStrategy` and in the `advanceTime` call inside the loop.
+- This change reduces the creation of redundant `ManualClock` instances and improves the clarity of the code. 
+
+This approach should be applied to other test methods in the class where similar patterns of repeated object creation are found.

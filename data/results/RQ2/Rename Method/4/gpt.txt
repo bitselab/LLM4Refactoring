@@ -1,0 +1,11 @@
+To improve the readability and clarity of the method name in the provided code snippet, we can refactor the method name `pointAsWKB` to something more descriptive. This method appears to take a `Geometry` object and convert it into a Well-Known Binary (WKB) format, returning a `BytesRef` object. The current name `pointAsWKB` is a bit misleading since it suggests the method is specific to `Point` geometry, while in fact, it can handle any `Geometry` type.
+
+A more appropriate name could be `geometryToWKB`, which clearly indicates that the method takes any `Geometry` object and converts it to WKB format. Here's the refactored code snippet:
+
+```java
+public BytesRef geometryToWKB(Geometry geometry) {
+    return new BytesRef(WellKnownBinary.toWKB(geometry, ByteOrder.LITTLE_ENDIAN));
+}
+```
+
+This change should be applied wherever the method is called within the codebase to maintain consistency.

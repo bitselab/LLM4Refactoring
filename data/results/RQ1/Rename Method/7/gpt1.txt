@@ -1,0 +1,106 @@
+Reviewing the provided code snippet, there are several opportunities for refactoring to improve its readability, maintainability, and performance. Here are the key refactoring steps I would suggest:
+
+1. **Method Length and Complexity**: The `performInsertReturning` method is long and handles multiple responsibilities (preparing, executing, and releasing the statement). This could be refactored into smaller, more focused methods.
+
+2. **Resource Management**: The use of `PreparedStatement` should ideally be within a try-with-resources statement to ensure proper resource management and prevent potential resource leaks.
+
+3. **Deprecated Methods**: There are methods marked as deprecated. If they are no longer needed or have replacements, consider removing or replacing them.
+
+4. **Exception Handling**: The catch block for `SQLException` could be more specific in handling different types of SQL exceptions.
+
+5. **Comments and Documentation**: Ensure that the methods and their purpose are well-documented, especially for the abstract methods.
+
+6. **Code Duplication**: The `executeAndExtract` method is marked as deprecated and seems to be a wrapper around `executeAndExtractReturning`. If it's no longer needed, it could be removed.
+
+Let's refactor the code based on these suggestions:
+
+```java
+package org.hibernate.id.insert;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+import org.hibernate.engine.jdbc.mutation.JdbcValueBindings;
+import org.hibernate.engine.jdbc.mutation.group.PreparedStatementDetails;
+import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.EventType;
+import org.hibernate.generator.values.AbstractGeneratedValuesMutationDelegate;
+import org.hibernate.generator.values.GeneratedValues;
+import org.hibernate.id.PostInsertIdentityPersister;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.pretty.MessageHelper;
+
+/**
+ * Abstract {@link org.hibernate.generator.values.GeneratedValuesMutationDelegate} implementation where
+ * the underlying strategy causes the generated identifier to be returned as
+ * an effect of performing the insert statement. There is no need for
+ * an additional sql statement to determine the generated identifier.
+ */
+public abstract class AbstractReturningDelegate extends AbstractGeneratedValuesMutationDelegate
+        implements InsertGeneratedIdentifierDelegate {
+
+    // Constructor
+    public AbstractReturningDelegate(
+            EntityPersister persister,
+            EventType timing,
+            boolean supportsArbitraryValues,
+            boolean supportsRowId) {
+        super( persister, timing, supportsArbitraryValues, supportsRowId );
+    }
+
+    @Override
+    public GeneratedValues performInsert(
+            PreparedStatementDetails statementDetails,
+            JdbcValueBindings valueBindings,
+            Object entity,
+            SharedSessionContractImplementor session) {
+        logStatementDetails(session, statementDetails);
+        valueBindings.beforeStatement( statementDetails );
+        return executeAndExtractReturning( statementDetails.getSqlString(), statementDetails.getStatement(), session );
+    }
+
+    @Override
+    public final GeneratedValues performInsertReturning(String sql, SharedSessionContractImplementor session, Binder binder) {
+        try (PreparedStatement insert = prepareStatement( sql, session )) {
+            binder.bindValues( insert );
+            return executeAndExtractReturning( sql, insert, session );
+        } catch (SQLException sqle) {
+            throw convertSQLException(session, sqle, sql);
+        }
+    }
+
+    protected abstract GeneratedValues executeAndExtractReturning(
+            String sql,
+            PreparedStatement preparedStatement,
+            SharedSessionContractImplementor session);
+
+    // Additional helper methods for better code organization
+    private void logStatementDetails(SharedSessionContractImplementor session, PreparedStatementDetails statementDetails) {
+        session.getJdbcServices().getSqlStatementLogger().logStatement( statementDetails.getSqlString() );
+    }
+
+    private SQLException convertSQLException(SharedSessionContractImplementor session, SQLException sqle, String sql) {
+        return session.getJdbcServices().getSqlExceptionHelper().convert(
+                sqle,
+                "could not insert: " + MessageHelper.infoString( persister ),
+                sql
+        );
+   
+
+    }
+
+    protected void releaseStatement(PreparedStatement preparedStatement, SharedSessionContractImplementor session) {
+        final JdbcCoordinator jdbcCoordinator = session.getJdbcCoordinator();
+        jdbcCoordinator.getLogicalConnection().getResourceRegistry().release( preparedStatement );
+        jdbcCoordinator.afterStatementExecution();
+    }
+}
+```
+
+In this refactored code:
+- Deprecated methods and related comments are removed.
+- The `performInsertReturning` method now uses a try-with-resources statement for `PreparedStatement`.
+- Added private helper methods `logStatementDetails` and `convertSQLException` for better readability and separation of concerns.
+- Removed unnecessary code duplication and comments to streamline the class.
+- Ensured that the code adheres to good practices in exception handling and resource management.

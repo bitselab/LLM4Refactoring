@@ -1,0 +1,36 @@
+After thoroughly reviewing the provided code snippet from the Spring Framework's `AbstractApplicationContext` class, I've identified a few potential opportunities for inline method refactoring. Inline method refactoring is about moving the code from a method into its callers when the method's body is just as clear as its name, or when it's only called in one place. This can improve readability and reduce the indirection in the code. However, caution is needed to ensure that such changes do not affect the functionality or extend beyond the intended scope of refactoring.
+
+1. **`getResourcePatternResolver()` Method:**
+   - This method is only called once, in the constructor of `AbstractApplicationContext`. Its functionality is straightforward, returning a new instance of `PathMatchingResourcePatternResolver`. We can inline this method in the constructor to reduce indirection.
+
+2. **`createEnvironment()` Method:**
+   - Similar to `getResourcePatternResolver()`, the `createEnvironment()` method is simple and only called from the `getEnvironment()` method. It can be inlined for clarity and to reduce the number of small methods.
+
+3. **`assertBeanFactoryActive()` Method:**
+   - This method is used multiple times, but its body is straightforward and can be easily understood if inlined. However, since it's used in several places, inlining it might increase code duplication. It's a trade-off between reducing method count and avoiding duplication.
+
+Here's how the code would look after applying the first two inline method refactorings:
+
+```java
+// In AbstractApplicationContext class:
+
+public AbstractApplicationContext() {
+    this.resourcePatternResolver = new PathMatchingResourcePatternResolver(this);
+}
+
+// ...
+
+@Override
+public ConfigurableEnvironment getEnvironment() {
+    if (this.environment == null) {
+        this.environment = new StandardEnvironment();
+    }
+    return this.environment;
+}
+
+// Remove the getResourcePatternResolver() and createEnvironment() methods.
+```
+
+For the `assertBeanFactoryActive()` method, given its multiple usages, I would recommend keeping it as is to avoid code duplication.
+
+Remember, while inline method refactoring can simplify the code and reduce the number of methods, it's important to balance this with the need to maintain code readability and avoid excessive duplication. In a widely used framework like Spring, maintaining clear, self-documenting code is especially important.

@@ -1,0 +1,35 @@
+ **Here are a few refactoring opportunities in the code:**
+
+1. **Extract a method for creating a JAR file:** The block of code that creates a JAR file within `loadFromJar` can be extracted into a separate method for better reusability and readability:
+
+```java
+private Path createJar(Path tempDir, String resourceName, String content) throws IOException {
+    Path jarPath = tempDir.resolve("custom.jar");
+    try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jarPath))) {
+        out.putNextEntry(new ZipEntry(resourceName));
+        out.write(content.getBytes(StandardCharsets.UTF_8));
+    }
+    return jarPath;
+}
+```
+
+2. **Combine common code in `loadEmptyClasspathWithParent` and `loadEmptyClasspathNoParent`:** These two test methods have a lot of common code. You can extract the common parts into a method and call it from both tests:
+
+```java
+private void assertLoadObjectClass(ClasspathClassLoader loader) throws IOException {
+    try (InputStream resource = loader.getResourceAsStream("java/lang/Object.class")) { // ...
+    }
+}
+```
+
+3. **Consider a parameter for `javaHome` in `loadFromJava17`:** Instead of hardcoding assumptions about the `javaHome` structure, make the test more flexible by accepting a `javaHome` parameter:
+
+```java
+void loadFromJava17(Path javaHome) throws IOException {
+  // ...
+}
+```
+
+4. **Move resource-related utility methods to a separate class:** If there are other resource-related utility methods like `IOUtil.readToString`, consider creating a separate class for better organization.
+
+While these are potential improvements, the code is overall well-structured and readable, so these refactoring suggestions are optional and depend on your team's coding preferences and maintainability goals.

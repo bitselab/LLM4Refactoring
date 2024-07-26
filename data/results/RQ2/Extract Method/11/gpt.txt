@@ -1,0 +1,53 @@
+To refactor the given code by extracting the duplicate code snippet into a method, we can create a new method, perhaps named `cleanUpAndFinish`. This method will encapsulate the repeated lines of code. By doing this, we make the code more maintainable, readable, and adhere to the DRY (Don't Repeat Yourself) principle.
+
+I'll show you how the refactored code will look after introducing the `cleanUpAndFinish` method:
+
+1. **Define the New Method**:
+   We'll define `cleanUpAndFinish` method which takes a `Throwable` parameter (failure) and performs the common actions.
+
+   ```java
+   private void cleanUpAndFinish(Throwable failure) {
+       byteBufferPool.release(cipherBuffer);
+       finishOutwardClose(failure);
+       timeout.destroy();
+   }
+   ```
+
+2. **Replace Duplicate Code Snippets**:
+   Replace each occurrence of the duplicate code snippet with a call to `cleanUpAndFinish`.
+
+Here's the refactored version of the `QuicSession` class:
+
+```java
+// ... [Other parts of the QuicSession class remain unchanged]
+
+private class Flusher extends IteratingCallback {
+    // ... [Other parts of Flusher class remain unchanged]
+
+    @Override
+    protected void onCompleteSuccess() {
+        if (LOG.isDebugEnabled())
+            LOG.debug("connection closed {}", QuicSession.this);
+        Throwable failure = new ClosedChannelException();
+        cleanUpAndFinish(failure); // Refactored code
+    }
+
+    @Override
+    protected void onCompleteFailure(Throwable failure) {
+        if (LOG.isDebugEnabled())
+            LOG.debug("failed to write cipher bytes, closing session on {}", QuicSession.this, failure);
+        cleanUpAndFinish(failure); // Refactored code
+    }
+
+    // New method for clean up
+    private void cleanUpAndFinish(Throwable failure) {
+        byteBufferPool.release(cipherBuffer);
+        finishOutwardClose(failure);
+        timeout.destroy();
+    }
+}
+
+// ... [Other parts of the QuicSession class remain unchanged]
+```
+
+In this refactored version, both `onCompleteSuccess` and `onCompleteFailure` methods in the `Flusher` inner class now call `cleanUpAndFinish` with the appropriate failure information. This change removes the duplicate code, making the class cleaner and more maintainable.

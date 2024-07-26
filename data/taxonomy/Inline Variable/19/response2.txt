@@ -1,0 +1,18 @@
+In the provided code snippet, there is an opportunity for inline variable refactoring. The variable `file` is used only once in the immediate return statement, so it can be inlined for cleaner and more concise code. This follows the pattern where if a variable is used immediately and only once, it should be inlined.
+
+Here's the refactored code:
+```java
+private File getUnderlyingFile(Resource resource) {
+    try {
+        if (resource instanceof ClassPathResource || resource instanceof FileSystemResource
+                || resource instanceof FileUrlResource) {
+            return resource.getFile().getAbsoluteFile();
+        }
+    }
+    catch (IOException ex) {
+        // Ignore
+    }
+    return null;
+}
+```
+In this refactored version, I've removed the `file` variable and replaced it with the method call chain `resource.getFile().getAbsoluteFile()`. This makes the method slightly more straightforward without affecting its functionality or readability negatively.

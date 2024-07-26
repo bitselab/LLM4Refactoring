@@ -1,0 +1,62 @@
+ **I've identified a few potential rename variable refactoring opportunities in the code:**
+
+1. **Renaming `FIELD_NAME_STATE_TTL` to `FIELD_NAME_STATE_RETENTION_TIME`:** This change would better align with the terminology used in the `ExecutionConfigOptions.IDLE_STATE_RETENTION` configuration option, making the code more consistent and easier to understand.
+
+2. **Renaming `stateTtl` to `stateRetentionTime`:** Similarly, this would reinforce consistency within the class and match the language used in the configuration option.
+
+3. **Renaming `getOneInputOperatorDefaultMeta` to `getDefaultMetaForOneInputOperator`:** This change would improve readability by following a more consistent verb-noun naming convention for method names.
+
+4. **Renaming `getMultiInputOperatorDefaultMeta` to `getDefaultMetaForMultiInputOperator`:** This would apply the same naming convention for consistency.
+
+5. **Renaming `getStateTtlForOneInputOperator` to `getStateRetentionTimeForOneInputOperator`:** This aligns with the proposed renaming of `stateTtl` to `stateRetentionTime`.
+
+6. **Renaming `getStateTtlForMultiInputOperator` to `getStateRetentionTimesForMultiInputOperator`:** This reflects that the method returns a list of retention times, and it makes the return value clearer from the method name.
+
+**Here's the refactored code incorporating these changes:**
+
+```java
+package org.apache.flink.table.planner.plan.nodes.exec;
+
+// ... other imports
+
+@Internal
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class StateMetadata {
+
+    public static final String FIELD_NAME_STATE_INDEX = "index";
+    public static final String FIELD_NAME_STATE_RETENTION_TIME = "retentionTime"; // Renamed from FIELD_NAME_STATE_TTL
+    public static final String FIELD_NAME_STATE_NAME = "name";
+
+    // ... other fields
+
+    private final Duration stateRetentionTime; // Renamed from stateTtl
+
+    // ... other methods
+
+    public static List<StateMetadata> getDefaultMetaForOneInputOperator( // Renamed from getOneInputOperatorDefaultMeta
+        ReadableConfig tableConfig, String stateName) {
+        // ...
+    }
+
+    public static List<StateMetadata> getDefaultMetaForMultiInputOperator( // Renamed from getMultiInputOperatorDefaultMeta
+        Map<Integer, Long> stateTtlFromHint,
+        ReadableConfig tableConfig,
+        String... stateNameList) {
+        // ...
+    }
+
+    public static long getStateRetentionTimeForOneInputOperator( // Renamed from getStateTtlForOneInputOperator
+        ExecNodeConfig config, @Nullable List<StateMetadata> stateMetadataList) {
+        // ...
+    }
+
+    public static List<Long> getStateRetentionTimesForMultiInputOperator( // Renamed from getStateTtlForMultiInputOperator
+        ExecNodeConfig config,
+        int inputNumOfOperator,
+        @Nullable List<StateMetadata> stateMetadataList) {
+        // ...
+    }
+
+    // ... other methods
+}
+```

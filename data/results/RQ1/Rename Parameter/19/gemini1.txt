@@ -1,0 +1,91 @@
+ **I've reviewed the code and identified several refactoring opportunities:**
+
+**1. Employ a Builder Pattern for PulsarPropertiesMapper:**
+- The constructor features numerous optional parameters.
+- Refactoring with a Builder pattern would streamline object creation and enhance readability.
+
+**2. Streamline Timeout Handling:**
+- The `timeoutProperty` method is used repeatedly for timeout conversions.
+- Create a utility class with static methods for timeout conversions to centralize this logic.
+
+**3. Extract Common Authentication Logic:**
+- The `customizeAuthentication` method is duplicated for client and admin builders.
+- Create a reusable method to handle authentication setup for both cases.
+
+**4. Leverage Streamlined Property Mapping:**
+- Consider using Spring's `BeanUtils.copyProperties` or a custom mapper to simplify property mapping.
+
+**5. Optimize Builder Customization Methods:**
+- The methods for customizing builders (`customizeClientBuilder`, `customizeAdminBuilder`, etc.) follow a similar pattern.
+-  Explore potential for generalization or streamlining with a common method or utility class.
+
+**6. Enhance Naming Conventions:**
+- Some variable and method names could benefit from more descriptive names to improve readability.
+
+**7. Augment Comments and Documentation:**
+- While the code has some comments, adding more detailed documentation would bolster comprehension and maintainability.
+
+**Below is a refactored code sample incorporating some of these suggestions:**
+
+```java
+// ... other imports
+import static org.springframework.util.StringUtils.hasText;
+
+public class PulsarPropertiesMapper {
+
+    private final PulsarProperties properties;
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    private PulsarPropertiesMapper(Builder builder) {
+        this.properties = builder.properties;
+    }
+
+    // ... other methods
+
+    private void customizeCommonBuilderProperties(Builder builder, PulsarProperties.BaseProperties properties) {
+        PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
+        map.from(properties::getConnectionTimeout).to(this::applyTimeout);
+        map.from(properties::getOperationTimeout).to(this::applyTimeout);
+        map.from(properties::getLookupTimeout).to(this::applyTimeout);
+        // ... other common properties
+    }
+
+    private void customizeAuthentication(BiConsumer<String, String> authenticationSetter) {
+        PulsarProperties.Authentication properties = this.properties.getAuthentication();
+        if (hasText(properties.getPluginClassName())) {
+            try {
+                Map<String, String> params = new TreeMap<>(properties.getParam());
+                String authParamString = ObjectMapperFactory.create().writeValueAsString(params);
+                authenticationSetter.accept(properties.getPluginClassName(), authParamString);
+            } catch (Exception ex) {
+                throw new IllegalStateException("Could not configure Pulsar authentication", ex);
+            }
+        }
+    }
+
+    private void applyTimeout(Duration timeout, BiConsumer<Integer, TimeUnit> timeoutSetter) {
+        timeoutSetter.accept(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    public static class Builder {
+
+        private PulsarProperties properties;
+
+        public Builder properties(PulsarProperties properties) {
+            this.properties = properties;
+            return this;
+        }
+
+        // ... other builder methods
+
+        public PulsarPropertiesMapper build() {
+            return new PulsarPropertiesMapper(this);
+        }
+    }
+}
+```
+
+**Remember that refactoring decisions should align with your project's specific needs and priorities.**

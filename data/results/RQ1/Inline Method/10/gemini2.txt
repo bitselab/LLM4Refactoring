@@ -1,0 +1,54 @@
+There is indeed an opportunity for inline method refactoring in the provided code snippet. The private method `chooseJdk(Project project, Collection<? extends Module> modules)` can be inlined into the public method `getAnyJdk(Project project)`.
+
+Here's the refactored code:
+
+```java
+package com.intellij.openapi.projectRoots.ex;
+
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.JavaSdkType;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.ProjectRootManager;
+import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.lang.JavaVersion;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+
+/**
+ * @author Eugene Zhuravlev
+ */
+public final class PathUtilEx {
+
+  @Nullable
+  public static Sdk getAnyJdk(@NotNull Project project) {
+    Sdk projectJdk = ProjectRootManager.getInstance(project).getProjectSdk();
+    if (projectJdk != null && projectJdk.getSdkType() instanceof JavaSdkType) {
+      return projectJdk;
+    }
+
+    List<Sdk> jdks = ContainerUtil.mapNotNull(Arrays.asList(ModuleManager.getInstance(project).getModules()), module -> {
+      if (module == null) return null;
+      Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
+      if (sdk == null || !(sdk.getSdkType() instanceof JavaSdkType)) return null;
+      return sdk;
+    });
+
+    if (jdks.isEmpty()) {
+      return null;
+    }
+    return jdks.stream().max(Comparator.comparing(jdk -> JavaVersion.tryParse(jdk.getVersionString()), Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(null);
+  }
+}
+```
+
+In this refactored code, the logic from `chooseJdk(Project project, Collection<? extends Module> modules)` is directly placed within the `getAnyJdk(Project project)` method, eliminating the need for a separate private method. This improves readability by keeping related code together.
+
+It's important to note that both the original `chooseJdk` methods are marked as deprecated. Since we've inlined the functionality into `getAnyJdk`, these methods can be safely removed entirely. However, that decision should be made in consultation with the team to ensure no unintended consequences arise. 

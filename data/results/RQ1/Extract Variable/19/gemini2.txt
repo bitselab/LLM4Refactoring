@@ -1,0 +1,20 @@
+## Refactored Code with Extract Variable
+
+There is an opportunity for extract variable refactoring in the `createHttpHandler` method. The condition `StringUtils.hasLength(this.contextPath)` is used twice. We can extract this condition into a separate variable to improve readability.
+
+Here's the refactored code:
+
+```java
+@Override
+protected HttpHandler createHttpHandler() {
+  HttpHandler handler = super.createHttpHandler();
+  // Extract the condition into a variable
+  boolean hasContextPath = StringUtils.hasLength(this.contextPath);
+  if (hasContextPath) {
+    handler = Handlers.path().addPrefixPath(this.contextPath, handler);
+  }
+  return handler;
+}
+```
+
+This refactoring makes the code easier to understand by clearly separating the condition check from the actual logic. 

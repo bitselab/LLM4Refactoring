@@ -1,0 +1,189 @@
+Rename variable refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename variable refactoring pattern is to rename variables whose semantics are inappropriate in the context. Here is an example of the rename variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private Availability availability() {
+    if (isShutdown.get()) {
+        return Availability.SHUTDOWN;
+    }
+    int val = requirementCount.get();
+    if (val == 0) {
+        return Availability.AVAILABLE;
+    }
+    assert (val > 0); 
+    return Availability.UNAVAILABLE;
+}
+```
+The source code after refactoring is:
+```
+private Availability availability() {
+    if (isShutdown.get()) {
+        return Availability.SHUTDOWN;
+    }
+    int count = requirementCount.get();
+    if (count == 0) {
+        return Availability.AVAILABLE;
+    }
+    assert (count > 0);
+    return Availability.UNAVAILABLE;
+}
+```
+In this example, the developer renamed the variable "val" to "count".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+@Nullable
+public PsiBuilder.Marker parseStatement(@NotNull PsiBuilder builder) {
+    IElementType tokenType = builder.getTokenType();
+    if (tokenType == JavaTokenType.IF_KEYWORD) {
+        return parseIfStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.WHILE_KEYWORD) {
+        return parseWhileStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.FOR_KEYWORD) {
+        return parseForStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.DO_KEYWORD) {
+        return parseDoWhileStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.SWITCH_KEYWORD) {
+        return parseSwitchStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.CASE_KEYWORD || tokenType == JavaTokenType.DEFAULT_KEYWORD) {
+        return parseSwitchLabelStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.BREAK_KEYWORD) {
+        return parseBreakStatement(builder);
+    }
+    else if (isStmtYieldToken(builder, tokenType)) {
+        return parseYieldStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.CONTINUE_KEYWORD) {
+        return parseContinueStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.RETURN_KEYWORD) {
+        return parseReturnStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.THROW_KEYWORD) {
+        return parseThrowStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.SYNCHRONIZED_KEYWORD) {
+        return parseSynchronizedStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.TRY_KEYWORD) {
+        return parseTryStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.ASSERT_KEYWORD) {
+        return parseAssertStatement(builder);
+    }
+    else if (tokenType == JavaTokenType.LBRACE) {
+        return parseBlockStatement(builder);
+    }
+    else if (tokenType instanceof ILazyParseableElementType) {
+        builder.advanceLexer();
+        return null;
+    }
+    else if (tokenType == JavaTokenType.SEMICOLON) {
+        PsiBuilder.Marker empty = builder.mark();
+        builder.advanceLexer();
+        done(empty, myJavaElementTypeContainer.EMPTY_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+        return empty;
+    }
+    else if (tokenType == JavaTokenType.IDENTIFIER || tokenType == JavaTokenType.AT) {
+        PsiBuilder.Marker refPos = builder.mark();
+        boolean nonSealed = BasicDeclarationParser.isNonSealedToken(builder, tokenType);
+        myParser.getDeclarationParser().parseAnnotations(builder);
+        skipQualifiedName(builder);
+        IElementType suspectedLT = builder.getTokenType(), next = builder.lookAhead(1);
+        refPos.rollbackTo();
+
+        if (suspectedLT == JavaTokenType.LT || suspectedLT == JavaTokenType.DOT && next == JavaTokenType.AT || nonSealed) {
+            PsiBuilder.Marker declStatement = builder.mark();
+
+            if (myParser.getDeclarationParser().parse(builder, BasicDeclarationParser.BaseContext.CODE_BLOCK) != null) {
+                done(declStatement, myJavaElementTypeContainer.DECLARATION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+                return declStatement;
+            }
+
+            BasicReferenceParser.TypeInfo type = myParser.getReferenceParser().parseTypeInfo(builder, 0);
+            if (suspectedLT == JavaTokenType.LT && (type == null || !type.isParameterized)) {
+                declStatement.rollbackTo();
+            }
+            else if (type == null || builder.getTokenType() != JavaTokenType.DOUBLE_COLON) {
+                error(builder, JavaPsiBundle.message("expected.identifier"));
+                if (type == null) builder.advanceLexer();
+                done(declStatement, myJavaElementTypeContainer.DECLARATION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+                return declStatement;
+            }
+            else {
+                declStatement.rollbackTo();  // generic type followed by the double colon is a good candidate for being a constructor reference
+            }
+        }
+    }
+
+    PsiBuilder.Marker pos = builder.mark();
+    PsiBuilder.Marker expr = myParser.getExpressionParser().parse(builder);
+
+    if (expr != null) {
+        int count = 1;
+        PsiBuilder.Marker list = expr.precede();
+        PsiBuilder.Marker statement = list.precede();
+        while (builder.getTokenType() == JavaTokenType.COMMA) {
+            PsiBuilder.Marker commaPos = builder.mark();
+            builder.advanceLexer();
+            PsiBuilder.Marker expr1 = myParser.getExpressionParser().parse(builder);
+            if (expr1 == null) {
+                commaPos.rollbackTo();
+                break;
+            }
+            commaPos.drop();
+            count++;
+        }
+        if (count > 1) {
+            pos.drop();
+            done(list, myJavaElementTypeContainer.EXPRESSION_LIST, myWhiteSpaceAndCommentSetHolder);
+            semicolon(builder);
+            done(statement, myJavaElementTypeContainer.EXPRESSION_LIST_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+            return statement;
+        }
+        if (exprType(expr) != myJavaElementTypeContainer.REFERENCE_EXPRESSION) {
+            drop(list, pos);
+            semicolon(builder);
+            done(statement, myJavaElementTypeContainer.EXPRESSION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+            return statement;
+        }
+        pos.rollbackTo();
+    }
+    else {
+        pos.drop();
+    }
+
+    PsiBuilder.Marker decl = myParser.getDeclarationParser().parse(builder, BasicDeclarationParser.BaseContext.CODE_BLOCK);
+    if (decl != null) {
+        PsiBuilder.Marker statement = decl.precede();
+        done(statement, myJavaElementTypeContainer.DECLARATION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+        return statement;
+    }
+
+    if (builder.getTokenType() == JavaTokenType.IDENTIFIER && builder.lookAhead(1) == JavaTokenType.COLON) {
+        PsiBuilder.Marker statement = builder.mark();
+        advance(builder, 2);
+        parseStatement(builder);
+        done(statement, myJavaElementTypeContainer.LABELED_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+        return statement;
+    }
+
+    if (expr != null) {
+        PsiBuilder.Marker statement = builder.mark();
+        myParser.getExpressionParser().parse(builder);
+        semicolon(builder);
+        done(statement, myJavaElementTypeContainer.EXPRESSION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+        return statement;
+    }
+
+    return null;
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

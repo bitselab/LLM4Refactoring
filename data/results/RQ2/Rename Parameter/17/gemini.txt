@@ -1,0 +1,38 @@
+ **Here's the refactored code with a more descriptive parameter name:**
+
+```java
+public class ExhaustiveSwitch {
+
+    // ... other code
+
+    static int coverage(Object inputObject) {  // Renamed parameter to "inputObject"
+        return switch (inputObject) {
+            case String s -> s.length();
+            case Integer i -> i;
+            default -> 0;
+        };
+    }
+
+    // ... other code
+}
+```
+
+**Explanation of the change:**
+
+- The parameter `o` in the `coverage` method has been renamed to `inputObject`. This name better conveys the purpose of the parameter, which is to receive an object for processing.
+- The new name is more specific and aligns with the general coding convention of using descriptive variable and parameter names.
+
+**Additional Considerations:**
+
+- **Consistency:** Make sure to update any references to the old parameter name (`o`) within the `coverage` method or other related code to maintain consistency.
+- **Broader Refactoring:** Consider exploring other refactoring opportunities in the code to further enhance readability and maintainability. For example:
+    - Rename other variables or methods with unclear names.
+    - Introduce helper methods to break down complex logic.
+    - Improve code formatting and spacing for better visual clarity.
+
+**Key Takeaways:**
+
+- Renaming parameters is a valuable refactoring technique for improving code clarity.
+- Choose descriptive names that accurately reflect the parameter's purpose.
+- Consistency in naming is crucial for maintainability.
+- Combine parameter renaming with other refactoring techniques for optimal code quality.

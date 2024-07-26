@@ -1,0 +1,83 @@
+ **Here's the refactored code after inlining the `computeNumberOfSubpartitions` method:**
+
+```java
+package org.apache.flink.runtime.executiongraph;
+
+import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
+import org.apache.flink.runtime.jobgraph.DistributionPattern;
+import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.scheduler.strategy.ConsumedPartitionGroup;
+import org.apache.flink.runtime.scheduler.strategy.ConsumerVertexGroup;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import static org.apache.flink.util.Preconditions.checkState;
+
+public class IntermediateResultPartition {
+
+    static final int NUM_SUBPARTITIONS_UNKNOWN = -1;
+
+    private final IntermediateResult totalResult;
+
+    private final ExecutionVertex producer;
+
+    private final IntermediateResultPartitionID partitionId;
+
+    private final EdgeManager edgeManager;
+
+    private final int numberOfSubpartitionsForDynamicGraph;
+
+    private boolean dataAllProduced = false;
+
+    private final Set<ConsumedPartitionGroup> releasablePartitionGroups = new HashSet<>();
+
+    public IntermediateResultPartition(
+            IntermediateResult totalResult,
+            ExecutionVertex producer,
+            int partitionNumber,
+            EdgeManager edgeManager) {
+        this.totalResult = totalResult;
+        this.producer = producer;
+        this.partitionId = new IntermediateResultPartitionID(totalResult.getId(), partitionNumber);
+        this.edgeManager = edgeManager;
+
+        if (!producer.getExecutionGraphAccessor().isDynamic()) {
+            this.numberOfSubpartitionsForDynamicGraph = NUM_SUBPARTITIONS_UNKNOWN;
+        } else {
+            this.numberOfSubpartitionsForDynamicGraph = computeNumberOfSubpartitionsForDynamicGraph();
+            checkState(
+                    numberOfSubpartitionsForDynamicGraph > 0,
+                    "Number of subpartitions is an unexpected value: "
+                            + numberOfSubpartitionsForDynamicGraph);
+        }
+    }
+
+    // ... other methods ...
+
+    public int getNumberOfSubpartitions() {
+        if (!getProducer().getExecutionGraphAccessor().isDynamic()) {
+            List<ConsumerVertexGroup> consumerVertexGroups = getConsumerVertexGroups();
+            checkState(!consumerVertexGroups.isEmpty());
+            return consumerVertexGroups.get(0).size();  // Inline the logic directly
+        } else {
+            return numberOfSubpartitionsForDynamicGraph;
+        }
+    }
+
+    // ... other methods ...
+}
+```
+
+**Key points about the refactoring:**
+
+- **Removed method:** The `computeNumberOfSubpartitions` method is removed as its logic is directly integrated into `getNumberOfSubpartitions`.
+- **Inlined logic:** The calculation of subpartitions is now performed directly within the `getNumberOfSubpartitions` method, reducing method calls and improving readability.
+
+**Additional considerations for further refactoring:**
+
+- **Descriptive variable names:** Consider using more meaningful names like `consumerVertexGroupsSize` instead of `consumerVertexGroups.get(0).size()` for further clarity.
+- **Extract common logic:** If similar logic for getting consumer vertex groups is used in multiple places, consider extracting it into a separate method to reduce code duplication.
+- **Comments and documentation:** Add comments to explain the purpose of methods and variables, enhancing code understanding and maintainability.

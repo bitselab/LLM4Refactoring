@@ -1,0 +1,80 @@
+## Refactoring Opportunities
+
+There are several opportunities to refactor the provided code snippet for improved readability and maintainability. Here's a breakdown of the suggestions:
+
+1. **Extract Test Helper Method:**  
+The method `createBrokenInputStream` creates a BrokenInputStream instance with a provided exception. This functionality can be extracted into a separate helper method to avoid repetition in each test case.
+
+2. **Simplify Exception Handling (Optional):**  
+The current approach uses `assertThrows` to verify the thrown exception type and message. Depending on project standards and developer preference, a simpler approach using a try-catch block might be sufficient.
+
+3. **Descriptive Test Method Names:** 
+Consider using more descriptive test names that clearly indicate the specific behavior being tested. For example, instead of `testAvailable`, names like `testAvailable_ThrowsExpectedException` or `testAvailable_CorrectExceptionThrown` could be used.
+
+## Refactored Code (Example):
+
+Here's an example of the refactored code with the first suggestion implemented:
+
+```java
+public class BrokenInputStreamTest {
+
+  /**
+   * Factory for parameterized tests of BrokenInputStream, BrokenReader, BrokenOutputStream, and BrokenWriter.
+   */
+  public static final class CustomException extends Exception {
+
+    private static final long serialVersionUID = 1L;
+
+  }
+
+  public static Stream<Class<? extends Throwable>> parameters() {
+    // @formatter:off
+    return Stream.of(
+        IOException.class,
+        FileNotFoundException.class,
+        FileSystemNotFoundException.class,
+        RuntimeException.class,
+        IllegalArgumentException.class,
+        IllegalStateException.class,
+        Error.class,
+        ExceptionInInitializerError.class,
+        CustomException.class
+    );
+    // @formatter:on
+  }
+
+  private static BrokenInputStream createBrokenInputStream(Throwable exception) {
+    if (exception instanceof IOException) {
+      return new BrokenInputStream((IOException) exception);
+    }
+    return new BrokenInputStream(exception);
+  }
+
+  private static void testExceptionThrowingMethod(final Class<Exception> clazz, final String methodName) throws Exception {
+    final Throwable exception = clazz.newInstance();
+    @SuppressWarnings("resource") final BrokenInputStream stream = createBrokenInputStream(exception);
+    assertEquals(exception, assertThrows(clazz, () -> stream.getClass().getDeclaredMethod(methodName).invoke(stream)));
+  }
+
+  @ParameterizedTest
+  @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+  public void testAvailable_ThrowsExpectedException(final Class<Exception> clazz) throws Exception {
+    testExceptionThrowingMethod(clazz, "available");
+  }
+
+  @ParameterizedTest
+  @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+  public void testClose_ThrowsExpectedException(final Class<Exception> clazz) throws Exception {
+    testExceptionThrowingMethod(clazz, "close");
+  }
+
+  // ... (rest of the test methods can be refactored similarly)
+
+  @Test
+  public void testTryWithResources() {
+    // ... (test logic remains the same)
+  }
+}
+```
+
+This is just a basic example. You can further improve the test names based on the specific functionality being tested.  

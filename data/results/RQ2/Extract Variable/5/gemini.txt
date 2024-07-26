@@ -1,0 +1,38 @@
+ **Here's the refactored code with the extracted variable:**
+
+```java
+void testMaxAttempts() {
+    int maxAttempts = 13;
+    long maxBackoffMS = 3L;
+    final ExponentialDelayRestartBackoffTimeStrategy restartStrategy =
+            new ExponentialDelayRestartBackoffTimeStrategy(
+                    new ManualClock(), 1L, maxBackoffMS, 1.2, 10L, 0.25, maxAttempts);
+
+  // Extract the repeated expression into a variable
+  ManualClock clock = new ManualClock();
+
+    for (int i = 0; i <= maxAttempts; i++) {
+        assertThat(restartStrategy.canRestart()).isTrue();
+        restartStrategy.notifyFailure(failure);
+        clock.advanceTime(Duration.ofMillis(maxBackoffMS + 1)); // Use the extracted variable
+    }
+    assertThat(restartStrategy.canRestart()).isFalse();
+}
+```
+   
+**Explanation of the refactoring:**
+
+1. **Identify the repeated expression:** The expression `new ManualClock()` was encountered multiple times within the `testMaxAttempts()` method.
+
+2. **Extract the variable:**
+   - Declare a variable named `clock` with type `ManualClock` before the loop.
+   - Assign the value `new ManualClock()` to the `clock` variable.
+
+3. **Replace occurrences:**
+   - Use the variable `clock` instead of `new ManualClock()` within the loop where time advancement is needed.
+
+**Benefits of this refactoring:**
+
+- **Readability:** The code becomes more readable as the intent of using a `ManualClock` object is clearer with a descriptive variable name.
+- **Maintainability:** If changes are needed to the construction of the `ManualClock` object, it can be done in one place, affecting all uses of the clock.
+- **Reusability:** Other parts of the code could potentially reuse the `clock` variable, if needed, preventing further repetitions.

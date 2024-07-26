@@ -1,0 +1,33 @@
+In the given code snippet, the potential for inline variable refactoring should be evaluated based on the usage frequency of variables and their impact on code readability. Here's the provided code:
+
+```java
+private void parseCharset(final String hdr, final String enc, final IOFunction<InputStream, XmlStreamReader> factory) throws Exception {
+    try (final InputStream stream = new ByteArrayInputStream(hdr.getBytes(StandardCharsets.UTF_8))) {
+        try (final XmlStreamReader xml = factory.apply(stream)) {
+            final String getenc = xml.getEncoding();
+            assertEquals(enc.toUpperCase(Locale.ROOT), getenc, enc);
+        }
+    }
+}
+```
+
+### Analysis:
+1. **Variable `getenc`**:
+   - This variable is used only once in the `assertEquals` statement.
+   - The value of `getenc` can be directly used in the `assertEquals` without loss of readability.
+
+### Proposed Refactoring:
+The variable `getenc` can be inlined for simplification without affecting the readability. This leads to a slightly more concise and direct implementation.
+
+### Refactored Code:
+```java
+private void parseCharset(final String hdr, final String enc, final IOFunction<InputStream, XmlStreamReader> factory) throws Exception {
+    try (final InputStream stream = new ByteArrayInputStream(hdr.getBytes(StandardCharsets.UTF_8))) {
+        try (final XmlStreamReader xml = factory.apply(stream)) {
+            assertEquals(enc.toUpperCase(Locale.ROOT), xml.getEncoding(), enc);
+        }
+    }
+}
+```
+
+In this refactored code, `xml.getEncoding()` is directly passed to `assertEquals()`, eliminating the single-use variable `getenc` and adhering to the inline variable refactoring pattern described. This maintains the clarity and efficiency of the code.

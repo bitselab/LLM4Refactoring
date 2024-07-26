@@ -1,0 +1,39 @@
+In the provided code snippet for `PulsarPropertiesMapper`, an extract method refactoring can be applied to improve readability and maintainability. Specifically, the operations for sorting parameters and converting them into a JSON string can be extracted into a separate method. This will make the `customizeAuthentication` method more concise and focused.
+
+Here is the refactored code with the extract method refactoring applied:
+
+```java
+final class PulsarPropertiesMapper {
+
+    private void customizeAuthentication(AuthenticationConsumer authentication,
+                                         PulsarProperties.Authentication properties) {
+        if (StringUtils.hasText(properties.getPluginClassName())) {
+            try {
+                String authParamString = createAuthParamString(params);
+                authentication.accept(properties.getPluginClassName(), authParamString);
+            }
+            catch (UnsupportedAuthenticationException ex) {
+                throw new IllegalStateException("Unable to configure Pulsar authentication", ex);
+            }
+        }
+    }
+
+    private String createAuthParamString(Map<String, String> params) {
+        Map<String, String> sortedParams = new TreeMap<>(params);
+        try {
+            return ObjectMapperFactory.create().writeValueAsString(sortedParams);
+        }
+        catch (Exception ex) {
+            throw new IllegalStateException("Could not convert auth parameters to encoded string", ex);
+        }
+    }
+}
+```
+
+**Explanation:**
+
+1. **Extracted Method (`createAuthParamString`)**: This new method takes the original map of parameters, sorts them, and then converts them to a JSON string. This operation is isolated from the main logic of the `customizeAuthentication` method, making it easier to understand and test separately.
+
+2. **Main Method Changes (`customizeAuthentication`)**: With the extracted method, `customizeAuthentication` becomes cleaner and its purpose is more apparent. It now focuses solely on checking if the plugin class name is provided and using the extracted method to handle parameter processing.
+
+This refactoring follows the principle of having each method perform a single, well-defined task, enhancing the code's modularity and clarity.

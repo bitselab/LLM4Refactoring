@@ -1,0 +1,79 @@
+Analyzing the provided code, which is a test suite for the JUnit 5 framework focusing on `AutoClose` functionality, we can identify several opportunities for the "Extract Method" refactoring to improve readability and maintainability. The key areas are:
+
+1. **Repeated Test Execution Logic**: The logic for executing tests and verifying results is repeated in multiple test methods. This can be abstracted into a single method.
+
+2. **Repeated Assertion Logic**: The code for asserting failure messages is repeated in several methods. This can also be abstracted into a separate method.
+
+3. **Repeated Test Setup Logic**: The setup logic in nested test classes (`InstancePerMethodEnclosingTestCase`, `InstancePerClassEnclosingTestCase`) is similar and can be extracted into a common method.
+
+Let's refactor the code based on these observations:
+
+```java
+class AutoCloseTests extends AbstractJupiterTestEngineTests {
+    // Existing class members remain unchanged
+
+    // Extracted method for asserting failing tests with a message
+    private void assertFailingTest(Class<?> testClass, String messageFormat) {
+        String msg = String.format(messageFormat, testClass.getCanonicalName());
+        Events tests = executeTestsForClass(testClass).testEvents();
+        assertFailingWithMessage(tests, msg);
+    }
+
+    @Test
+    void blankCloseMethodName() {
+        assertFailingTest(BlankCloseMethodNameTestCase.class, "@AutoClose on field %s.field must specify a method name.");
+    }
+
+    @Test
+    void primitiveTypeCannotBeClosed() {
+        assertFailingTest(PrimitiveFieldTestCase.class, "@AutoClose is not supported on primitive field %s.x.");
+    }
+
+    @Test
+    void arrayCannotBeClosed() {
+        assertFailingTest(ArrayFieldTestCase.class, "@AutoClose is not supported on array field %s.x.");
+    }
+
+    // Other test methods remain largely the same
+    // ...
+
+    // Extracted method for common setup in nested test classes
+    private static void setupAutoCloseSpy(String spyName, AutoCloseable... spies) {
+        for (AutoCloseable spy : spies) {
+            spy = new AutoCloseSpy(spyName);
+        }
+    }
+
+    @TestInstance(PER_METHOD)
+    static class InstancePerMethodEnclosingTestCase implements TestInterface {
+        // ...
+
+        @BeforeAll
+        static void setup() {
+            setupAutoCloseSpy("enclosingStaticClosable", enclosingStaticClosable);
+        }
+
+        // Nested class and other methods remain unchanged
+    }
+
+    @TestInstance(PER_CLASS)
+    static class InstancePerClassEnclosingTestCase implements TestInterface {
+        // ...
+
+        @BeforeAll
+        static void setup() {
+            setupAutoCloseSpy("enclosingStaticClosable", enclosingStaticClosable);
+        }
+
+        // Nested class and other methods remain unchanged
+    }
+
+    // Other inner classes remain unchanged
+}
+```
+
+Changes Made:
+1. **Extracted `assertFailingTest` Method**: This method centralizes the logic for executing a test class and asserting a failure message.
+2. **Extracted `setupAutoCloseSpy` Method**: Common setup logic for `AutoCloseSpy` in nested classes has been extracted into this method.
+
+Note: This refactoring focuses on specific areas identified for the "Extract Method" refactoring. The rest of the code remains unchanged, but similar refactoring patterns can be applied to other parts of the code as needed. Ensure all tests pass after refactoring.

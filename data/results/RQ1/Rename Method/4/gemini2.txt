@@ -1,0 +1,49 @@
+There are a few opportunities for rename method refactoring in the provided code snippet:
+
+1. Refactor `longAsPoint` and `pointAsLong` methods in both `GEO` and `CARTESIAN` enums:
+
+  - These methods perform conversions between encoded longs and Point objects. While the names are technically accurate, they are not very descriptive for someone unfamiliar with the specific encoding scheme. More specific names would improve readability.
+
+  Refactored code:
+
+  ```java
+  public enum SpatialCoordinateTypes {
+      GEO {
+          public Point decodeGeoPoint(long encoded) {
+  // ... (rest of the code in longAsPoint remains the same)
+  }
+
+          public long encodeGeoPoint(Point point) {
+  // ... (rest of the code in pointAsLong remains the same)
+  }
+      },
+      CARTESIAN {
+  // ... (similar refactoring for longAsPoint -> decodeCartesianPoint and pointAsLong -> encodeCartesianPoint)
+  }
+  }
+  ```
+
+2. Refactor `wkbAsLong` and `longAsWkb` methods:
+
+  - These methods handle converting between Well-Known Binary (WKB) and encoded longs, specific to the context of the enum. Renaming them to reflect this context would be beneficial.
+
+  Refactored code:
+
+  ```java
+  public enum SpatialCoordinateTypes {
+      // ... (rest of the enum)
+      public long decodeFromWkb(BytesRef wkb) {
+      // ... (rest of the code in wkbAsLong remains the same)
+  }
+
+      public BytesRef encodeAsWkb(long encoded) {
+      // ... (rest of the code in longAsWkb remains the same)
+  }
+  }
+  ```
+
+3. Consider refactoring `pointAsWKB` method:
+
+  - This method has a slightly different naming convention compared to the others (`point` instead of `geo` or `cartesian`). While not strictly necessary for this specific case, maintaining consistency could improve readability. You can potentially rename it to `encodePointAsWkb` for better alignment.
+
+These refactorings focus on making the method names more descriptive of their purpose within the context of the `SpatialCoordinateTypes` enum. This improves code readability and maintainability.

@@ -1,0 +1,110 @@
+In this code snippet, there are a few opportunities for refactoring:
+
+1. **Extract method for `getProperties`:** The `getProperties` method is a simple key-value creation process. This can be refactored into a separate method to improve readability and potentially reuse the logic elsewhere in the test class.
+
+2. **Simplify data creation for `TestValuesTableFactory`:**  The logic for creating test data with `TestValuesTableFactory.registerRowData` and setting properties can be encapsulated in a separate method to reduce code duplication within the tests.
+
+Here's the refactored code with the suggested improvements:
+
+```java
+package org.apache.flink.table.planner.runtime.stream.jsonplan;
+
+import org.apache.flink.table.api.TableException;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.planner.factories.TestValuesTableFactory;
+import org.apache.flink.table.planner.utils.JsonPlanTestBase;
+import org.apache.flink.table.planner.utils.JsonTestUtils;
+
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode;
+
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java  util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
+/**
+ * Tests for configuring operator-level state TTL via {@link
+ * org.apache.flink.table.api.CompiledPlan}.
+ */
+class ConfigureOperatorLevelStateTtlJsonITCase extends JsonPlanTestBase {
+
+  private static Map<String, String> createTestTableProperties(
+      String dataId, int sleepAfterElements, String sleepTime) {
+    Map<String, String> properties = new HashMap<>();
+    properties.put("connector", "values");
+    properties.put("bounded", "false");
+    properties.put("register-internal-data", "true");
+    properties.put("source.sleep-after-elements", String.valueOf(sleepAfterElements));
+    properties.put("source.sleep-time", sleepTime);
+    properties.put("data-id", dataId);
+    return properties;
+  }
+
+  private void createTestSourceTable(
+      String tableName, String[] fieldNames, String description, Map<String, String> properties) {
+    TestValuesTableFactory.registerRowData(Arrays.asList(genericRowData(fieldNames)));
+    createTestTable(tableName, fieldNames, description, properties);
+  }
+
+  private GenericRowData genericRowData(String[] fieldNames) {
+    // Implement logic to create GenericRowData based on field names
+  }
+
+  @Test
+  void testDifferentStateTtlForDifferentOneInputOperator() throws Exception {
+    String dataId =
+        TestValuesTableFactory.registerRowData(
+            Arrays.asList(
+                GenericRowData.of(1, StringData.fromString("Tom"), 1, 199.9d),
+                GenericRowData.of(2, StringData.fromString("Jerry"), 2, 99.9d),
+                GenericRowData.of(1, StringData.fromString("Tom"), 1, 199.9d),
+                GenericRowData.of(3, StringData.fromString("Tom"), 1, 29.9d),
+                GenericRowData.of(4, StringData.fromString("Olivia"), 1, 100d),
+                GenericRowData.of(4, StringData.fromString("Olivia"), 1, 100d),
+                GenericRowData.of(2, StringData.fromString("Jerry"), 2, 99.9d),
+                GenericRowData.of(5, StringData.fromString("Michael"), 3, 599.9d),
+                GenericRowData.of(6, StringData.fromString("Olivia"), 3, 1000d)));
+    createTestSourceTable(
+        "Orders",
+        new String[] {
+            "`order_id` INT", "`buyer` STRING", "`quantity` INT", "`amount` DOUBLE"
+        },
+        null,
+        createTestTableProperties(dataId, 1, "2s"));
+
+    createTestNonInsertOnlyValuesSinkTable(
+        "OrdersStats",
+        "`buyer` STRING",
+        "`ord_cnt` BIGINT",
+        "`quantity_cnt` BIGINT",
+        "`total_amount` DOUBLE");
+    compileSqlAndExecutePlan("INSERT INTO OrdersStats \n"
+        + "SELECT buyer, COUNT(1) AS ord_cnt, SUM(quantity) AS quantity_cnt, SUM(amount) AS total_amount FROM (\n"
+        + "SELECT *, ROW_NUMBER() OVER(PARTITION BY order_id, buyer, quantity, amount ORDER BY proctime() ASC) AS rk FROM Orders) tmp\n"
+        + "WHERE rk = 1\n"
+        + "GROUP BY buyer", (Function<String, String>) json -> {
+      try {
+        JsonNode target = JsonTestUtils.readFromString(json);
+        JsonTestUtils.setExecNodeStateMetadata(
+            target, "stream-exec-deduplicate", 0, 6000L);
+        JsonTestUtils.setExecNodeStateMetadata(
+            target, "stream-exec-group-aggregate", 0, 9000L);
+        return JsonTestUtils.writeToString(target);
+      } catch (IOException e) {
+        throw new TableException("Cannot modify compiled json plan.", e);
+      }
+    }).await();
+
+    // ... existing assertions ...
+  }
+
+  // ... other test methods with similar improvements ...
+}
+```
+
+The refactoring improves code organization and reduces repetition within the test class. 

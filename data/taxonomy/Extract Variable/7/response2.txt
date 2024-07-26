@@ -1,0 +1,48 @@
+Analyzing the provided code snippet reveals several opportunities for Extract Variable refactoring, aiming to improve readability and maintainability. The focus is on extracting complex expressions into meaningful variable names. Here’s a refactored version of the code:
+
+```java
+public void onRefresh(RefreshEvent event, RefreshContext refreshedAlready) {
+    final EventSource source = event.getSession();
+    final PersistenceContext persistenceContext = source.getPersistenceContextInternal();
+    final Object object = event.getObject();
+
+    if (persistenceContext.reassociateIfUninitializedProxy(object)) {
+        final LazyInitializer lazyInitializer = HibernateProxy.extractLazyInitializer(object);
+        final String entityName = lazyInitializer.getEntityName();
+        final EntityPersister persister = source.getEntityPersister(entityName, object);
+        final Object identifier = persister.getIdentifier(object, event.getSession());
+
+        refresh(
+            event,
+            null,
+            source,
+            persister,
+            lazyInitializer,
+            null,
+            identifier,
+            persistenceContext
+        );
+
+        boolean isTransient = isTransient(event, source, object);
+        boolean defaultReadOnly = source.isDefaultReadOnly();
+        if (isTransient) {
+            source.setReadOnly(object, defaultReadOnly);
+        }
+    } else {
+        final Object entity = persistenceContext.unproxyAndReassociate(object);
+        boolean isNewlyRefreshed = refreshedAlready.add(entity);
+        if (isNewlyRefreshed) {
+            refresh(event, refreshedAlready, entity);
+        } else {
+            LOG.trace("Already refreshed");
+        }
+    }
+}
+```
+
+### Key Changes
+1. **`entityName`**: Extracted from `lazyInitializer.getEntityName()`. This helps in understanding what the `entityName` is being used for without digging into the method calls.
+2. **`identifier`**: Extracted from `persister.getIdentifier(object, event.getSession())`. This variable makes it clear what this identifier represents and separates its computation from its use in the `refresh` method.
+3. **`isTransient`** and **`defaultReadOnly`**: These boolean variables extracted from their respective method calls simplify the conditions within the `if` statement, making the logic more readable.
+
+These refactorings aim to clarify what each part of the code does by isolating complex method calls and their results into well-named variables, adhering to the Extract Variable refactoring pattern.

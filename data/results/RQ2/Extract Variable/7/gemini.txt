@@ -1,0 +1,51 @@
+ **Here's the refactored code with the extracted variable:**
+
+```java
+public void onRefresh(RefreshEvent event, RefreshContext refreshedAlready) {
+    final EventSource source = event.getSession();
+    final PersistenceContext persistenceContext = source.getPersistenceContextInternal();
+    final Object object = event.getObject();
+
+    if (persistenceContext.reassociateIfUninitializedProxy(object)) {
+        final LazyInitializer lazyInitializer = HibernateProxy.extractLazyInitializer(object);
+        final EntityPersister persister = source.getEntityPersister(lazyInitializer.getEntityName(), object);
+
+        // Extracted variable for improved readability:
+        boolean isTransientObject = isTransient(event, source, object);
+
+        refresh(
+                event,
+                null,
+                source,
+                persister,
+                lazyInitializer,
+                null,
+                persister.getIdentifier(object, event.getSession()),
+                persistenceContext
+        );
+
+        if (isTransientObject) {
+            source.setReadOnly(object, source.isDefaultReadOnly());
+        }
+    } else {
+        final Object entity = persistenceContext.unproxyAndReassociate(object);
+        if (refreshedAlready.add(entity)) {
+            refresh(event, refreshedAlready, entity);
+        } else {
+            LOG.trace("Already refreshed");
+        }
+    }
+}
+```
+
+**Explanation of the Refactoring:**
+
+1. **Identified the Expression:** The expression `isTransient(event, source, object)` was used twice within the conditional block, making it a good candidate for extraction.
+2. **Extracted the Variable:** The expression was extracted into a new boolean variable named `isTransientObject` placed before the `refresh` method call.
+3. **Replaced the Expression:** The original occurrences of the expression were replaced with the newly created variable.
+
+**Benefits of This Refactoring:**
+
+- **Improved Readability:** The code becomes more readable by giving a descriptive name to the expression, clarifying its intent.
+- **Reduced Redundancy:** The calculation of the expression is performed only once, saving resources and potentially improving performance.
+- **Enhanced Maintainability:** The code becomes easier to understand and modify, as changes to the logic only need to be made in one place.

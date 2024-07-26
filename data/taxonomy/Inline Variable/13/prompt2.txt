@@ -1,0 +1,77 @@
+Inline variable refactorings are frequently employed to eliminate unnecessary variables to improve readability.
+##################################################
+An inline variable refactoring pattern is to remove variables that are used only once within the method. Here is an example of the inline variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public int getNumEntries() throws IOException {
+    if (m_closed) {
+        open(false);
+    }
+    if (m_fc.size() > SEGMENT_HEADER_BYTES) {
+        final int numEntries = m_buf.b().getInt(COUNT_OFFSET);
+        return numEntries;
+    } else {
+        return 0;
+    }
+}
+```
+The source code after refactoring is:
+```
+public int getNumEntries() throws IOException {
+    if (m_closed) {
+        open(false);
+    }
+    if (m_fc.size() > SEGMENT_HEADER_BYTES) {
+        return m_buf.b().getInt(COUNT_OFFSET);
+    } else {
+        return 0;
+    }
+}
+```
+In this example, the developer removed the unnecessary variable "numEntries".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential inline variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+@Test
+void allFieldsAreClosedIfAnyFieldThrowsAnException() {
+    String staticField1 = "staticField1";
+    // Prerequisites to ensure fields are "ordered" as expected (based on the hash codes for their names).
+    assertThat(staticField1.hashCode()).isLessThan("staticField2".hashCode()).isLessThan(
+            "staticField3".hashCode());
+    assertThat("field1".hashCode()).isLessThan("field2".hashCode()).isLessThan("field3".hashCode());
+
+    Class<?> testClass = FailingFieldsTestCase.class;
+    EngineExecutionResults allEvents = executeTestsForClass(testClass);
+
+    Events tests = allEvents.testEvents();
+    tests.assertStatistics(stats -> stats.succeeded(0).failed(1));
+
+    // Verify that ALL fields were closed in the proper order.
+    assertThat(recorder).containsExactly(//
+            "FailingFieldsTestCase.field1.close()", //
+            "FailingFieldsTestCase.field2.close()", //
+            "FailingFieldsTestCase.field3.close()", //
+            "FailingFieldsTestCase.staticField1.close()", //
+            "FailingFieldsTestCase.staticField2.close()", //
+            "FailingFieldsTestCase.staticField3.close()" //
+    );
+
+    // Test-level failures
+    assertThat(findFailure(tests, "test()")) //
+            .isExactlyInstanceOf(RuntimeException.class) //
+            .hasMessage("FailingFieldsTestCase.field1.close()")//
+            .hasNoCause()//
+            .hasSuppressedException(new RuntimeException("FailingFieldsTestCase.field2.close()"));
+
+    Events containers = allEvents.containerEvents();
+    containers.assertStatistics(stats -> stats.succeeded(1).failed(1));
+
+    // Container-level failures
+    assertThat(findFailure(containers, testClass.getSimpleName())) //
+            .isExactlyInstanceOf(RuntimeException.class) //
+            .hasMessage("FailingFieldsTestCase.staticField1.close()")//
+            .hasNoCause()//
+            .hasSuppressedException(new RuntimeException("FailingFieldsTestCase.staticField2.close()"));
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

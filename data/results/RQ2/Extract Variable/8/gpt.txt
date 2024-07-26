@@ -1,0 +1,43 @@
+In the provided code snippet, the expression `(LuceneVectorFieldCodec<F>) codec` is indeed used multiple times within the `Builder` class's constructor. To improve readability and reusability, we can refactor this by extracting the repeated expression into a local variable. Here's how the refactored code would look:
+
+Refactored Code:
+```java
+package org.hibernate.search.backend.lucene.search.predicate.impl;
+
+// ... [imports remain unchanged]
+
+public class LuceneKnnPredicate extends AbstractLuceneSingleFieldPredicate implements LuceneSearchPredicate {
+
+    // ... [rest of the LuceneKnnPredicate class remains unchanged]
+
+    private static class Builder<F> extends AbstractBuilder implements KnnPredicateBuilder {
+        private final Class<?> vectorElementsType;
+        private final int indexedVectorsDimension;
+        private int k;
+        private Object vector;
+        private LuceneSearchPredicate filter;
+
+        private Builder(LuceneSearchIndexScope<?> scope, LuceneSearchIndexValueFieldContext<F> field) {
+            super(scope, field);
+
+            LuceneFieldCodec<F> codec = field.type().codec();
+            if (codec instanceof LuceneVectorFieldCodec) {
+                LuceneVectorFieldCodec<F> vectorFieldCodec = (LuceneVectorFieldCodec<F>) codec;
+                vectorElementsType = vectorFieldCodec.vectorElementsType();
+                indexedVectorsDimension = vectorFieldCodec.getConfiguredDimensions();
+            } else {
+                // shouldn't really happen as if someone tries this it should fail on `queryElementFactory` lookup.
+                throw new AssertionFailure("Attempting to use a knn predicate on a non-vector field.");
+            }
+        }
+
+        // ... [rest of the Builder class remains unchanged]
+    }
+}
+```
+
+Changes Made:
+1. Extracted `((LuceneVectorFieldCodec<F>) codec)` into a local variable `vectorFieldCodec`.
+2. Used the `vectorFieldCodec` variable to access `vectorElementsType` and `indexedVectorsDimension`.
+
+This refactoring improves the clarity of the code by reducing the complexity of the expressions and making the type casting more evident. It also adheres to the DRY (Don't Repeat Yourself) principle by removing the repetition of the type cast.

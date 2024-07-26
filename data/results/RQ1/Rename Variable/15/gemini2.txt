@@ -1,0 +1,41 @@
+ I've reviewed the code snippet, and while the variable names are generally descriptive, there are a few opportunities for rename variable refactoring to further enhance readability:
+
+1. **SESSION**: This variable is used specifically for storing a Mockito session, so a more specific name like `mockitoSession` would be more informative.
+
+2. **MOCKS**: This variable holds a collection of mocks. However, since it's within a Mockito extension, it's clear that it's related to Mockito. Renaming it to `mockitoMocks` could make its purpose even clearer.
+
+Here's the refactored code with those changes:
+
+```java
+package org.mockito.junit.jupiter;
+
+// ... (other imports)
+
+public class MockitoExtension implements BeforeEachCallback, AfterEachCallback, ParameterResolver {
+
+  private final static Namespace MOCKITO_NAMESPACE = create("org.mockito");
+
+  private final static String MOCKITO_SESSION = "mockitoSession", MOCKITO_MOCKS = "mockitoMocks";
+
+  // ... (other code remains the same)
+
+  @Override
+  public void beforeEach(final ExtensionContext context) {
+    // ...
+    context.getStore(MOCKITO_NAMESPACE).put(MOCKITO_MOCKS, new HashSet<>());
+    context.getStore(MOCKITO_NAMESPACE).put(MOCKITO_SESSION, session);
+  }
+
+  // ... (other code remains the same)
+
+  @Override
+  public void afterEach(ExtensionContext context) {
+    // ...
+    context.getStore(MOCKITO_NAMESPACE).remove(MOCKITO_MOCKS, Set.class).forEach(mock -> ((ScopedMock) mock).closeOnDemand());
+    context.getStore(MOCKITO_NAMESPACE).remove(MOCKITO_SESSION, MockitoSession.class)
+        .finishMocking(context.getExecutionException().orElse(null));
+  }
+}
+```
+
+These changes make the code slightly more descriptive, especially for developers less familiar with Mockito.

@@ -1,0 +1,54 @@
+The method `loadFromJava` in the provided code snippet could benefit from a rename refactoring to better describe its functionality. The current name is somewhat ambiguous and does not clearly convey the method's purpose. A more descriptive name would improve readability and make the code more maintainable. 
+
+Given the method's functionality, a suitable rename could be `testLoadingFromClasspathForSpecificJavaVersion`. This name clearly states that the method is a test (following the common convention of prefixing test methods with `test`), and it specifies that the test is for loading classpath resources for a specific Java version.
+
+Here is the refactored code with the renamed method:
+
+```java
+package net.sourceforge.pmd.internal.util;
+
+// ... [imports remain unchanged]
+
+class ClasspathClassLoaderTest {
+    @TempDir
+    private Path tempDir;
+
+    // ... [other methods remain unchanged]
+
+    /**
+     * Verifies that we load the class files from the runtime image of the correct java home.
+     * This test only runs if you have a folder ${HOME}/openjdk{javaVersion}.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {11, 17, 21})
+    void testLoadingFromClasspathForSpecificJavaVersion(int javaVersion) throws IOException {
+        Path javaHome = Paths.get(System.getProperty("user.home"), "openjdk" + javaVersion);
+        assumeTrue(Files.isDirectory(javaHome), "Couldn't find java" + javaVersion + " installation at " + javaHome);
+
+        Path jrtfsPath = javaHome.resolve("lib/jrt-fs.jar");
+        assertTrue(Files.isRegularFile(jrtfsPath), "java" + javaVersion + " installation is incomplete. " + jrtfsPath + " not found!");
+        String classPath = jrtfsPath.toString();
+
+        try (ClasspathClassLoader loader = new ClasspathClassLoader(classPath, null)) {
+            assertEquals(javaHome.toString(), loader.javaHome);
+            try (InputStream stream = loader.getResourceAsStream("java/lang/Object.class")) {
+                assertNotNull(stream);
+                try (DataInputStream data = new DataInputStream(stream)) {
+                    assertClassFile(data, javaVersion);
+                }
+            }
+
+            // should not fail for resources without a package
+            assertNull(loader.getResourceAsStream("ClassInDefaultPackage.class"));
+        }
+    }
+
+    // ... [rest of the class remains unchanged]
+
+    private void assertClassFile(DataInputStream data, int javaVersion) throws IOException {
+        // ... [method body remains unchanged]
+    }
+}
+```
+
+This renamed method now more accurately describes its purpose, enhancing the overall readability and clarity of the code.

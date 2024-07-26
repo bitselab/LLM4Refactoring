@@ -1,0 +1,76 @@
+Analyzing the provided code snippet, there are a few opportunities for refactoring to improve the code's readability, maintainability, and efficiency. I'll focus on the following aspects:
+
+1. **Duplication Reduction**: There's repeated instantiation of `BeanPropertyRowMapper<Person>` in multiple test methods. This can be moved to a setup method using `@BeforeEach` annotation.
+
+2. **Constant Extraction**: Repeated strings and objects like `"John"`, `"Doe"`, `30`, and `MockRow` setups can be extracted as constants to avoid repetition and enhance readability.
+
+3. **Method Extraction for MockRow Creation**: The methods to create `SIMPLE_PERSON_ROW`, `EXTENDED_PERSON_ROW`, and `EMAIL_PERSON_ROW` share a similar structure. This can be refactored into a single method with parameters.
+
+4. **Use of Parameterized Tests**: Some tests like `mappingRowSimpleObject`, `mappingRowMissingAttributeAccepted`, and `mappingRowWithDifferentName` could be combined into a parameterized test if they are structurally similar.
+
+5. **General Code Clean-Up**: This includes organizing imports, ensuring consistent formatting, and removing unused imports if any.
+
+Here's the refactored code:
+
+```java
+package org.springframework.r2dbc.core;
+
+// Import statements...
+
+class R2dbcBeanPropertyRowMapperTests {
+
+    private BeanPropertyRowMapper<Person> personMapper;
+    private BeanPropertyRowMapper<ExtendedPerson> extendedPersonMapper;
+    private BeanPropertyRowMapper<EmailPerson> emailPersonMapper;
+    private BeanPropertyRowMapper<TypeMismatchExtendedPerson> typeMismatchExtendedPersonMapper;
+
+    private static final String FIRST_NAME = "John";
+    private static final String LAST_NAME = "Doe";
+    private static final int AGE = 30;
+    private static final String ADDRESS = "123 Sesame Street";
+    private static final String EMAIL = "mail@example.org";
+    
+    private static final MockRow SIMPLE_PERSON_ROW = buildPersonRow(FIRST_NAME, LAST_NAME, AGE, null, null);
+    private static final MockRow EXTENDED_PERSON_ROW = buildPersonRow(FIRST_NAME, LAST_NAME, AGE, ADDRESS, null);
+    private static final MockRow EMAIL_PERSON_ROW = buildPersonRow(FIRST_NAME, LAST_NAME, AGE, null, "EMail");
+
+    @BeforeEach
+    void setUp() {
+        personMapper = new BeanPropertyRowMapper<>(Person.class);
+        extendedPersonMapper = new BeanPropertyRowMapper<>(ExtendedPerson.class);
+        emailPersonMapper = new BeanPropertyRowMapper<>(EmailPerson.class);
+        typeMismatchExtendedPersonMapper = new BeanPropertyRowMapper<>(TypeMismatchExtendedPerson.class);
+    }
+
+    // Test methods...
+
+    private static MockRow buildPersonRow(String firstName, String lastName, int age, String address, String emailColumnName) {
+        MockRow.Builder rowBuilder = MockRow.builder()
+            .metadata(MockRowMetadata.builder()
+                .columnMetadata(MockColumnMetadata.builder().name("firstName").javaType(String.class).build())
+                .columnMetadata(MockColumnMetadata.builder().name("lastName").javaType(String.class).build())
+                .columnMetadata(MockColumnMetadata.builder().name("age").javaType(Integer.class).build());
+        
+        if (address != null) {
+            rowBuilder.metadata(MockRowMetadata.builder()
+                .columnMetadata(MockColumnMetadata.builder().name("address").javaType(String.class).build()));
+        }
+
+        if (emailColumnName != null) {
+            rowBuilder.metadata(MockRowMetadata.builder()
+                .columnMetadata(MockColumnMetadata.builder().name(emailColumnName).javaType(String.class).build()));
+        }
+
+        return rowBuilder
+            .identified(0, String.class, firstName)
+            .identified(1, String.class, lastName)
+            .identified(2, int.class, age)
+            .identified(3, String.class, address != null ? address : EMAIL)
+            .build();
+    }
+
+    // Other classes and methods remain the same...
+}
+```
+
+This refactoring focuses on reducing code duplication, improving readability, and making the tests more maintainable. Note that some of the proposed changes (like combining tests into parameterized tests) depend on the specific structure and intention of the original tests, which might not be fully clear without additional context.

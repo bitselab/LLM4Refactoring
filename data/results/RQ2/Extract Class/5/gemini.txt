@@ -1,0 +1,65 @@
+ **Here's the refactored code after applying Extract Class:**
+
+```java
+package org.apache.flink.runtime.metrics.groups;
+
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.OperatorIOMetricGroup;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
+import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
+import org.apache.flink.runtime.metrics.MetricNames;
+
+/** Special {@link org.apache.flink.metrics.MetricGroup} representing an Operator. */
+@Internal
+public class InternalSinkWriterMetricGroup extends ProxyMetricGroup<MetricGroup>
+        implements SinkWriterMetricGroup {
+
+    private final Counter numRecordsOutErrors;
+    private final Counter numRecordsSendErrors;
+    private final Counter numRecordsWritten;
+    private final Counter numBytesWritten;
+    private final OperatorIOMetricGroup operatorIOMetricGroup;
+
+    @VisibleForTesting
+    InternalSinkWriterMetricGroup(
+            MetricGroup parentMetricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        super(parentMetricGroup);
+        // ... (constructor logic remains the same)
+    }
+
+    // ... (other methods remain the same)
+}
+
+// New class extracted for InternalSinkWriterMetricGroup creation
+class InternalSinkWriterMetricGroupFactory {
+
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup create(MetricGroup metricGroup) {
+        return new InternalSinkWriterMetricGroup(
+                metricGroup, UnregisteredMetricsGroup.createOperatorIOMetricGroup());
+    }
+
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup create(
+            MetricGroup metricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        return new InternalSinkWriterMetricGroup(metricGroup, operatorIOMetricGroup);
+    }
+}
+```
+
+**Explanation of changes:**
+
+1. **New Class Created:** A new class named `InternalSinkWriterMetricGroupFactory` is created to encapsulate the extracted `mockWriterMetricGroup` methods.
+2. **Methods Moved:** The two `mockWriterMetricGroup` methods are moved from `InternalSinkWriterMetricGroup` to `InternalSinkWriterMetricGroupFactory`.
+3. **Naming Convention:** The extracted methods are renamed to `create` to better reflect their purpose as factory methods.
+4. **Constructor Calls:** The constructor of `InternalSinkWriterMetricGroup` is now called directly within the `create` methods of the factory class.
+
+**Benefits of this refactoring:**
+
+- **Improved Focus:** The `InternalSinkWriterMetricGroup` class now focuses solely on its core functionality, metrics management, making it easier to understand and maintain.
+- **Clearer Responsibility:** The `InternalSinkWriterMetricGroupFactory` class has a clear responsibility for creating instances of `InternalSinkWriterMetricGroup`, improving code organization.
+- **Potential for Reuse:** The factory class can now be easily reused in other parts of the code where `InternalSinkWriterMetricGroup` instances are needed, promoting code reusability.

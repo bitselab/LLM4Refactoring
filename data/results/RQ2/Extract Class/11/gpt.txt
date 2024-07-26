@@ -1,0 +1,93 @@
+In the provided code snippet from `CircuitBreakerManager`, the management and handling of a list of `CircuitBreaker` objects represent a distinct area of functionality that can be separated from the rest of the class. Extracting this functionality into a new class would improve the readability and maintainability of the code. The new class can be named `CircuitBreakerRegistry` to reflect its role in managing the circuit breakers.
+
+Here's the refactored code:
+
+1. **New `CircuitBreakerRegistry` Class:**
+
+    ```java
+    package org.apache.solr.util.circuitbreaker;
+
+    import java.util.ArrayList;
+    import java.util.List;
+
+    public class CircuitBreakerRegistry {
+        private final List<CircuitBreaker> circuitBreakerList = new ArrayList<>();
+
+        public void register(CircuitBreaker circuitBreaker) {
+            circuitBreakerList.add(circuitBreaker);
+        }
+
+        public void deregisterAll() {
+            circuitBreakerList.clear();
+        }
+
+        public List<CircuitBreaker> checkTripped() {
+            List<CircuitBreaker> triggeredCircuitBreakers = new ArrayList<>();
+            for (CircuitBreaker circuitBreaker : circuitBreakerList) {
+                if (circuitBreaker.isTripped()) {
+                    triggeredCircuitBreakers.add(circuitBreaker);
+                }
+            }
+            return triggeredCircuitBreakers;
+        }
+
+        public boolean checkAnyTripped() {
+            for (CircuitBreaker circuitBreaker : circuitBreakerList) {
+                if (circuitBreaker.isTripped()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static String toErrorMessage(List<CircuitBreaker> circuitBreakerList) {
+            StringBuilder sb = new StringBuilder();
+            for (CircuitBreaker circuitBreaker : circuitBreakerList) {
+                sb.append(circuitBreaker.getErrorMessage()).append("\n");
+            }
+            return sb.toString();
+        }
+
+        public boolean isEnabled() {
+            return !circuitBreakerList.isEmpty();
+        }
+
+        @VisibleForTesting
+        public List<CircuitBreaker> getRegisteredCircuitBreakers() {
+            return circuitBreakerList;
+        }
+    }
+    ```
+
+2. **Refactoring in `CircuitBreakerManager`:**
+
+    Modify `CircuitBreakerManager` to use the new `CircuitBreakerRegistry` class:
+
+    ```java
+    package org.apache.solr.util.circuitbreaker;
+
+    import org.apache.solr.common.util.NamedList;
+    import org.slf4j.Logger;
+    import org.slf4j.LoggerFactory;
+
+    @Deprecated(since = "9.4")
+    public class CircuitBreakerManager extends CircuitBreaker {
+        private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+        // ... [other fields remain unchanged] ...
+
+        private CircuitBreakerRegistry registry = new CircuitBreakerRegistry();
+
+        // Constructor and other methods remain unchanged
+
+        // Use registry methods in place of the extracted methods
+        @Override
+        public void init(NamedList<?> args) {
+            super.init(args);
+            // ... initialization logic ...
+        }
+
+        // ... [remaining methods] ...
+    }
+    ```
+
+In this refactoring, the responsibility for managing the list of circuit breakers and related operations is moved to the `CircuitBreakerRegistry` class. This change simplifies the `CircuitBreakerManager` class, adhering to the Single Responsibility Principle and making the codebase more modular and easier to maintain.

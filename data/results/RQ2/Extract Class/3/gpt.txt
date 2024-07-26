@@ -1,0 +1,116 @@
+To improve the structure and readability of the provided code snippet, an "Extract Class" refactoring is indeed appropriate. The goal is to separate concerns and reduce the complexity of the `AbstractBackgroundInitializerTestImpl` class. Specifically, the handling of the number of initialization calls and related methods can be encapsulated in a separate class.
+
+Here's the refactored code:
+
+```java
+package org.apache.commons.lang3.concurrent;
+
+// ... [import statements remain unchanged]
+
+public class BackgroundInitializerTest extends AbstractLangTest {
+    // ... [Test methods remain unchanged]
+
+    protected AbstractBackgroundInitializerTestImpl getBackgroundInitializerTestImpl() {
+        return new MethodBackgroundInitializerTestImpl();
+    }
+
+    protected AbstractBackground
+
+To improve the structure and readability of the provided code snippet, an "Extract Class" refactoring is indeed appropriate. The goal is to separate concerns and reduce the complexity of the `AbstractBackgroundInitializerTestImpl` class. Specifically, the handling of the number of initialization calls and related methods can be encapsulated in a separate class.
+
+Here's the refactored code:
+
+```java
+package org.apache.commons.lang3.concurrent;
+
+// ... [import statements remain unchanged]
+
+public class BackgroundInitializerTest extends AbstractLangTest {
+    // ... [Test methods remain unchanged]
+
+    protected AbstractBackgroundInitializerTestImpl getBackgroundInitializerTestImpl() {
+        return new MethodBackgroundInitializerTestImpl();
+    }
+
+    protected AbstractBackgroundInitializer
+
+To improve the structure and readability of the provided code snippet, an "Extract Class" refactoring is indeed appropriate. The goal is to separate concerns and reduce the complexity of the `AbstractBackgroundInitializerTestImpl` class. Specifically, the handling of the number of initialization calls and related methods can be encapsulated in a separate class.
+
+Here's the refactored code:
+
+```java
+package org.apache.commons.lang3.concurrent;
+
+// ... [import statements remain unchanged]
+
+public class BackgroundInitializerTest extends AbstractLangTest {
+    // ... [Test methods remain unchanged]
+
+    private void checkInitialize(final AbstractBackgroundInitializerTestImpl init) throws ConcurrentException {
+        final Integer result = init.get();
+        assertEquals(1, result.intValue(), "Wrong result");
+        assertEquals(1, init.getInitializeCalls(), "Wrong number of invocations");
+        assertNotNull(init.getFuture(), "No future");
+    }
+
+    protected AbstractBackgroundInitializerTestImpl getBackgroundInitializerTestImpl() {
+        return new MethodBackgroundInitializerTestImpl();
+    }
+
+    protected AbstractBackgroundInitializerTestImpl getBackgroundInitializerTestImpl(final ExecutorService exec) {
+        return new MethodBackgroundInitializerTestImpl(exec);
+    }
+
+    protected static class AbstractBackgroundInitializerTestImpl extends BackgroundInitializer<Integer> {
+        private final InitializationCounter initializationCounter = new InitializationCounter();
+
+        // ... [rest of the class code]
+
+        public void enableLatch() {
+            waitForLatch = true;
+        }
+
+        public void releaseLatch() {
+            latch.countDown();
+        }
+
+        protected AtomicInteger initializeInternal() throws Exception {
+            if (ex != null) {
+                throw ex;
+            }
+            if (shouldSleep) {
+                ThreadUtils.sleep(Duration.ofMinutes(1));
+            }
+            if (waitForLatch) {
+                latch.await();
+            }
+            return initializationCounter.increment();
+        }
+
+        public int getInitializeCalls() {
+            return initializationCounter.getInitializeCalls();
+        }
+    }
+
+    private static class InitializationCounter {
+        private final AtomicInteger initializeCalls = new AtomicInteger();
+
+        public AtomicInteger increment() {
+            initializeCalls.incrementAndGet();
+            return initializeCalls;
+        }
+
+        public int getInitializeCalls() {
+            return initializeCalls.get();
+        }
+    }
+}
+```
+
+### Changes Made:
+
+1. **Extracted InitializationCounter Class**: This new class handles the tracking and incrementing of initialization calls. It encapsulates the `initializeCalls` field and the associated methods.
+
+2. **Simplified AbstractBackgroundInitializerTestImpl**: This class now interacts with `InitializationCounter` for counting initialization calls, reducing its complexity.
+
+This refactoring enhances the readability and maintainability of the code by segregating different responsibilities into separate classes.

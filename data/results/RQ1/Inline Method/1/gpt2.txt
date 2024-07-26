@@ -1,0 +1,39 @@
+After reviewing the provided code snippet, one potential opportunity for inline method refactoring is found in the `configure` method within the `DatabaseContainer` class. This method is only called from the `configuration` method and does not seem to add significant clarity or abstraction to the code. Therefore, it can be inlined into the `configuration` method for simplicity.
+
+Here's the refactored code with the `configure` method inlined into the `configuration` method:
+
+```java
+package org.hibernate.search.util.impl.integrationtest.mapper.orm;
+
+// ... [imports remain unchanged]
+
+@SuppressWarnings("resource")
+public final class DatabaseContainer {
+
+    // ... [rest of the class members remain unchanged]
+
+    public static Configuration configuration() {
+        if (!SupportedDatabase.H2.equals(DATABASE)) {
+            DATABASE_CONTAINER.start();
+        }
+        Configuration configuration = DATABASE.configuration(DATABASE_CONTAINER);
+
+        if (DATABASE_CONTAINER != null && !DATABASE_CONTAINER.isRunning()) {
+            synchronized (DATABASE_CONTAINER) {
+                if (!DATABASE_CONTAINER.isRunning()) {
+                    DATABASE_CONTAINER.start();
+                }
+            }
+        }
+
+        return configuration;
+    }
+
+    // ... [rest of the class remains unchanged including the SupportedDatabase enum and the Configuration class]
+
+}
+```
+
+In this refactored version, the logic from the `configure` method is directly incorporated into the `configuration` method. This simplification removes the need for an extra method call and streamlines the code, enhancing readability without losing clarity or functionality. 
+
+Note: Any further refactoring would require a deeper understanding of how this class interacts with other parts of the system, as well as the overall design goals of the project. The current refactoring is based solely on the provided snippet.

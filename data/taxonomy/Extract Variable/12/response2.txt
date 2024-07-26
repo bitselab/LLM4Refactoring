@@ -1,0 +1,69 @@
+The provided code snippet for `writeCommitData` contains several opportunities for refactoring using the "Extract Variable" pattern. This refactoring will aim to simplify the code by reducing duplication and improving readability. Here’s a detailed refactoring:
+
+1. **Repeated Method Calls:** There are multiple calls to `out.getWriteMonitor()` that can be extracted to a variable. This will minimize method call overhead and improve code readability.
+2. **Repeated Array Accesses:** The manipulation of `tmp` array, especially at indexes `hashsz`, `hashsz + 4`, `hashsz + 8`, and `hashsz + 12` is repetitive and can be made more readable by introducing variables that hold these indices.
+3. **Repeatedly Computing Edge Values:** The way `edgeValue` is calculated based on the number of parents can be simplified by extracting the conditions into a separate method or more descriptive variables.
+
+Here’s the refactored code:
+
+```java
+private void writeCommitData(CancellableDigestOutputStream out)
+        throws IOException {
+    int[] generations = computeGenerationNumbers(out.getWriteMonitor());
+    WriteMonitor writeMonitor = out.getWriteMonitor();
+    writeMonitor.beginTask(JGitText.get().writingOutCommitGraph, graphCommits.size());
+    
+    int num = 0;
+    byte[] tmp = new byte[hashsz + COMMIT_DATA_WIDTH];
+    int i = 0;
+    
+    for (RevCommit commit : graphCommits) {
+        int edgeValue;
+        int[] packedDate = new int[2];
+
+        ObjectId treeId = commit.getTree();
+        treeId.copyRawTo(tmp, 0);
+
+        RevCommit[] parents = commit.getParents();
+        edgeValue = computeEdgeValue(parents, num);
+
+        int edgeIndex = hashsz;
+        NB.encodeInt32(tmp, edgeIndex, edgeValue);
+
+        if (parents.length > 2) {
+            num += parents.length - 1;
+        }
+
+        int packedDateIndex = hashsz + 8;
+        packedDate[0] = 0; // commitTime is an int in JGit now
+        packedDate[0] |= generations[i] << 2;
+        packedDate[1] = commit.getCommitTime();
+        NB.encodeInt32(tmp, packedDateIndex, packedDate[0]);
+        NB.encodeInt32(tmp, packedDateIndex + 4, packedDate[1]);
+
+        out.write(tmp);
+        writeMonitor.update(1);
+        i++;
+    }
+    writeMonitor.endTask();
+}
+
+private int computeEdgeValue(RevCommit[] parents, int num) {
+    if (parents.length == 0) {
+        return GRAPH_NO_PARENT;
+    } else if (parents.length == 1) {
+        return GRAPH_NO_PARENT;
+    } else if (parents.length == 2) {
+        return graphCommits.getOidPosition(parents[1]);
+    } else {
+        return GRAPH_EXTRA_EDGES_NEEDED | num;
+    }
+}
+```
+
+**Changes made:**
+- **`writeMonitor` variable**: This refactoring extracts the repeated calls to `out.getWriteMonitor()` into a single variable, reducing duplication.
+- **`computeEdgeValue` method**: This separates the logic of computing `edgeValue` based on `parents` into its own method, making the loop more readable and modular.
+- **Index Variables**: While the index variables for `tmp` are not explicitly named, comments or further variables could be added to indicate purpose, especially if `hashsz` changes or the structure of `tmp` is adjusted in future.
+
+These changes aim to improve the maintainability and clarity of the code.

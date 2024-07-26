@@ -1,0 +1,125 @@
+After examining the provided code, I noticed that there are potential inline variable refactorings that can simplify the code, especially by removing temporary variables used only once to pass values directly. Here’s the refactoring:
+
+1. **In the `MultiPhraseQuery` block:**
+    - The variable `maxPosition` is calculated to find the maximum position in the positions array. This value is only used to initialize the size of `disjunctLists` and is not reused or checked against other conditions. We can inline this calculation directly into the array initialization.
+
+2. **In the `SpanNearQuery` instantiation in the `MultiPhraseQuery` block:**
+    - The variables `slop` and `inorder` are used only once when creating a `SpanNearQuery`. These can be inlined for clarity and to reduce the variable count.
+
+Let's refactor the code accordingly:
+
+```java
+protected void extract(Query query, float boost, Map<String, WeightedSpanTerm> terms)
+        throws IOException {
+    if (query instanceof BoostQuery) {
+        BoostQuery boostQuery = (BoostQuery) query;
+        extract(boostQuery.getQuery(), boost * boostQuery.getBoost(), terms);
+    } else if (query instanceof BooleanQuery) {
+        for (BooleanClause clause : (BooleanQuery) query) {
+            if (!clause.isProhibited()) {
+                extract(clause.getQuery(), boost, terms);
+            }
+        }
+    } else if (query instanceof PhraseQuery) {
+        PhraseQuery phraseQuery = ((PhraseQuery) query);
+        Term[] phraseQueryTerms = phraseQuery.getTerms();
+        if (phraseQueryTerms.length == 1) {
+            extractWeightedSpanTerms(terms, new SpanTermQuery(phraseQueryTerms[0]), boost);
+        } else {
+            SpanQuery[] clauses = new SpanQuery[phraseQueryTerms.length];
+            for (int i = 0; i < phraseQueryTerms.length; i++) {
+                clauses[i] = new SpanTermQuery(phraseQueryTerms[i]);
+            }
+            int positionGaps = 0;
+            int[] positions = phraseQuery.getPositions();
+            if (positions.length >= 2) {
+                positionGaps =
+                        Math.max(0, positions[positions.length - 1] - positions[0] - positions.length + 1);
+            }
+            boolean inorder = (phraseQuery.getSlop() == 0);
+            SpanNearQuery sp =
+                    new SpanNearQuery(clauses, phraseQuery.getSlop() + positionGaps, inorder);
+            extractWeightedSpanTerms(terms, sp, boost);
+        }
+    } else if (query instanceof TermQuery || query instanceof SynonymQuery) {
+        extractWeightedTerms(terms, query, boost);
+    } else if (query instanceof SpanQuery) {
+        extractWeightedSpanTerms(terms, (SpanQuery) query, boost);
+    } else if (query instanceof ConstantScoreQuery) {
+        final Query q = ((ConstantScoreQuery) query).getQuery();
+        if (q != null) {
+            extract(q, boost, terms);
+        }
+    } else if (query instanceof CommonTermsQuery) {
+        extractWeightedTerms(terms, query, boost);
+    } else if (query instanceof DisjunctionMaxQuery) {
+        for (Query clause : ((DisjunctionMaxQuery) query)) {
+            extract(clause, boost, terms);
+        }
+    } else if (query instanceof MultiPhraseQuery) {
+        final MultiPhraseQuery mpq = (MultiPhraseQuery) query;
+        final Term[][] termArrays = mpq.getTermArrays();
+        final int[] positions = mpq.getPositions();
+        if (positions.length > 0) {
+            final List<SpanQuery>[] disjunctLists = new List[positions[positions.length - 1] + 1];
+            int distinctPositions = 0;
+            for (int i = 0; i < termArrays.length; ++i) {
+                final Term[] termArray = termArrays[i];
+                List<SpanQuery> disjuncts = disjunctLists[positions[i]];
+                if (disjuncts == null) {
+                    disjuncts = (disjunctLists[positions[i]] = new ArrayList<>(termArray.length));
+                    ++distinctPositions;
+                }
+                for (Term aTermArray : termArray) {
+                    disjuncts.add(new SpanTermQuery(aTermArray));
+                }
+            }
+            int positionGaps = 0;
+            int position = 0;
+            final SpanQuery[] clauses = new SpanQuery[distinctPositions];
+            for (List<SpanQuery> disjuncts : disjunctLists) {
+                if (disjuncts != null) {
+                    clauses[position++] =
+                            new SpanOrQuery(disjuncts.toArray(new SpanQuery[0]));
+                } else {
+                    ++positionGaps;
+                }
+            }
+            if (clauses.length == 1) {
+                extractWeightedSpanTerms(terms, clauses[0], boost);
+            } else {
+                SpanNearQuery sp = new SpanNearQuery(clauses, mpq.getSlop() + positionGaps, mpq.getSlop() == 0);
+                extractWeightedSpanTerms(terms, sp, boost);
+            }
+        }
+    } else if (query instanceof MatchAllDocsQuery || query instanceof FieldExistsQuery) {
+        // nothing
+    } else if (query instanceof FunctionScoreQuery) {
+        extract(((FunctionScoreQuery) query).getWrappedQuery(), boost, terms);
+    } else if (isQueryUnsupported(query.getClass())) {
+        // nothing
+    } else {
+        if (query instanceof MultiTermQuery
+                && (!expandMultiTermQuery || !fieldNameComparator(((MultiTermQuery) query).getField()))) {
+            return;
+        }
+        Query origQuery = query;
+        final IndexReader reader = getLeafContext().reader();
+        Query rewritten;
+        if (query instanceof MultiTermQuery) {
+            rewritten =
+                    MultiTermQuery.SCORING_BOOLEAN_REWRITE.rewrite(
+                            new IndexSearcher(reader), (MultiTermQuery) query);
+        } else {
+            rewritten = origQuery.rewrite(new IndexSearcher(reader));
+        }
+        if (rewritten != origQuery) {
+            extract(rewritten, boost, terms);
+        } else {
+            extractUnknownQuery(query, terms);
+        }
+    }
+}
+```
+
+These changes remove unnecessary variable declarations and streamline the logic, which can help in improving the readability and possibly the performance of the code.

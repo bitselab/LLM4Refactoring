@@ -1,0 +1,46 @@
+In the provided code snippet, there are multiple opportunities for applying the extract variable refactoring to enhance readability and reduce redundancy. The expression `type.asWildcard()` is repeated multiple times, which makes it a candidate for extraction. Additionally, other repeated method calls can be extracted into variables to simplify conditional checks and assignments.
+
+Here's the refactored code:
+
+```java
+default ResolvedType useThisTypeParametersOnTheGivenType(ResolvedType type) {
+    if (type.isTypeVariable()) {
+        ResolvedTypeParameterDeclaration typeParameter = type.asTypeParameter();
+        if (typeParameter.declaredOnType()) {
+            Optional<ResolvedType> typeParam = typeParamValue(typeParameter);
+            if (typeParam.isPresent()) {
+                ResolvedType typeParamResolved = typeParam.get();
+                // Extracted the typeParam.get() method call to reduce redundancy
+                if (typeParamResolved.isWildcard()) {
+                    ResolvedWildcard wildcardType = typeParamResolved.asWildcard();  // Extracted asWildcard call
+                    // Try to avoid an infinite loop when the type is a wildcard type bounded by a type variable like "? super T"
+                    if (!wildcardType.equals(ResolvedWildcard.UNBOUNDED) && type.equals(wildcardType.getBoundedType())) {
+                        return type;
+                    }
+                }
+                type = typeParamResolved;
+            }
+        }
+    }
+    if (type.isWildcard()) {
+        ResolvedWildcard wildcardType = type.asWildcard();  // Extracted asWildcard call
+        if (wildcardType.isBounded()) {
+            if (wildcardType.isExtends()) {
+                return ResolvedWildcard.extendsBound(useThisTypeParametersOnTheGivenType(wildcardType.getBoundedType()));
+            }
+            return ResolvedWildcard.superBound(useThisTypeParametersOnTheGivenType(wildcardType.getBoundedType()));
+        }
+    }
+    if (type.isReferenceType()) {
+        type = type.asReferenceType().transformTypeParameters(this::useThisTypeParametersOnTheGivenType);
+    }
+    return type;
+}
+```
+
+In this refactoring:
+
+1. I extracted `typeParam.get()` into `typeParamResolved` because it is used multiple times for various checks and assignments.
+2. The `type.asWildcard()` call, used in several conditions and method calls, is also extracted to a variable `wildcardType` to simplify the expression and improve clarity.
+
+These changes make the code cleaner and reduce the complexity of method calls, improving maintainability and readability.

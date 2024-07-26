@@ -1,0 +1,80 @@
+Examining the code snippet provided, we look for rename parameter refactoring opportunities, specifically checking if parameter names are not descriptive or consistent with their type and purpose within the method. We focus on constructors and methods in the classes `DoubleValuesSourceComparator` and `DoubleValuesSourceLeafComparator`.
+
+### Original Code Analysis:
+
+1. `DoubleValuesSourceComparator` constructor:
+    ```java
+    public DoubleValuesSourceComparator(int numHits, String field, Double missingValue, boolean reversed, Pruning enableSkipping, DoubleMultiValuesToSingleValuesSource source) {
+        super(numHits, field, missingValue, reversed, enableSkipping);
+        this.source = source;
+    }
+    ```
+    - Parameters like `numHits`, `field`, `missingValue`, `reversed`, and `source` are well-named and descriptive of their types and purposes.
+    - `enableSkipping` is a boolean that dictates whether pruning should be enabled or not. The parameter name might potentially be improved for clarity.
+
+2. `DoubleValuesSourceLeafComparator` constructor:
+    ```java
+    DoubleValuesSourceLeafComparator(LeafReaderContext context) throws IOException {
+        super(context);
+    }
+    ```
+    - The parameter `context` is aptly named and clear in this context.
+
+3. `getNumericDocValues` method:
+    ```java
+    protected NumericDocValues getNumericDocValues(LeafReaderContext context, String field) throws IOException {
+        return source.getValues(context, null).getRawDoubleValues();
+    }
+    ```
+    - The parameter `field` is not used within this method. Its presence is misleading and potentially unnecessary since it is not utilized in the current logic.
+
+### Refactoring Recommendations:
+
+- **Rename `enableSkipping`**: To more clearly reflect its boolean nature and its use in toggling pruning, renaming this parameter could enhance readability. A name like `isPruningEnabled` might be more descriptive.
+- **Remove the unused `field` parameter in `getNumericDocValues`**: Since the `field` parameter is not used, it can be removed to clean up the method signature unless its presence is required by an overriding contract or future anticipated use.
+
+### Refactored Code:
+
+```java
+package org.hibernate.search.backend.lucene.lowlevel.comparator.impl;
+
+import java.io.IOException;
+
+import org.hibernate.search.backend.lucene.lowlevel.docvalues.impl.DoubleMultiValuesToSingleValuesSource;
+
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.search.LeafFieldComparator;
+import org.apache.lucene.search.Pruning;
+import org.apache.lucene.search.comparators.DoubleComparator;
+
+public class DoubleValuesSourceComparator extends DoubleComparator {
+
+    private final DoubleMultiValuesToSingleValuesSource source;
+
+    public DoubleValuesSourceComparator(int numHits, String field, Double missingValue, boolean reversed,
+                                        Pruning isPruningEnabled, DoubleMultiValuesToSingleValuesSource source) {
+        super(numHits, field, missingValue, reversed, isPruningEnabled);
+        this.source = source;
+    }
+
+    @Override
+    public LeafFieldComparator getLeafComparator(LeafReaderContext context) throws IOException {
+        return new DoubleValuesSourceLeafComparator(context);
+    }
+
+    private class DoubleValuesSourceLeafComparator extends DoubleLeafComparator {
+        DoubleValuesSourceLeafComparator(LeafReaderContext context) throws IOException {
+            super(context);
+        }
+
+        @Override
+        protected NumericDocValues getNumericDocValues(LeafReaderContext context) throws IOException {
+            return source.getValues(context, null).getRawDoubleValues();
+        }
+    }
+
+}
+```
+
+This refactoring addresses clarity and removes redundancy, thereby improving the maintainability and readability of the code.

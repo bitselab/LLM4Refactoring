@@ -1,0 +1,193 @@
+Extract class refactorings are frequently employed to decompose complex classes to improve readability.
+##################################################
+An extract class refactoring pattern is to extract a few attributes and/or methods as a new class to decompose this class. Here is an example of the extract class refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public class ScanTargetPattern {
+    private File _directory;
+    private List<String> _includes = Collections.emptyList();
+    private List<String> _excludes = Collections.emptyList();
+
+    /**
+     * @return the _directory
+     */
+    public File getDirectory() {
+        return _directory;
+    }
+
+    /**
+     * @param directory the directory to set
+     */
+    public void setDirectory(File directory) {
+        this._directory = directory;
+    }
+
+    public void setIncludes(List<String> includes) {
+        _includes= includes;
+    }
+
+    public void setExcludes(List<String> excludes) {
+        _excludes = excludes;
+    }
+
+    public List<String> getIncludes() {
+        return _includes;
+    }
+
+    public List<String> getExcludes() {
+        return _excludes;
+    }
+
+}
+```
+The source code after refactoring is:
+```
+public class ScanPattern {
+    private List<String> _includes = Collections.emptyList();
+    private List<String> _excludes = Collections.emptyList();
+
+    public void setIncludes(List<String> includes) {
+        _includes = includes;
+    }
+
+    public void setExcludes(List<String> excludes) {
+        _excludes = excludes;
+    }
+
+    public List<String> getIncludes() {
+        return _includes;
+    }
+
+    public List<String> getExcludes() {
+        return _excludes;
+    }
+}
+
+public class ScanTargetPattern {
+    private File _directory;
+    private ScanPattern _pattern;
+
+    /**
+     * @return the _directory
+     */
+    public File getDirectory() {
+        return _directory;
+    }
+
+    /**
+     * @param directory the directory to set
+     */
+    public void setDirectory(File directory) {
+        this._directory = directory;
+    }
+
+    public void setIncludes(List<String> includes) {
+        if (_pattern == null)
+            _pattern = new ScanPattern();
+        _pattern.setIncludes(includes);
+    }
+
+    public void setExcludes(List<String> excludes) {
+        if (_pattern == null)
+            _pattern = new ScanPattern();
+        _pattern.setExcludes(excludes);
+    }
+
+    public List<String> getIncludes() {
+        return (_pattern == null ? Collections.emptyList() : _pattern.getIncludes());
+    }
+
+    public List<String> getExcludes() {
+        return (_pattern == null ? Collections.emptyList() : _pattern.getExcludes());
+    }
+
+}
+```
+In this example, the developer extracted the following attributes and methods:
+```
+private List<String> _includes = Collections.emptyList();
+private List<String> _excludes = Collections.emptyList();
+
+public void setIncludes(List<String> includes) {
+    _includes = includes;
+}
+
+public void setExcludes(List<String> excludes) {
+    _excludes = excludes;
+}
+
+public List<String> getIncludes() {
+    return _includes;
+}
+
+public List<String> getExcludes() {
+    return _excludes;
+}
+```
+as new class "ScanPattern".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential extract class refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+package net.sourceforge.pmd.cpd;
+
+import java.io.IOException;
+
+import net.sourceforge.pmd.lang.document.TextDocument;
+
+/**
+ * Tokenizes a source file into tokens consumable by CPD.
+ */
+public interface Tokenizer {
+
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_LITERAL_SEQUENCES =
+            PropertyFactory.booleanProperty("cpdIgnoreLiteralSequences")
+                    .defaultValue(false)
+                    .desc("Ignore sequences of literals, eg `0, 0, 0, 0`")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_LITERAL_AND_IDENTIFIER_SEQUENCES =
+            PropertyFactory.booleanProperty("cpdIgnoreLiteralAndIdentifierSequences")
+                    .defaultValue(false)
+                    .desc("Ignore sequences of literals, eg `a, b, 0, 0`")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_ANONYMIZE_LITERALS =
+            PropertyFactory.booleanProperty("cpdAnonymizeLiterals")
+                    .defaultValue(false)
+                    .desc("Anonymize literals. They are still part of the token stream but all literals appear to have the same value.")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_ANONYMIZE_IDENTIFIERS =
+            PropertyFactory.booleanProperty("cpdAnonymizeIdentifiers")
+                    .defaultValue(false)
+                    .desc("Anonymize identifiers. They are still part of the token stream but all identifiers appear to have the same value.")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_IMPORTS =
+            PropertyFactory.booleanProperty("cpdIgnoreImports")
+                    .defaultValue(true)
+                    .desc("Ignore import statements and equivalent (eg using statements in C#).")
+                    .build();
+    public static final PropertyDescriptor<Boolean> CPD_IGNORE_METADATA =
+            PropertyFactory.booleanProperty("cpdIgnoreMetadata")
+                    .defaultValue(false)
+                    .desc("Ignore metadata such as Java annotations or C# attributes.")
+                    .build();
+
+    @Deprecated
+    // TODO what to do with this?
+    public static final String DEFAULT_SKIP_BLOCKS_PATTERN = "#if 0|#endif";
+
+    /**
+     * Tokenize the source code and record tokens using the provided token factory.
+     */
+    void tokenize(TextDocument document, TokenFactory tokens) throws IOException;
+
+    /**
+     * Wraps a call to {@link #tokenize(TextDocument, TokenFactory)} to properly
+     * create and close the token factory.
+     */
+    static void tokenize(Tokenizer tokenizer, TextDocument textDocument, Tokens tokens) throws IOException {
+        try (TokenFactory tf = Tokens.factoryForFile(textDocument, tokens)) {
+            tokenizer.tokenize(textDocument, tf);
+        }
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

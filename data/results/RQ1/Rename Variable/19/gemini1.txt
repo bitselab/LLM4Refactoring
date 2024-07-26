@@ -1,0 +1,63 @@
+ I've identified a few refactoring opportunities in the given code:
+
+1. **Combine conditional blocks:**
+  - In `jobLauncherApplicationRunner`, merge the conditional logic for setting `jobNames` into a single block for clarity.
+  - In `SpringBootBatchConfiguration`, consolidate conditional logic for returning `dataSource` or `batchDataSource`.
+
+2. **Extract common logic:**
+  - Create a method to encapsulate the repetitive logic of fetching a DataSource from `batchDataSource` or falling back to `dataSource`.
+
+3. **Reduce conditional complexity:**
+  - Simplify conditional expressions where possible, such as using the conditional operator (`?:`).
+
+4. **Consider using a Builder pattern:**
+  - Refactor `SpringBootBatchConfiguration` to use a Builder pattern for clearer configuration with multiple dependencies.
+
+5. **Improve formatting:**
+  - Use consistent indentation and spacing for better readability.
+
+6. **Add comments:**
+  - Explain non-obvious code blocks with concise comments.
+
+Here's the refactored code incorporating these suggestions:
+
+```java
+package org.springframework.boot.autoconfigure.batch;
+
+// ... imports
+
+@AutoConfiguration(after = { HibernateJpaAutoConfiguration.class, TransactionAutoConfiguration.class })
+// ... other annotations
+public class BatchAutoConfiguration {
+
+    // ... other beans
+
+    @Configuration(proxyBeanMethods = false)
+    static class SpringBootBatchConfiguration extends DefaultBatchConfiguration {
+
+        private final DataSource dataSource;
+        private final PlatformTransactionManager transactionManager;
+        private final BatchProperties properties;
+        private final List<BatchConversionServiceCustomizer> batchConversionServiceCustomizers;
+
+        SpringBootBatchConfiguration(DataSource dataSource,
+                                     @BatchDataSource ObjectProvider<DataSource> batchDataSource,
+                                     PlatformTransactionManager transactionManager,
+                                     BatchProperties properties,
+                                     ObjectProvider<BatchConversionServiceCustomizer> batchConversionServiceCustomizers) {
+            this.dataSource = getDataSource(dataSource, batchDataSource);
+            this.transactionManager = transactionManager;
+            this.properties = properties;
+            this.batchConversionServiceCustomizers = batchConversionServiceCustomizers.orderedStream().toList();
+        }
+
+        private DataSource getDataSource(DataSource dataSource, ObjectProvider<DataSource> batchDataSource) {
+            return batchDataSource.getIfAvailable(() -> dataSource);
+        }
+
+        // ... other methods
+    }
+
+    // ... other configurations
+}
+```

@@ -1,0 +1,63 @@
+To refactor the provided code snippet, we'll focus on the `mockWriterMetricGroup` methods. These methods are primarily for testing purposes and do not necessarily belong in the main `InternalSinkWriterMetricGroup` class. Extracting these methods into a separate class can improve the readability and maintainability of the code.
+
+### Refactoring Steps:
+1. **Create a new class** (e.g., `InternalSinkWriterMetricGroupFactory`) that will be responsible for creating instances of `InternalSinkWriterMetricGroup`, especially for testing purposes.
+2. **Move the `mockWriterMetricGroup` methods** to this new class.
+3. **Adjust the visibility and static nature** of the methods if necessary, based on the new class's context.
+
+### Refactored Code
+
+#### New Factory Class for `InternalSinkWriterMetricGroup`
+
+```java
+package org.apache.flink.runtime.metrics.groups;
+
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.OperatorIOMetricGroup;
+
+/**
+ * Factory class for creating instances of InternalSinkWriterMetricGroup, primarily for testing.
+ */
+public class InternalSinkWriterMetricGroupFactory {
+
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup mockWriterMetricGroup(MetricGroup metricGroup) {
+        return new InternalSinkWriterMetricGroup(
+                metricGroup, UnregisteredMetricsGroup.createOperatorIOMetricGroup());
+    }
+
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup mockWriterMetricGroup(
+            MetricGroup metricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        return new InternalSinkWriterMetricGroup(metricGroup, operatorIOMetricGroup);
+    }
+}
+```
+
+#### Updated `InternalSinkWriterMetricGroup` Class
+
+```java
+package org.apache.flink.runtime.metrics.groups;
+
+// ... [Other Imports] ...
+
+@Internal
+public class InternalSinkWriterMetricGroup extends ProxyMetricGroup<MetricGroup>
+        implements SinkWriterMetricGroup {
+
+    // ... [Field Declarations] ...
+
+    // Constructor and other methods remain unchanged
+
+    // Removed the mockWriterMetricGroup methods
+
+    // ... [Other Methods] ...
+}
+```
+
+### Summary of Changes
+- Extracted the `mockWriterMetricGroup` methods into a new class `InternalSinkWriterMetricGroupFactory`. This class is now responsible for creating instances of `InternalSinkWriterMetricGroup` for testing purposes.
+- Removed the `mockWriterMetricGroup` methods from the original `InternalSinkWriterMetricGroup` class to clean up its responsibilities and focus on its primary role.
+
+This refactoring enhances the single responsibility principle and makes the codebase more organized and testable.

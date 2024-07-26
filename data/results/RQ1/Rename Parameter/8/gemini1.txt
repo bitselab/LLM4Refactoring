@@ -1,0 +1,47 @@
+**I'm ready to review the code and identify refactoring opportunities. While the code is relatively concise and well-formatted, there are a few potential areas for improvement:**
+
+**1. Combine Constructor Calls for Clarity:**
+
+- **Merge calls to super constructors:** This can condense the code and make the inheritance structure clearer.
+
+**2. Consider Using a Fluent Interface:**
+
+- **Explore using a fluent interface for constructor calls:** This can enhance readability and make client code more expressive.
+
+**Refactored Code (Example):**
+
+```java
+public class DoubleValuesSourceComparator extends DoubleComparator {
+
+  private final DoubleMultiValuesToSingleValuesSource source;
+
+  public DoubleValuesSourceComparator(int numHits, String field, Double missingValue, boolean reversed,
+                                       Pruning enableSkipping, DoubleMultiValuesToSingleValuesSource source) {
+    super(numHits, field, missingValue, reversed, enableSkipping);
+    this.source = source;
+  }
+
+  @Override
+  public LeafFieldComparator getLeafComparator(LeafReaderContext context) throws IOException {
+    return new DoubleValuesSourceLeafComparator(context);
+  }
+
+  private class DoubleValuesSourceLeafComparator extends DoubleLeafComparator {
+    DoubleValuesSourceLeafComparator(LeafReaderContext context) throws IOException {
+      super(context);
+    }
+
+    @Override
+    protected NumericDocValues getNumericDocValues(LeafReaderContext context, String field) throws IOException {
+      return source.getValues(context, null).getRawDoubleValues();
+    }
+  }
+
+}
+```
+
+**Additional Considerations:**
+
+- **Team Conventions and Practices:** Adhere to established coding conventions and best practices within your team.
+- **Trade-offs:** Evaluate any potential trade-offs between refactoring and code familiarity for other team members.
+- **Future Extensions:** Consider potential future modifications or extensions to the code when evaluating refactoring options.

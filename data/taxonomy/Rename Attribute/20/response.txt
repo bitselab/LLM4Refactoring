@@ -1,0 +1,115 @@
+After reviewing the provided code from the `AnnotatedMethod` class in the Spring Framework package, I noticed a few potential opportunities for renaming attributes to improve consistency and clarity. Here are the suggested changes:
+
+1. **`parameters` to `methodParameters`**:
+    - Reason: This change aims to clarify that these parameters are specifically for methods, distinguishing them from potential other parameter types within the same context.
+
+2. **`bridgedMethod` to `resolvedBridgedMethod`**:
+    - Reason: Renaming this to indicate that it has been resolved to the bridged method version of the original method could provide clearer indication of its purpose, especially since there's a specific operation (`BridgeMethodResolver.findBridgedMethod(method)`) used to initialize this field.
+
+3. **`interfaceParameterAnnotations` to `inheritedInterfaceAnnotations`**:
+    - Reason: Since the purpose of this variable is to hold annotations inherited from interfaces and potentially superclasses, renaming it might clarify its role in storing inherited data, not just interface-specific data.
+
+Here's how the code looks after applying these refactorings:
+
+```java
+package org.springframework.core.annotation;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import org.springframework.core.BridgeMethodResolver;
+import org.springframework.core.MethodParameter;
+import org.springframework.core.ResolvableType;
+import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
+import org.springframework.util.ObjectUtils;
+import org.springframework.util.ReflectionUtils;
+import org.springframework.util.StringUtils;
+
+/**
+ * A convenient wrapper for a {@link Method} handle, providing deep annotation
+ * introspection on methods and method parameters, including the exposure of
+ * interface-declared parameter annotations from the concrete target method.
+ *
+ * @author Juergen Hoeller
+ * @since 6.1
+ * @see #getMethodAnnotation(Class)
+ * @see #getMethodParameters()
+ * @see AnnotatedElementUtils
+ * @see SynthesizingMethodParameter
+ */
+public class AnnotatedMethod {
+
+    private final Method method;
+
+    private final Method resolvedBridgedMethod;
+
+    private final MethodParameter[] methodParameters;
+
+    @Nullable
+    private volatile List<Annotation[][]> inheritedInterfaceAnnotations;
+
+
+    /**
+     * Create an instance that wraps the given {@link Method}.
+     * @param method the {@code Method} handle to wrap
+     */
+    public AnnotatedMethod(Method method) {
+        Assert.notNull(method, "Method is required");
+        this.method = method;
+        this.resolvedBridgedMethod = BridgeMethodResolver.findBridgedMethod(method);
+        ReflectionUtils.makeAccessible(this.resolvedBridgedMethod);
+        this.methodParameters = initMethodParameters();
+    }
+
+    /**
+     * Copy constructor for use in subclasses.
+     */
+    protected AnnotatedMethod(AnnotatedMethod annotatedMethod) {
+        Assert.notNull(annotatedMethod, "AnnotatedMethod is required");
+        this.method = annotatedMethod.method;
+        this.resolvedBridgedMethod = annotatedMethod.resolvedBridgedMethod;
+        this.methodParameters = annotatedMethod.methodParameters;
+        this.inheritedInterfaceAnnotations = annotatedMethod.inheritedInterfaceAnnotations;
+    }
+
+
+    /**
+     * Return the annotated method.
+     */
+    public final Method getMethod() {
+        return this.method;
+    }
+
+    /**
+     * If the annotated method is a bridge method, this method returns the bridged
+     * (user-defined) method. Otherwise, it returns the same method as {@link #getMethod()}.
+     */
+    protected final Method getBridgedMethod() {
+        return this.resolvedBridgedMethod;
+    }
+
+    /**
+     * Expose the containing class for method parameters.
+     * @see MethodParameter#getContainingClass()
+     */
+    protected Class<?> getContainingClass() {
+        return this.method.getDeclaringClass();
+    }
+
+    /**
+     * Return the method parameters for this {@code AnnotatedMethod}.
+     */
+    public final MethodParameter[] getMethodParameters() {
+        return this.methodParameters;
+    }
+
+    // The rest of the methods remain unchanged.
+}
+```
+
+This refactoring focuses on clarity and consistency with method names and their purposes within the class, enhancing readability and maintainability. If you have any further changes or a different focus in mind for refactoring, please let me know!

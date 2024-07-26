@@ -1,0 +1,62 @@
+Analyzing the provided code snippet, there are several opportunities for Extract Method refactoring, a technique used to improve code readability and maintainability. The goal is to identify segments of code within a method that can be grouped together and moved into a new method. Let's focus on some of the potential refactorings:
+
+1. **Data Registration**: The process of registering data with `TestValuesTableFactory.registerRowData` is repeated in multiple methods. This can be extracted into a separate method.
+
+2. **Table Creation**: The creation of test source tables and sink tables is a candidate for extraction. This will make the main test methods more focused on the test logic.
+
+3. **JSON Transformation Logic**: The lambda expressions used in `compileSqlAndExecutePlan` for JSON transformation are complex and can be extracted into separate methods.
+
+4. **Properties Map Creation**: The method `getProperties` creates a properties map using an anonymous class. This can be refactored for better readability.
+
+Let's refactor the code with these suggestions in mind. Here's a refactored version of the key sections:
+
+```java
+class ConfigureOperatorLevelStateTtlJsonITCase extends JsonPlanTestBase {
+
+    @Test
+    void testDifferentStateTtlForDifferentOneInputOperator() throws Exception {
+        String dataId = registerTestDataForOneInputOperator();
+        setupTestTablesForOneInputOperator(dataId);
+        compileSqlAndExecutePlan(
+            getSqlForOneInputOperator(), 
+            json -> transformJsonForOneInputOperator(json)
+        ).await();
+        verifyResultsForOneInputOperator();
+    }
+
+    private String registerTestDataForOneInputOperator() {
+        // Code for registering test data...
+    }
+
+    private void setupTestTablesForOneInputOperator(String dataId) {
+        // Code for setting up test tables...
+    }
+
+    private String getSqlForOneInputOperator() {
+        // Return SQL query string...
+    }
+
+    private String transformJsonForOneInputOperator(String json) throws IOException {
+        // Code for transforming JSON...
+    }
+
+    private void verifyResultsForOneInputOperator() {
+        // Code for verifying test results...
+    }
+
+    // Similar refactoring for other test methods...
+
+    private static Map<String, String> createPropertiesMap(String dataId, int sleepAfterElements, String sleepTime) {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("connector", "values");
+        properties.put("bounded", "false");
+        properties.put("register-internal-data", "true");
+        properties.put("source.sleep-after-elements", String.valueOf(sleepAfterElements));
+        properties.put("source.sleep-time", sleepTime);
+        properties.put("data-id", dataId);
+        return properties;
+    }
+}
+```
+
+This refactored code is more modular and readable. Each test method is now shorter and more focused, with separate methods handling specific parts of the test setup and execution. This makes it easier to understand what each part of the code is doing and simplifies maintenance and potential future changes.

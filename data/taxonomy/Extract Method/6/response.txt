@@ -1,0 +1,76 @@
+In the given code, a recurring pattern that appears to be a candidate for the "Extract Method" refactoring pattern is the sequence used for setting up `FutureDataInputStreamBuilder` and performing read operations across several test methods. This repeated sequence could be extracted into a separate method to improve code readability, maintainability, and reusability.
+
+### Potential Refactor Target:
+The operations to create a `FutureDataInputStreamBuilder`, configure it with a buffer size, and perform the read operations are repeated across several test methods, such as in the `testSeekAndReadWithConf`, `testPartialReadWithNoData`, and `testPartialReadWithSomeData` methods. Here's how the refactoring can be applied:
+
+### Extracted Method:
+Create a method called `setupAndReadStream` that takes in parameters for the file system, file path, footer read buffer size, and the expected configurations and performs the necessary setup and read operations. This method can then be called from the various test methods.
+
+### Refactored Code:
+Here's how the refactored code snippet would look after applying the extract method refactoring to the `setupAndReadStream` process:
+
+```java
+private FSDataInputStream setupAndReadStream(Path testFilePath, AzureBlobFileSystem fs, int footerReadBufferSize) throws Exception {
+    FutureDataInputStreamBuilder builder = getParameterizedBuilder(testFilePath, fs, footerReadBufferSize);
+    return builder.build().get();
+}
+
+@Test
+public void testOnlyOneServerCallIsMadeWhenTheConfIsTrue() throws Exception {
+    testNumBackendCalls(true);
+}
+
+@Test
+public void testMultipleServerCallsAreMadeWhenTheConfIsFalse() throws Exception {
+    testNumBackendCalls(false);
+}
+
+private void testNumBackendCalls(boolean optimizeFooterRead) throws Exception {
+    int fileIdx = 0;
+    for (int i = 0; i <= 4; i++) {
+        for (int j = 0; j <= 2; j++) {
+            int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+            int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+            final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+            int fileIdx1 = fileIdx++;
+            String fileName = methodName.getMethodName() + fileIdx1;
+            byte[] fileContent = getRandomBytesArray(fileSize);
+            Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+            int length = AbfsInputStream.FOOTER_SIZE;
+            try (FSDataInputStream iStream = setupAndReadStream(testFilePath, fs, footerReadBufferSize)) {
+                verifyConfigValueInStream(iStream, footerReadBufferSize);
+                byte[] buffer = new byte[length];
+                Map<String, Long> metricMap = getInstrumentationMap(fs);
+                long requestsMadeBeforeTest = metricMap.get(CONNECTIONS_MADE.getStatName());
+                performReads(iStream, fileSize, buffer, length);
+                long requestsMadeAfterTest = metricMap.get(CONNECTIONS_MADE.getStatName());
+                assertNumberOfRequests(optimizeFooterRead, requestsMadeBeforeTest, requestsMadeAfterTest);
+            }
+        }
+    }
+}
+
+private void performReads(FSDataInputStream iStream, int fileSize, byte[] buffer, int length) throws IOException {
+    iStream.seek(fileSize - 8);
+    iStream.read(buffer, 0, length);
+    iStream.seek(fileSize - (TEN * ONE_KB));
+    iStream.read(buffer, 0, length);
+    iStream.seek(fileSize - (TWENTY * ONE_KB));
+    iStream.read(buffer, 0, length);
+}
+
+private void assertNumberOfRequests(boolean optimizeFooterRead, long requestsMadeBeforeTest, long requestsMadeAfterTest) {
+    if (optimizeFooterRead) {
+        assertEquals(1, requestsMadeAfterTest - requestsMadeBeforeTest);
+    } else {
+        assertEquals(3, requestsMadeAfterTest - requestsMadeBeforeTest);
+    }
+}
+```
+
+### Explanation:
+1. **Method Extraction**: The `setupAndReadStream` method simplifies the creation and configuration of `FutureDataInputStreamBuilder` and its use in reading data streams. This method now encapsulates the logic for building and getting the stream, which is repeated in multiple test cases.
+
+2. **Call to Extracted Method**: Each test method that needs to read from the file system now calls `setupAndReadStream`, simplifying the test methods and reducing duplicated code.
+
+This refactoring improves the structure of the codebase, making it cleaner and more manageable by consolidating repeated code sequences into a single, reusable method.

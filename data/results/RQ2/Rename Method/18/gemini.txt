@@ -1,0 +1,41 @@
+ **Here's the refactored code with a more descriptive method name:**
+
+```java
+public class LBHttp2SolrClient extends LBSolrClient {
+  // ... rest of the class code remains the same ...
+
+  public static class Builder {
+    // ... other builder methods remain the same ...
+
+    /**
+     * Sets the default data store (collection or core) to use for requests.
+     *
+     * @param defaultDataStore the name of the collection or core to use by default
+     */
+    public LBHttp2SolrClient.Builder setDefaultDataStore(String defaultDataStore) {
+      this.defaultDataStore = defaultDataStore;
+      return this;
+    }
+
+    // ... other builder methods remain the same ...
+  }
+}
+```
+
+**Explanation of the change:**
+
+- **Original method name:** `withDefaultCollection`
+- **Refactored method name:** `setDefaultDataStore`
+
+**Improvements:**
+
+- **Clarity:** The new name directly conveys its purpose of setting a default data store, making it easier to understand for both current and future developers.
+- **Accuracy:** It accurately reflects the behavior of the method as described in the Javadoc comment.
+- **Consistency:** It aligns with naming conventions in Java and Solr, where a method that sets a property often starts with "set".
+- **Readability:** It improves readability by using a more descriptive and intuitive name.
+
+**Benefits of this refactoring:**
+
+- **Enhanced code comprehension:** Clearer method names make it easier to grasp the overall logic and flow of the code.
+- **Improved maintainability:** Descriptive names make the code easier to maintain and modify in the future.
+- **Better code collaboration:** Clearer method names facilitate communication and understanding among developers.

@@ -1,0 +1,53 @@
+To improve the code snippet you provided, we can apply the "Extract Method" refactoring technique to the repeated code. The specific code snippet you highlighted:
+
+```java
+findExecution(tests, "test()")//
+    .getTerminationInfo().getExecutionResult().getThrowable().orElseThrow();
+```
+
+This code is used to find a specific execution by its display name and then retrieve the associated throwable. It's repeated in the `allFieldsAreClosedIfAnyFieldThrowsAnException` method. We can extract this into a new method to enhance readability and reusability.
+
+Here's the refactored code:
+
+```java
+class AutoCloseTests extends AbstractJupiterTestEngineTests {
+    // ... [Other members and methods remain unchanged]
+
+    @Test
+    void allFieldsAreClosedIfAnyFieldThrowsAnException() {
+        // ... [Other code remains unchanged]
+
+        // Test-level failures
+        Throwable throwable = extractThrowableFromExecution(tests, "test()");
+        assertThat(throwable)
+            .isExactlyInstanceOf(RuntimeException.class)
+            .hasMessage("FailingFieldsTestCase.field1.close()")
+            .hasNoCause()
+            .hasSuppressedException(new RuntimeException("FailingFieldsTestCase.field2.close()"));
+
+        Events containers = allEvents.containerEvents();
+        containers.assertStatistics(stats -> stats.succeeded(1).failed(1));
+
+        // Container-level failures
+        throwable = extractThrowableFromExecution(containers, testClass.getSimpleName());
+        assertThat(throwable)
+            .isExactlyInstanceOf(RuntimeException.class)
+            .hasMessage("FailingFieldsTestCase.staticField1.close()")
+            .hasNoCause()
+            .hasSuppressedException(new RuntimeException("FailingFieldsTestCase.staticField2.close()"));
+    }
+
+    private Throwable extractThrowableFromExecution(Events events, String displayName) {
+        return findExecution(events, displayName)
+            .getTerminationInfo().getExecutionResult().getThrowable().orElseThrow();
+    }
+
+    // ... [Rest of the class remains unchanged]
+}
+```
+
+Changes Made:
+- **Extracted Method `extractThrowableFromExecution`**: This new method encapsulates the logic of retrieving the throwable from an execution based on the display name. It takes `Events` and the display name as parameters.
+- **Refactored Usage**: Replaced the repeated code in `allFieldsAreClosedIfAnyFieldThrowsAnException` with calls to the new `extractThrowableFromExecution` method.
+
+This refactoring improves the code by reducing duplication and making it easier to understand and maintain. Remember to test the refactored code to ensure it behaves as expected.

@@ -1,0 +1,57 @@
+Absolutely, there is a refactoring opportunity in the provided code for the `QuicSession` class. The identified refactoring technique is **Extract Method**.
+
+Here's the breakdown:
+
+- The current `process` method performs multiple responsibilities:
+    1. Updates `remoteAddress`
+    2. Feeds data to `quicheConnection`
+    3. Handles connection established logic
+    4. Flushes data
+
+- We can extract a new method to handle logic related to feeding data to `quicheConnection` and updating connection state based on the established flag. 
+
+Here's the refactored code with the extracted method:
+
+```java
+public class QuicSession extends ContainerLifeCycle {
+  // ... other class members ...
+
+  public Runnable process(SocketAddress remoteAddress, ByteBuffer cipherBufferIn) throws IOException {
+    this.remoteAddress = remoteAddress;
+
+    int remaining = cipherBufferIn.remaining();
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("feeding {} cipher bytes to {}", remaining, this);
+    }
+    int accepted = quicheConnection.feedCipherBytes(cipherBufferIn, getLocalAddress(), remoteAddress);
+    if (accepted != remaining) {
+      throw new IllegalStateException();
+    }
+
+    return handleConnectionEstablished(isConnectionEstablished());
+  }
+
+  private Runnable handleConnectionEstablished(boolean connectionEstablished) throws IOException {
+    if (connectionEstablished) {
+      ProtocolSession protocol = protocolSession;
+      if (protocol == null) {
+        protocolSession = protocol = createProtocolSession();
+        addManaged(protocol);
+      }
+
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("processing {}", protocol);
+      }
+      // Return a task because we want 1 thread per QUIC connection ID.
+      return protocol.getProducerTask();
+    } else {
+      flush();
+      return null;
+    }
+  }
+
+  // ... other methods ...
+}
+```
+
+This refactoring improves code readability and maintainability by separating concerns within the `process` method. The new `handleConnectionEstablished` method clearly handles the logic related to connection state and avoids code duplication.

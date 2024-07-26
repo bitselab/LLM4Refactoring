@@ -1,0 +1,78 @@
+Inline variable refactoring is a technique used to improve code readability by reducing the use of unnecessary temporary variables. This approach can make the code more concise and easier to follow. I'll review the provided code snippet to identify opportunities for inline variable refactoring. Here are some key areas to consider:
+
+1. **Temporary Variables with Immediate Returns**: If a temporary variable is assigned and then immediately returned or thrown, it can usually be inlined.
+
+2. **Single-Use Variables**: Variables that are only used once and don't significantly improve readability or understanding can often be inlined.
+
+3. **Simple Expressions**: Variables that hold simple expressions or method calls can typically be inlined without impacting readability.
+
+Let's apply these principles to refactor the code:
+
+### Refactored Code with Inline Variable Refactoring
+
+Here's the refactored version of the provided code snippet, focusing on inline variable refactoring:
+
+```java
+// ... [Previous imports and class declarations remain unchanged] ...
+
+public static class LocalAction extends TransportAction<Request, Response> {
+    // ... [Unchanged class members and constructor] ...
+
+    @Override
+    protected void doExecute(Task task, Request request, ActionListener<Response> listener) {
+        try (var refs = new RefCountingRunnable(() -> listener.onResponse(new ResultsBuilder().getResponse()))) {
+            for (String repositoryName : request.repositories()) {
+                Repository repository;
+                try {
+                    repository = repositoriesService.repository(repositoryName);
+                } catch (RepositoryMissingException e) {
+                    logger.debug("[{}]: repository not found", repositoryName);
+                    continue;
+                }
+
+                if (repository.isReadOnly()) {
+                    logger.debug("[{}]: skipping readonly repository", repositoryName);
+                    continue;
+                }
+
+                retentionExecutor.execute(ActionRunnable.wrap(
+                    ActionListener.releaseAfter(new ActionListener<Void>() {
+                        @Override
+                        public void onResponse(Void unused) {}
+
+                        @Override
+                        public void onFailure(Exception e) {
+                            logger.debug(Strings.format("[%s]: could not compute expired snapshots", repositoryName), e);
+                        }
+                    }, refs.acquire()), perRepositoryListener -> createSubscribableListener(repository, repositoryName, request, new ResultsBuilder(), perRepositoryListener)));
+            }
+        }
+    }
+
+    private void createSubscribableListener(Repository repository, String repositoryName, Request request, ResultsBuilder resultsBuilder, ActionListener<Void> perRepositoryListener) {
+        // Inline method calls and remove intermediate variables
+        SubscribableListener.<RepositoryData>newForked(l -> repository.getRepositoryData(retentionExecutor, l))
+            .<SnapshotDetailsByPolicy>andThen(
+                (l, repositoryData) -> getSnapshotDetailsByPolicy(retentionExecutor, repository, repositoryData, l)
+            )
+            .andThenAccept(snapshotDetailsByPolicy -> {
+                resultsBuilder.addResult(
+                    repositoryName,
+                    getSnapshotsToDelete(repositoryName, request.policies(), snapshotDetailsByPolicy)
+                );
+            })
+            .addListener(perRepositoryListener);
+    }
+
+    // ... [Rest of the LocalAction class remains unchanged] ...
+}
+
+// ... [Rest of the classes remain unchanged] ...
+```
+
+Changes made:
+
+1. **Inline `ResultsBuilder` Instance**: Inlined the creation of `ResultsBuilder` in `doExecute` method.
+2. **Inline Method Calls in `createSubscribableListener`**: Simplified the method by inlining calls within the `SubscribableListener` chain.
+
+These changes improve the readability of the code by eliminating unnecessary variables and making the flow of data and execution more apparent. Inline refactoring is particularly useful in cases where the readability and maintainability of the code are not compromised.

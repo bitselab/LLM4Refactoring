@@ -1,0 +1,69 @@
+Yes, there is a refactoring opportunity in the provided code snippet. The code snippet contains a block of code that calculates the backoff time based on the `initialBackoffMS` and other parameters. This block of logic is repeated multiple times in the test methods `testMultipleSettings` and `testMergingExceptionsWorksWithResetting`. 
+
+Extracting this logic into a separate method would improve code readability and maintainability. Here's the refactored code:
+
+```java
+class ExponentialDelayRestartBackoffTimeStrategyTest {
+
+  private final Exception failure = new Exception();
+
+  private long calculateBackoffTime(long initialBackoffMS, double backoffMultiplier, 
+      long resetBackoffThresholdMS, long currentAttempt) {
+    long backoffMs = initialBackoffMS;
+    for (int i = 0; i < currentAttempt; i++) {
+      backoffMs = Math.min(backoffMs * backoffMultiplier, resetBackoffThresholdMS);
+    }
+    return backoffMs;
+  }
+
+  // ... rest of the code remains the same ...
+
+  @Test
+  void testMultipleSettings() {
+    ManualClock clock = new ManualClock();
+    final long initialBackoffMS = 1L;
+    final long maxBackoffMS = 9L;
+    double backoffMultiplier = 2.0;
+    final long resetBackoffThresholdMS = 80L;
+    double jitterFactor = 0.25;
+
+    final ExponentialDelayRestartBackoffTimeStrategy restartStrategy =
+        new ExponentialDelayRestartBackoffTimeStrategy(
+            clock, initialBackoffMS, maxBackoffMS, backoffMultiplier, resetBackoffThresholdMS, jitterFactor, Integer.MAX_VALUE);
+
+    // ensure initial data
+    restartStrategy.notifyFailure(failure);
+    assertThat(restartStrategy.canRestart()).isTrue();
+    assertThat(restartStrategy.getBackoffTime()).isEqualTo(initialBackoffMS);
+
+    // ensure backoff time is initial after the first failure
+    clock.advanceTime(resetBackoffThresholdMS + 1, TimeUnit.MILLISECONDS);
+    restartStrategy.notifyFailure(failure);
+    assertThat(restartStrategy.canRestart()).isTrue();
+    assertThat(restartStrategy.getBackoffTime()).isEqualTo(initialBackoffMS);
+
+    // ensure backoff increases until threshold is reached
+    clock.advanceTime(4, TimeUnit.MILLISECONDS);
+    restartStrategy.notifyFailure(failure);
+    assertThat(restartStrategy.canRestart()).isTrue();
+    assertThat(restartStrategy.getBackoffTime()).isEqualTo(calculateBackoffTime(initialBackoffMS, backoffMultiplier, resetBackoffThresholdMS, 2));
+
+    // ensure backoff is reset after threshold is reached
+    clock.advanceTime(resetBackoffThresholdMS + 9 + 1, TimeUnit.MILLISECONDS);
+    restartStrategy.notifyFailure(failure);
+    assertThat(restartStrategy.canRestart()).isTrue();
+    assertThat(restartStrategy.getBackoffTime()).isOne();
+    clock.advanceTime(Duration.ofMillis(maxBackoffMS + 1));
+
+    // ensure backoff still increases
+    restartStrategy.notifyFailure(failure);
+    assertThat(restartStrategy.canRestart()).isTrue();
+    assertThat(restartStrategy.getBackoffTime()).isEqualTo(calculateBackoffTime(initialBackoffMS, backoffMultiplier, resetBackoffThresholdMS, 3));
+  }
+
+  // ... other test methods ...
+}
+```
+
+In the refactored code, the logic for calculating the backoff time is extracted into a separate method `calculateBackoffTime`. This method takes the relevant parameters (`initialBackoffMS`, `backoffMultiplier`, `resetBackoffThresholdMS`, and `currentAttempt`) and calculates the backoff time. The test methods now call this method to calculate the backoff time instead of duplicating the logic.
+ 

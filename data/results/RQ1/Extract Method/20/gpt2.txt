@@ -1,0 +1,65 @@
+Analyzing the provided code snippet from `org.springframework.core.BridgeMethodResolver`, there are several opportunities for extract method refactoring to improve readability and maintainability. Specifically, the patterns of code that are repeated in both `findBridgedMethod` and `getMostSpecificMethod` can be extracted into separate methods. Here's a refactored version of the code:
+
+1. **Extract Method for Cache Handling**: The logic for handling the cache lookup and insertion is repeated. This can be extracted into a separate method.
+
+2. **Extract Method for Method Gathering**: The logic to gather all methods with matching name and parameter size is duplicated and can be extracted.
+
+Refactored Code:
+
+```java
+package org.springframework.core;
+
+// ... [imports remain unchanged] ...
+
+public final class BridgeMethodResolver {
+    // ... [unchanged fields and constructor] ...
+
+    public static Method findBridgedMethod(Method bridgeMethod) {
+        return resolveMethod(bridgeMethod, bridgeMethod.getDeclaringClass());
+    }
+
+    public static Method getMostSpecificMethod(Method bridgeMethod, @Nullable Class<?> targetClass) {
+        Method specificMethod = ClassUtils.getMostSpecificMethod(bridgeMethod, targetClass);
+        return resolveMethod(specificMethod, targetClass != null ? targetClass : specificMethod.getDeclaringClass());
+    }
+
+    private static Method resolveMethod(Method method, Class<?> targetClass) {
+        if (!method.isBridge() && method.getDeclaringClass() == targetClass) {
+            return method;
+        }
+
+        Object cacheKey = createCacheKey(method, targetClass);
+        return cache.computeIfAbsent(cacheKey, key -> findBridgedMethodInHierarchy(method, targetClass));
+    }
+
+    private static Object createCacheKey(Method method, Class<?> targetClass) {
+        return method.getDeclaringClass() == targetClass ? method : new MethodClassKey(method, targetClass);
+    }
+
+    private static Method findBridgedMethodInHierarchy(Method bridgeMethod, Class<?> targetClass) {
+        List<Method> candidateMethods = gatherCandidateMethods(bridgeMethod, targetClass);
+        return candidateMethods.isEmpty() ? bridgeMethod : selectBridgedMethod(candidateMethods, bridgeMethod);
+    }
+
+    private static List<Method> gatherCandidateMethods(Method bridgeMethod, Class<?> targetClass) {
+        List<Method> candidateMethods = new ArrayList<>();
+        MethodFilter filter = candidateMethod -> isBridgedCandidateFor(candidateMethod, bridgeMethod);
+        ReflectionUtils.doWithMethods(targetClass, candidateMethods::add, filter);
+        return candidateMethods;
+    }
+
+    private static Method selectBridgedMethod(List<Method> candidateMethods, Method bridgeMethod) {
+        if (candidateMethods.size() == 1) {
+            return candidateMethods.get(0);
+        }
+        return candidateMethods.stream()
+                .filter(candidateMethod -> isBridgeMethodFor(bridgeMethod, candidateMethod, bridgeMethod.getDeclaringClass()))
+                .findFirst()
+                .orElse(bridgeMethod);
+    }
+
+    // ... [rest of the methods remain unchanged] ...
+}
+```
+
+These changes improve the structure and readability of the code by reducing duplication and making the purpose of each method more clear.

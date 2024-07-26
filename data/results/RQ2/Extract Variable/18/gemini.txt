@@ -1,0 +1,46 @@
+ **Here's the refactored code using Extract Variable refactoring to address the repeated expression "inputStream.readAllBytes()":**
+
+```java
+package org.apache.solr.handler.configsets;
+
+// ... existing imports ...
+
+public class UploadConfigSetFileAPI extends ConfigSetAPIBase {
+
+  // ... existing code ...
+
+  @EndPoint(method = PUT, path = API_PATH, permission = CONFIG_EDIT_PERM)
+  public void updateConfigSetFile(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
+    ensureConfigSetUploadEnabled();
+
+    // ... existing code ...
+
+    String fixedSingleFilePath = singleFilePath;
+    if (fixedSingleFilePath.charAt(0) == '/') {
+      fixedSingleFilePath = fixedSingleFilePath.substring(1);
+    }
+    if (fixedSingleFilePath.isEmpty()) {
+      // ... existing code ...
+    } else {
+      // Extract the repeated expression into a variable
+      byte[] fileBytes = inputStream.readAllBytes();
+
+      if (ZkMaintenanceUtils.isFileForbiddenInConfigSets(fixedSingleFilePath)
+          || FileTypeMagicUtil.isFileForbiddenInConfigset(fileBytes)) {
+        // ... existing code ...
+      } else if (cleanup) {
+        // ... existing code ...
+      } else {
+        createBaseNode(configSetService, overwritesExisting, requestIsTrusted, configSetName);
+        configSetService.uploadFileToConfig(configSetName, fixedSingleFilePath, fileBytes, allowOverwrite);
+      }
+    }
+  }
+}
+```
+
+**Key improvements:**
+
+- **Enhanced readability:** The code is less cluttered and easier to read by reading the file bytes into a dedicated variable.
+- **Improved maintainability:** If any changes related to reading the file bytes are needed, they can be made centrally in one place.
+- **Avoidance of potential errors:** Repeatedly calling `inputStream.readAllBytes()` could lead to errors if the stream is not reset properly. This refactoring ensures that the bytes are read only once.

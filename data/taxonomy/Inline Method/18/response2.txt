@@ -1,0 +1,28 @@
+In the provided code snippet, the `_allPropsWriter` method is called solely by the `writeMap` method in the `Replica` class. This scenario is an ideal candidate for inline method refactoring because `_allPropsWriter` acts merely as a proxy for the `writeMap` method without providing additional abstraction or encapsulation benefits.
+
+Here's the refactored code with the `_allPropsWriter` method inlined within `writeMap`:
+
+```java
+public class Replica extends ZkNodeProps implements MapWriter {
+    
+    @Override
+    public void writeMap(MapWriter.EntryWriter ew) throws IOException {
+        ew.putIfNotNull(ReplicaStateProps.CORE_NAME, core)
+                .putIfNotNull(ReplicaStateProps.NODE_NAME, node)
+                .putIfNotNull(ReplicaStateProps.TYPE, type.toString())
+                .putIfNotNull(ReplicaStateProps.STATE, getState().toString())
+                .putIfNotNull(ReplicaStateProps.LEADER, () -> isLeader() ? "true" : null)
+                .putIfNotNull(
+                        ReplicaStateProps.FORCE_SET_STATE, propMap.get(ReplicaStateProps.FORCE_SET_STATE))
+                .putIfNotNull(ReplicaStateProps.BASE_URL, propMap.get(ReplicaStateProps.BASE_URL));
+        for (Map.Entry<String, Object> e : propMap.entrySet()) {
+            if (!ReplicaStateProps.WELL_KNOWN_PROPS.contains(e.getKey())) {
+                ew.putIfNotNull(e.getKey(), e.getValue());
+            }
+        }
+    }
+
+}
+```
+
+This change simplifies the class by removing an unnecessary method, thereby improving readability and reducing the indirection in the method calls.

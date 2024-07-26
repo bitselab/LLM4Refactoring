@@ -1,0 +1,92 @@
+In the provided code snippet, the variable `filterRequested` can be renamed to better reflect its purpose and enhance code readability. A more descriptive name would be `isFilterApplied`. This name makes it clear that the variable is a boolean flag indicating whether a filter has been applied or not.
+
+Refactored code with the renamed attribute:
+
+```java
+package org.mockito.internal.runners;
+
+import org.junit.runner.Description;
+import org.junit.runner.manipulation.Filter;
+import org.junit.runner.manipulation.NoTestsRemainException;
+import org.junit.runner.notification.RunNotifier;
+import org.mockito.Mockito;
+import org.mockito.internal.junit.UnnecessaryStubbingsReporter;
+import org.mockito.internal.runners.util.FailureDetector;
+
+public class StrictRunner implements InternalRunner {
+
+    private final Class<?> testClass;
+    private final InternalRunner runner;
+    private boolean isFilterApplied; // Renamed from filterRequested
+
+    public StrictRunner(InternalRunner runner, Class<?> testClass) {
+        this.runner = runner;
+        this.testClass = testClass;
+        this.isFilterApplied = false; // Renamed usage
+    }
+
+    @Override
+    public void run(RunNotifier notifier) {
+        UnnecessaryStubbingsReporter reporter = new UnnecessaryStubbingsReporter();
+        FailureDetector listener = new FailureDetector();
+
+        Mockito.framework().addListener(reporter);
+        try {
+            notifier.addListener(listener);
+            runner.run(notifier);
+        } finally {
+            Mockito.framework().removeListener(reporter);
+        }
+
+        if (!isFilterApplied && listener.isSuccessful()) { // Renamed usage
+            reporter.validateUnusedStubs(testClass, notifier);
+        }
+    }
+
+    @Override
+    public Description getDescription() {
+        return runner.getDescription();
+    }
+
+    @Override
+    public void filter(Filter filter) throws NoTestsRemainException {
+        Filter recordingFilter = new RecordingFilter(filter);
+        runner.filter(recordingFilter);
+    }
+
+    private class RecordingFilter extends Filter {
+
+        private final Filter delegate;
+
+        public RecordingFilter(Filter delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void apply(Object child) throws NoTestsRemainException {
+            delegate.apply(child);
+        }
+
+        @Override
+        public Filter intersect(Filter second) {
+            return delegate.intersect(second);
+        }
+
+        @Override
+        public boolean shouldRun(Description description) {
+            boolean result = delegate.shouldRun(description);
+            if (!result) {
+                isFilterApplied = true; // Renamed usage
+            }
+            return result;
+        }
+
+        @Override
+        public String describe() {
+            return delegate.describe();
+        }
+    }
+}
+```
+
+This renaming makes the code more intuitive and self-explanatory, improving the overall readability and maintainability of the codebase.

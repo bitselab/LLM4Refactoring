@@ -1,0 +1,43 @@
+Rename variable refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename variable refactoring pattern is to rename variables that are inconsistent with method calls in their initialization expressions. Here is an example of the rename variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+public static XSourcePosition getCaretPosition(@NotNull Project project, DataContext context) {
+    Editor editor = getEditor(project, context);
+    if (editor == null) return null;
+    final Document document = editor.getDocument();
+    int line = editor.getCaretModel().getOffset();
+    VirtualFile file = FileDocumentManager.getInstance().getFile(document);
+    return XSourcePositionImpl.createByOffset(file, line);
+}
+```
+The source code after refactoring is:
+```
+public static XSourcePosition getCaretPosition(@NotNull Project project, DataContext context) {
+    Editor editor = getEditor(project, context);
+    if (editor == null) return null;
+    final Document document = editor.getDocument();
+    int offset = editor.getCaretModel().getOffset();
+    VirtualFile file = FileDocumentManager.getInstance().getFile(document);
+    return XSourcePositionImpl.createByOffset(file, offset);
+}
+```
+In this example, the developer renamed the variable "line" to "offset".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+@Bean
+@ConditionalOnMissingBean
+@ConditionalOnProperty(prefix = "spring.batch.job", name = "enabled", havingValue = "true", matchIfMissing = true)
+public JobLauncherApplicationRunner jobLauncherApplicationRunner(JobLauncher jobLauncher, JobExplorer jobExplorer,
+                                                                 JobRepository jobRepository, BatchProperties properties) {
+    JobLauncherApplicationRunner runner = new JobLauncherApplicationRunner(jobLauncher, jobExplorer, jobRepository);
+    String jobNames = properties.getJob().getName();
+    if (StringUtils.hasText(jobNames)) {
+        runner.setJobName(jobNames);
+    }
+    return runner;
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

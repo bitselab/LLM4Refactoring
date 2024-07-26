@@ -1,0 +1,84 @@
+ **I've identified several refactoring opportunities in the code you provided. Here's a refactored version with explanations:**
+
+**1. Extract Methods for Handling JSON Params:**
+- The nested conditional blocks within `processParams` dealing with JSON params can be extracted into separate methods:
+  - `extractParamsFromJSON`: Extracts params from JSON into `params` map.
+  - `mergeJSONParams`: Merges JSON params with existing params, prioritizing query params.
+
+**2. Refactor `convertJsonPropertyToLocalParams`:
+- Replace the conditional logic for single values and lists with a common approach using `Arrays.asList`.
+
+**3. Consolidate JSON Conversion Logic:**
+- Create a method `processJSONParams` to handle both `mergeJSON` calls and subsequent logic for compatibility, reducing conditional nesting.
+
+**4. Encapsulate JSON Field Handling:**
+- Create a method `handleJSONField` to encapsulate the logic for handling a single JSON field, reducing code duplication.
+
+**Here's the refactored code:**
+
+```java
+public class RequestUtil {
+
+    public static void processParams(
+            SolrRequestHandler handler,
+            SolrQueryRequest req,
+            SolrParams defaults,
+            SolrParams appends,
+            SolrParams invariants) {
+
+        // ... (other code remains the same)
+
+        // Handle JSON params
+        extractParamsFromJSON(params, jsonS);
+        mergeJSONParams(params, jsonS);
+
+        // ... (other code remains the same)
+
+        if (json != null) {
+            processJSONParams(req, json);
+        }
+    }
+
+    private static void extractParamsFromJSON(Map<String, String[]> params, String[] jsonS) {
+        for (String json : jsonS) {
+            if (json.contains("params")) {
+                try {
+                    getParamsFromJSON(params, json);
+                } catch (Exception e) {
+                    // ignore parse exceptions at this stage
+                }
+            }
+        }
+    }
+
+    private static void mergeJSONParams(Map<String, String[]> params, String[] jsonS) {
+        Map<String, Object> json = new LinkedHashMap<>();
+        for (String json : jsonS) {
+            mergeJSON(json, JSON, json, new ObjectUtil.ConflictHandler());
+        }
+        // Merge JSON params with existing params, giving priority to query params
+        for (Map.Entry<String, Object> entry : json.entrySet()) {
+            // ... (logic moved from processParams)
+        }
+    }
+
+    // ... (other refactored methods)
+
+    private static void processJSONParams(SolrQueryRequest req, Map<String, Object> json) {
+        // Handle compatibility for existing components
+        JsonQueryConverter jsonQueryConverter = new JsonQueryConverter();
+        for (Map.Entry<String, Object> entry : json.entrySet()) {
+            handleJSONField(req, jsonQueryConverter, entry);
+        }
+    }
+
+    private static void handleJSONField(
+            SolrQueryRequest req,
+            JsonQueryConverter jsonQueryConverter,
+            Map.Entry<String, Object> entry) {
+        String key = entry.getKey();
+        Object val = entry.getValue();
+        // ... (logic for handling different fields moved from processParams)
+    }
+}
+```

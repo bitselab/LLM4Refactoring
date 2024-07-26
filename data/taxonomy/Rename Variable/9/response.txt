@@ -1,0 +1,304 @@
+After reviewing the provided Java code snippet from the `BasicStatementParser` class, I noticed a few variable identifiers that could be improved for clarity and context-specific meaning. Here's a breakdown of the proposed refactorings:
+
+1. **Variable `isStatement` in `parseCodeBlock` Method:**
+   - Original name: `isStatement`
+   - Proposed name: `isStatementBlock`
+   - Reasoning: The term `isStatementBlock` provides clearer context that it is distinguishing between different types of blocks, specifically statement blocks, rather than potentially implying whether something is merely a statement.
+
+2. **Variable `greedyBlock` in `parseCodeBlockDeep` Method:**
+   - Original name: `greedyBlock`
+   - Proposed name: `requiresGreedyRightBinding`
+   - Reasoning: The name `requiresGreedyRightBinding` better describes the functionality related to token binding behavior in this context, making it clearer for maintainers of the code.
+
+3. **Variable `braceMode` in `parseStatements` Method:**
+   - Original name: `braceMode`
+   - Proposed name: `blockCompletionCriteria`
+   - Reasoning: Renaming `braceMode` to `blockCompletionCriteria` explains the role of the variable in determining how the parsing of blocks should be completed, which enhances readability.
+
+4. **Variable `expr` in `parseStatement` Method:**
+   - Original name: `expr`
+   - Proposed name: `expressionMarker`
+   - Reasoning: The name `expressionMarker` is more descriptive, indicating that this variable is used to mark the position of an expression in the parsing process.
+
+Here is the refactored version of the code incorporating these changes:
+
+```java
+package com.intellij.lang.java.parser;
+
+import com.intellij.core.JavaPsiBundle;
+import com.intellij.lang.PsiBuilder;
+import com.intellij.lang.WhitespacesBinders;
+import com.intellij.openapi.util.Pair;
+import com.intellij.pom.java.LanguageLevel;
+import com.intellij.psi.JavaTokenType;
+import com.intellij.psi.PsiKeyword;
+import com.intellij.psi.impl.source.AbstractBasicJavaElementTypeFactory;
+import com.intellij.psi.impl.source.WhiteSpaceAndCommentSetHolder;
+import com.intellij.psi.tree.IElementType;
+import com.intellij.psi.tree.ILazyParseableElementType;
+import com.intellij.psi.tree.TokenSet;
+import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import static com.intellij.lang.PsiBuilderUtil.*;
+import static com.intellij.lang.java.parser.BasicJavaParserUtil.*;
+import static com.intellij.psi.impl.source.BasicElementTypes.BASIC_JAVA_COMMENT_OR_WHITESPACE_BIT_SET;
+
+public class BasicStatementParser {
+    private static final TokenSet YIELD_STMT_INDICATOR_TOKENS = TokenSet.create(
+            JavaTokenType.PLUS, JavaTokenType.MINUS, JavaTokenType.EXCL,
+
+            JavaTokenType.SUPER_KEYWORD, JavaTokenType.THIS_KEYWORD,
+
+            JavaTokenType.TRUE_KEYWORD, JavaTokenType.FALSE_KEYWORD, JavaTokenType.NULL_KEYWORD,
+
+            JavaTokenType.STRING_LITERAL, JavaTokenType.INTEGER_LITERAL, JavaTokenType.DOUBLE_LITERAL,
+            JavaTokenType.FLOAT_LITERAL, JavaTokenType.LONG_LITERAL, JavaTokenType.CHARACTER_LITERAL,
+            JavaTokenType.TEXT_BLOCK_LITERAL,
+
+            JavaTokenType.IDENTIFIER, JavaTokenType.SWITCH_KEYWORD, JavaTokenType.NEW_KEYWORD,
+
+            JavaTokenType.LPARENTH,
+
+            // recovery
+            JavaTokenType.RBRACE, JavaTokenType.SEMICOLON, JavaTokenType.CASE_KEYWORD
+    );
+
+    private enum BraceMode {
+        TILL_FIRST, TILL_LAST
+    }
+
+    private static final TokenSet TRY_CLOSERS_SET = TokenSet.create(JavaTokenType.CATCH_KEYWORD, JavaTokenType.FINALLY_KEYWORD);
+
+    private final BasicJavaParser myParser;
+    private final AbstractBasicJavaElementTypeFactory.JavaElementTypeContainer myJavaElementTypeContainer;
+    private final WhiteSpaceAndCommentSetHolder myWhiteSpaceAndCommentSetHolder = WhiteSpaceAndCommentSetHolder.INSTANCE;
+
+    public BasicStatementParser(@NotNull BasicJavaParser javaParser) {
+        myParser = javaParser;
+        myJavaElementTypeContainer = javaParser.getJavaElementTypeFactory().getContainer();
+    }
+
+    @Nullable
+    public PsiBuilder.Marker parseCodeBlock(@NotNull PsiBuilder builder) {
+        return parseCodeBlock(builder, false);
+    }
+
+    @Nullable
+    public PsiBuilder.Marker parseCodeBlock(@NotNull PsiBuilder builder, boolean isStatementBlock) {
+        if (builder.getTokenType() != JavaTokenType.LBRACE) return null;
+        if (isStatementBlock && isParseStatementCodeBlocksDeep(builder)) return parseCodeBlockDeep(builder, false);
+        return parseBlockLazy(builder, JavaTokenType.LBRACE, JavaTokenType.RBRACE, myJavaElementTypeContainer.CODE_BLOCK);
+    }
+
+    @Nullable
+    public PsiBuilder.Marker parseCodeBlockDeep(@NotNull PsiBuilder builder, boolean parseUntilEof) {
+        if (builder.getTokenType() != JavaTokenType.LBRACE) return null;
+
+        PsiBuilder.Marker codeBlock = builder.mark();
+        builder.advanceLexer();
+
+        parseStatements(builder, parseUntilEof ? BraceMode.TILL_LAST : BraceMode.TILL_FIRST);
+
+        boolean requiresGreedyRightBinding = !expectOrError(builder, JavaTokenType.RBRACE, "expected.rbrace");
+        builder.getTokenType(); // eat spaces
+
+        done(codeBlock, myJavaElementTypeContainer.CODE_BLOCK, myWhiteSpaceAndCommentSetHolder);
+        if (requiresGreedyRightBinding) {
+            codeBlock.setCustomEdgeTokenBinders(null, WhitespacesBinders.GREEDY_RIGHT_BINDER);
+        }
+        return codeBlock;
+    }
+
+    public void parseStatements(@NotNull PsiBuilder builder) {
+        parseStatements(builder, null);
+    }
+
+    private void parseStatements(PsiBuilder builder, @Nullable BraceMode blockCompletionCriteria) {
+        while (builder.getTokenType() != null) {
+            PsiBuilder.Marker statement = parseStatement(builder);
+            if (statement != null) continue;
+
+            IElementType tokenType = builder.getTokenType();
+            if (tokenType == JavaTokenType.RBRACE &&
+                    (blockCompletionCriteria == BraceMode.TILL_FIRST || blockCompletionCriteria == BraceMode.TILL_LAST && builder.lookAhead(1) == null)) {
+                break;
+            }
+
+            PsiBuilder.Marker error = builder.mark();
+            builder.advanceLexer();
+            if (tokenType == JavaTokenType.ELSE_KEYWORD) {
+                error.error(JavaPsiBundle.message("else.without.if"));
+            }
+            else if (tokenType == JavaTokenType.CATCH_KEYWORD) {
+                error.error(JavaPsiBundle.message("catch.without.try"));
+            }
+            else if (tokenType == JavaTokenType.FINALLY_KEYWORD) {
+                error.error(JavaPsiBundle.message("finally.without.try"));
+            }
+            else {
+                error.error(JavaPsiBundle.message("unexpected.token"));
+            }
+        }
+    }
+
+    @Nullable
+    public PsiBuilder.Marker parseStatement(@NotNull PsiBuilder builder) {
+        IElementType tokenType = builder.getTokenType();
+        if (tokenType == JavaTokenType.IF_KEYWORD) {
+            return parseIfStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.WHILE_KEYWORD) {
+            return parseWhileStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.FOR_KEYWORD) {
+            return parseForStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.DO_KEYWORD) {
+            return parseDoWhileStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.SWITCH_KEYWORD) {
+            return parseSwitchStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.CASE_KEYWORD || tokenType == JavaTokenType.DEFAULT_KEYWORD) {
+            return parseSwitchLabelStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.BREAK_KEYWORD) {
+            return parseBreakStatement(builder);
+        }
+        else if (isStmtYieldToken(builder, tokenType)) {
+            return parseYieldStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.CONTINUE_KEYWORD) {
+            return parseContinueStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.RETURN_KEYWORD) {
+            return parseReturnStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.THROW_KEYWORD) {
+            return parseThrowStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.SYNCHRONIZED_KEYWORD) {
+            return parseSynchronizedStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.TRY_KEYWORD) {
+            return parseTryStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.ASSERT_KEYWORD) {
+            return parseAssertStatement(builder);
+        }
+        else if (tokenType == JavaTokenType.LBRACE) {
+            return parseBlockStatement(builder);
+        }
+        else if (tokenType instanceof ILazyParseableElementType) {
+            builder.advanceLexer();
+            return null;
+        }
+        else if (tokenType == JavaTokenType.SEMICOLON) {
+            PsiBuilder.Marker empty = builder.mark();
+            builder.advanceLexer();
+            done(empty, myJavaElementTypeContainer.EMPTY_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+            return empty;
+        }
+        else if (tokenType == JavaTokenType.IDENTIFIER || tokenType == JavaTokenType.AT) {
+            PsiBuilder.Marker refPos = builder.mark();
+            boolean nonSealed = BasicDeclarationParser.isNonSealedToken(builder, tokenType);
+            myParser.getDeclarationParser().parseAnnotations(builder);
+            skipQualifiedName(builder);
+            IElementType suspectedLT = builder.getTokenType(), next = builder.lookAhead(1);
+            refPos.rollbackTo();
+
+            if (suspectedLT == JavaTokenType.LT || suspectedLT == JavaTokenType.DOT && next == JavaTokenType.AT || nonSealed) {
+                PsiBuilder.Marker declStatement = builder.mark();
+
+                if (myParser.getDeclarationParser().parse(builder, BasicDeclarationParser.BaseContext.CODE_BLOCK) != null) {
+                    done(declStatement, myJavaElementTypeContainer.DECLARATION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+                    return declStatement;
+                }
+
+               
+
+ BasicReferenceParser.TypeInfo type = myParser.getReferenceParser().parseTypeInfo(builder, 0);
+                if (suspectedLT == JavaTokenType.LT && (type == null || !type.isParameterized)) {
+                    declStatement.rollbackTo();
+                }
+                else if (type == null || builder.getTokenType() != JavaTokenType.DOUBLE_COLON) {
+                    error(builder, JavaPsiBundle.message("expected.identifier"));
+                    if (type == null) builder.advanceLexer();
+                    done(declStatement, myJavaElementTypeContainer.DECLARATION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+                    return declStatement;
+                }
+                else {
+                    declStatement.rollbackTo();  // generic type followed by the double colon is a good candidate for being a constructor reference
+                }
+            }
+        }
+
+        PsiBuilder.Marker pos = builder.mark();
+        PsiBuilder.Marker expressionMarker = myParser.getExpressionParser().parse(builder);
+
+        if (expressionMarker != null) {
+            int count = 1;
+            PsiBuilder.Marker list = expressionMarker.precede();
+            PsiBuilder.Marker statement = list.precede();
+            while (builder.getTokenType() == JavaTokenType.COMMA) {
+                PsiBuilder.Marker commaPos = builder.mark();
+                builder.advanceLexer();
+                PsiBuilder.Marker expr1 = myParser.getExpressionParser().parse(builder);
+                if (expr1 == null) {
+                    commaPos.rollbackTo();
+                    break;
+                }
+                commaPos.drop();
+                count++;
+            }
+            if (count > 1) {
+                pos.drop();
+                done(list, myJavaElementTypeContainer.EXPRESSION_LIST, myWhiteSpaceAndCommentSetHolder);
+                semicolon(builder);
+                done(statement, myJavaElementTypeContainer.EXPRESSION_LIST_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+                return statement;
+            }
+            if (exprType(expressionMarker) != myJavaElementTypeContainer.REFERENCE_EXPRESSION) {
+                drop(list, pos);
+                semicolon(builder);
+                done(statement, myJavaElementTypeContainer.EXPRESSION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+                return statement;
+            }
+            pos.rollbackTo();
+        }
+        else {
+            pos.drop();
+        }
+
+        PsiBuilder.Marker decl = myParser.getDeclarationParser().parse(builder, BasicDeclarationParser.BaseContext.CODE_BLOCK);
+        if (decl != null) {
+            PsiBuilder.Marker statement = decl.precede();
+            done(statement, myJavaElementTypeContainer.DECLARATION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+            return statement;
+        }
+
+        if (builder.getTokenType() == JavaTokenType.IDENTIFIER && builder.lookAhead(1) == JavaTokenType.COLON) {
+            PsiBuilder.Marker statement = builder.mark();
+            advance(builder, 2);
+            parseStatement(builder);
+            done(statement, myJavaElementTypeContainer.LABELED_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+            return statement;
+        }
+
+        if (expressionMarker != null) {
+            PsiBuilder.Marker statement = builder.mark();
+            myParser.getExpressionParser().parse(builder);
+            semicolon(builder);
+            done(statement, myJavaElementTypeContainer.EXPRESSION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+            return statement;
+        }
+
+        return null;
+    }
+}
+```
+
+The above changes aim to make the code more readable and meaningful, enhancing overall understanding and maintainability.

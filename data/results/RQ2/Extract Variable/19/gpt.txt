@@ -1,0 +1,17 @@
+Certainly! Applying the "Extract Variable" refactoring technique to the `getStartLogMessage` method in the provided code will improve its readability. This technique involves creating a new variable to hold the result of the complex expression `StringUtils.hasText(this.contextPath) ? this.contextPath : "/"`. By doing so, we make the code more readable and easier to understand.
+
+Here's the refactored `getStartLogMessage` method:
+
+```java
+@Override
+protected String getStartLogMessage() {
+    String resolvedContextPath = StringUtils.hasText(this.contextPath) ? this.contextPath : "/";
+    StringBuilder message = new StringBuilder(super.getStartLogMessage());
+    message.append(" with context path '");
+    message.append(resolvedContextPath);
+    message.append("'");
+    return message.toString();
+}
+```
+
+In this refactored method, `resolvedContextPath` is the extracted variable. It holds the value of the context path after checking if it has text. This makes the concatenation part in the `StringBuilder` more straightforward and the intent of the code clearer.

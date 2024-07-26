@@ -1,0 +1,35 @@
+The identified attribute `taskQueue` in the `MetadataDataStreamsService` class can be renamed to better reflect its purpose and improve readability. Given its role in handling lifecycle update tasks, a more descriptive name would be `updateLifecycleTaskQueue`. This name clearly indicates that the queue is specifically for tasks related to updating the lifecycle of data streams.
+
+Here's the refactored code with the renamed attribute:
+
+```java
+package org.elasticsearch.cluster.metadata;
+
+// ... [import statements]
+
+public class MetadataDataStreamsService {
+
+    private final ClusterService clusterService;
+    private final IndicesService indicesService;
+    private final MasterServiceTaskQueue<UpdateLifecycleTask> updateLifecycleTaskQueue; // Renamed attribute
+    private final MasterServiceTaskQueue<SetRolloverOnWriteTask> setRolloverOnWriteTaskQueue;
+
+    public MetadataDataStreamsService(ClusterService clusterService, IndicesService indicesService) {
+        this.clusterService = clusterService;
+        this.indicesService = indicesService;
+        ClusterStateTaskExecutor<UpdateLifecycleTask> updateLifecycleExecutor = new SimpleBatchedAckListenerTaskExecutor<>() {
+            // ... [Executor implementation]
+        };
+        this.updateLifecycleTaskQueue = clusterService.createTaskQueue("modify-lifecycle", Priority.HIGH, updateLifecycleExecutor); // Updated usage
+        ClusterStateTaskExecutor<SetRolloverOnWriteTask> rolloverOnWriteExecutor = new SimpleBatchedAckListenerTaskExecutor<>() {
+            // ... [Executor implementation]
+        };
+        this.setRolloverOnWriteTaskQueue = clusterService.createTaskQueue("data-stream-rollover-on-write", Priority.NORMAL, rolloverOnWriteExecutor);
+    }
+
+    // ... [Rest of the class implementation]
+
+}
+```
+
+This change improves the clarity of the code by making the purpose of the `updateLifecycleTaskQueue` more explicit, which can be particularly helpful for new developers or when revisiting the code after some time.

@@ -1,0 +1,37 @@
+Certainly! Here's the refactored code with a more descriptive attribute name:
+
+```java
+package org.eclipse.jetty.websocket.core.client;
+
+// ... (imports remain the same) ...
+
+public class WebSocketCoreClient extends ContainerLifeCycle {
+
+  public static final String WEBSOCKET_CORECLIENT_ATTRIBUTE = WebSocketCoreClient.class.getName();
+
+  private static final Logger LOG = LoggerFactory.getLogger(WebSocketCoreClient.class);
+  private final HttpClient underlyingHttpClient; // Renamed attribute
+  private final WebSocketComponents components;
+  private ClassLoader classLoader;
+
+  // ... (Constructors remain the same) ...
+
+  public HttpClient getUnderlyingHttpClient() { // Renamed getter
+    return underlyingHttpClient;
+  }
+
+  // ... (other methods remain the same) ...
+}
+```
+
+**Changes made:**
+
+- The attribute `httpClient` has been renamed to `underlyingHttpClient`. This name clarifies that it's the underlying HTTP client used for WebSocket connections.
+- The getter method for the attribute has also been renamed to `getUnderlyingHttpClient` to maintain consistency. 
+
+**Benefits of this refactoring:**
+
+- **Improved readability:** The new name explicitly states the purpose of the attribute, making the code easier to understand.
+- **Enhanced maintainability:** More descriptive names make code easier to modify and update in the future.
+
+While "httpClient" is technically accurate, "underlyingHttpClient" provides more context and clarifies its role within the WebSocketCoreClient class.

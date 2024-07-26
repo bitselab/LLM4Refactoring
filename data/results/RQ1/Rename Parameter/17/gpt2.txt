@@ -1,0 +1,101 @@
+The provided code snippet is well-written and demonstrates an understanding of Java's modern features like pattern matching for switch statements and sealed classes. However, to enhance readability through more descriptive parameter names, I recommend the following rename parameter refactorings:
+
+1. In the `coverage` and `coverageStatement` methods, the parameter `Object o` could be renamed to `Object input` to better describe its role as a generic input object.
+
+2. In the `testSealedExhaustive` and `switchStatementExhaustive` methods, the parameter `S s` might be renamed to `S sealedObject` to clarify that it is an instance of a sealed class.
+
+3. In the `testGenericSealedExhaustive` method, the parameter `I<Integer> i` could be renamed to `I<Integer> genericSealedObject` to provide a clearer indication of its purpose and type.
+
+Here is the refactored code with the suggested parameter name changes:
+
+```java
+/**
+ * @see <a href="https://openjdk.org/jeps/441">JEP 441: Pattern Matching for switch</a>
+ */
+public class ExhaustiveSwitch {
+
+    // Type coverage
+    static int coverage(Object input) {
+        return switch (input) {
+            case String s  -> s.length();
+            case Integer i -> i;
+            default        -> 0;
+        };
+    }
+
+    static void coverageStatement(Object input) {
+        switch (input) {
+            case String s:
+                System.out.println(s);
+                break;
+            case Integer i:
+                System.out.println("Integer");
+                break;
+            default:    // Now exhaustive!
+                break;
+        }
+    }
+
+    // Exhaustiveness and sealed classes
+    sealed interface S permits A, B, C {}
+    final static class A implements S {}
+    final static class B implements S {}
+    record C(int i) implements S {}    // Implicitly final
+
+    static int testSealedExhaustive(S sealedObject) {
+        return switch (sealedObject) {
+            case A a -> 1;
+            case B b -> 2;
+            case C c -> 3;
+        };
+    }
+
+    static void switchStatementExhaustive(S sealedObject) {
+        switch (sealedObject) {
+            case A a :
+                System.out.println("A");
+                break;
+            case C c :
+                System.out.println("C");
+                break;
+            default:
+                System.out.println("default case, should be B");
+                break;
+        };
+    }
+
+    // Exhaustiveness and sealed classes
+    sealed interface I<T> permits E, F {}
+    final static class E<X> implements I<String> {}
+    final static class F<Y> implements I<Y> {}
+
+    static int testGenericSealedExhaustive(I<Integer> genericSealedObject) {
+        return switch (genericSealedObject) {
+            // Exhaustive as no E case possible!
+            case F<Integer> bi -> 42;
+        };
+    }
+
+    public static void main(String[] args) {
+        System.out.println(coverage("a string"));
+        System.out.println(coverage(42));
+        System.out.println(coverage(new Object()));
+
+        coverageStatement("a string");
+        coverageStatement(21);
+        coverageStatement(new Object());
+
+        System.out.println("A:" + testSealedExhaustive(new A()));
+        System.out.println("B:" + testSealedExhaustive(new B()));
+        System.out.println("C:" + testSealedExhaustive(new C(1)));
+
+        switchStatementExhaustive(new A());
+        switchStatementExhaustive(new B());
+        switchStatementExhaustive(new C(2));
+
+        System.out.println("F:" + testGenericSealedExhaustive(new F<Integer>()));
+    }
+}
+```
+
+These changes aim to enhance code readability by making parameter names more descriptive, which can be especially helpful for other developers who might work with this code in the future.

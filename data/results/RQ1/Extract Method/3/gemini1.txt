@@ -1,0 +1,113 @@
+This code snippet presents a few opportunities for refactoring:
+
+1. **Combine `Builder.toExcludeFieldNames` with constructor:** The `toExcludeFieldNames` method in the `Builder` class is a static helper method used only by the constructor. It can be simplified by inlining the logic directly into the constructor.
+
+2. **Simplify `ReflectionDiffBuilder.accept`:** The logic for checking field exclusion can be simplified by using a single `if` statement that combines conditions using the `&&` operator.
+
+3. **Use Stream API for `ReflectionDiffBuilder.appendFields`:** The loop iterating through fields can be refactored to leverage the Stream API for a more concise and potentially more performant approach.
+
+Here's the refactored code with the suggested improvements:
+
+```java
+package org.apache.commons.lang3.builder;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.stream.Stream;
+
+import org.apache.commons.lang3.ArraySorter;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.ClassUtils;
+import org.apache.commons.lang3.reflect.FieldUtils;
+
+public class ReflectionDiffBuilder<T> implements Builder<DiffResult<T>> {
+
+  public static final class Builder<T> {
+
+    private String[] excludeFieldNames = ArrayUtils.EMPTY_STRING_ARRAY;
+    private DiffBuilder<T> diffBuilder;
+
+    public ReflectionDiffBuilder<T> build() {
+      return new ReflectionDiffBuilder<>(diffBuilder, excludeFieldNames);
+    }
+
+    public Builder<T> setDiffBuilder(final DiffBuilder<T> diffBuilder) {
+      this.diffBuilder = diffBuilder;
+      return this;
+    }
+
+    public Builder<T> setExcludeFieldNames(final String... excludeFieldNames) {
+      this.excludeFieldNames = excludeFieldNames == null ? ArrayUtils.EMPTY_STRING_ARRAY :
+              ArraySorter.sort(ReflectionToStringBuilder.toNoNullStringArray(excludeFieldNames));
+      return this;
+    }
+  }
+
+  public static <T> Builder<T> builder() {
+    return new Builder<>();
+  }
+
+  private final DiffBuilder<T> diffBuilder;
+  private final String[] excludeFieldNames;
+
+  private ReflectionDiffBuilder(final DiffBuilder<T> diffBuilder, final String[] excludeFieldNames) {
+    this.diffBuilder = diffBuilder;
+    this.excludeFieldNames = excludeFieldNames;
+  }
+
+  @Deprecated
+  public ReflectionDiffBuilder(final T left, final T right, final ToStringStyle style) {
+    this(DiffBuilder.<T>builder().setLeft(left).setRight(right).setStyle(style).build(), null);
+  }
+
+  private boolean accept(final Field field) {
+    return field.getName().indexOf(ClassUtils.INNER_CLASS_SEPARATOR_CHAR) == -1 &&
+        !Modifier.isTransient(field.getModifiers()) &&
+        !Modifier.isStatic(field.getModifiers()) &&
+        (excludeFieldNames == null || Arrays.binarySearch(excludeFieldNames, field.getName()) < 0) &&
+        !field.isAnnotationPresent(DiffExclude.class);
+  }
+
+  private void appendFields(final Class<?> clazz) {
+    Stream.of(FieldUtils.getAllFields(clazz))
+        .filter(this::accept)
+        .forEach(field -> {
+          try {
+            diffBuilder.append(field.getName(), FieldUtils.readField(field, getLeft(), true), FieldUtils.readField(field, getRight(), true));
+          } catch (final IllegalAccessException e) {
+            throw new IllegalArgumentException("Unexpected IllegalAccessException: " + e.getMessage(), e);
+          }
+        });
+  }
+
+  @Override
+  public DiffResult<T> build() {
+    if (getLeft().equals(getRight())) {
+      return diffBuilder.build();
+    }
+
+    appendFields(getLeft().getClass());
+    return diffBuilder.build();
+  }
+
+  public String[] getExcludeFieldNames() {
+    return this.excludeFieldNames.clone();
+  }
+
+  private T getLeft() {
+    return diffBuilder.getLeft();
+  }
+
+  private T getRight() {
+    return diffBuilder.getRight();
+  }
+
+  @Deprecated
+  public ReflectionDiffBuilder<T> setExcludeFieldNames(final String... excludeFieldNames) {
+    this.excludeFieldNames = excludeFieldNames == null ? ArrayUtils.EMPTY_STRING_ARRAY :
+            ArraySorter.sort(ReflectionToStringBuilder.toNoNullStringArray(excludeFieldNames));
+    return this;
+  }
+
+}

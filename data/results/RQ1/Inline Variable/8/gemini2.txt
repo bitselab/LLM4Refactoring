@@ -1,0 +1,17 @@
+There is an opportunity for inline variable refactoring in the provided code snippet.
+
+**Original Code:**
+
+```java
+String jdbcUrlPattern = String.format(Locale.ROOT, jdbcUrlPattern, getHost(), getMappedPort(port));
+return new HibernateSearchJdbcDatabaseContainer(dockerfile, name, driverClassName, jdbcUrlPattern, port, username, password, testQueryString);
+```
+
+**Refactored Code:**
+
+```java
+return new HibernateSearchJdbcDatabaseContainer(dockerfile, name, driverClassName,
+  String.format(Locale.ROOT, jdbcUrlPattern, getHost(), getMappedPort(port)), port, username, password, testQueryString);
+```
+
+Here, the variable `jdbcUrlPattern` is assigned the result of `String.format(Locale.ROOT, jdbcUrlPattern, getHost(), getMappedPort(port))`. This value is then used  within the same line of code to construct a `HibernateSearchJdbcDatabaseContainer` instance. We can eliminate the unnecessary variable by directly using the expression in the constructor call. This refactoring improves code readability and reduces the number of lines.

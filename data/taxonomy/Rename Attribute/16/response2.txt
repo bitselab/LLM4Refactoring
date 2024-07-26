@@ -1,0 +1,35 @@
+In the provided code snippet, we are reviewing a `MapValueResolver` class for potential attribute renaming that would align better with its usage or related methods. The class contains a single attribute, `values`, which is a `Map<String, Object>`. The methods in this class are:
+
+1. `resolveValue(String name, Class<?> type)` - Retrieves a value from the `Map` based on the provided `name`.
+2. `getNames()` - Returns a set of keys from the `Map`.
+
+Given the methods' functionalities and the nature of the data stored (keys and values from a map), the attribute name `values` is quite descriptive of what it holds. It aligns with the methods that operate directly on these values and keys.
+
+However, to ensure the attribute name is even clearer and to follow the idea of renaming to enhance consistency and readability, a possible renaming could be:
+
+- Rename `values` to `valueMap` or `mappedValues` to indicate explicitly that this attribute is a mapping structure, which might make the relationship between the attribute and the methods like `resolveValue` and `getNames` even clearer, emphasizing that the operations are map-specific.
+
+Here is how the refactored code would look if we rename `values` to `valueMap`:
+
+```java
+private static class MapValueResolver implements DataBinder.ValueResolver {
+
+    private final Map<String, Object> valueMap;
+
+    private MapValueResolver(Map<String, Object> map) {
+        this.valueMap = map;
+    }
+
+    @Override
+    public Object resolveValue(String name, Class<?> type) {
+        return valueMap.get(name);
+    }
+
+    @Override
+    public Set<String> getNames() {
+        return this.valueMap.keySet();
+    }
+}
+```
+
+This renaming makes the nature of the data structure (a map) explicit and may improve readability and clarity, especially for new developers or those unfamiliar with the class.

@@ -1,0 +1,188 @@
+## Refactoring Opportunities
+
+There are a few opportunities for refactoring the provided code snippet:
+
+1. **Extract method:** The logic for setting the background color of the `JBOptionButton` in  `ToolbarTextButtonWrapper.createCustomComponent` can be extracted into a separate method to improve readability and maintainability.
+
+2. **Simplify logic:** In `LargeIconWithTextWrapper.updateIconBackground`, the check for `ExperimentalUI.isNewUI` can be simplified by using a ternary operator.
+
+3. **Combine conditions:** In `WelcomeScreenActionsUtil.splitAndWrapActions`, the checks for `!isActionAvailable(child)` and `main.getChildrenCount() < mainButtonsNum` can be combined using a logical AND operator (`&&`).
+
+Here's the refactored code with the suggested changes:
+
+```java
+public final class WelcomeScreenActionsUtil {
+
+  public static void collectAllActions(DefaultActionGroup group, ActionGroup actionGroup) {
+    for (AnAction action : actionGroup.getChildren(null)) {
+      if (action instanceof ActionGroup && !((ActionGroup) action).isPopup()) {
+        collectAllActions(group, (ActionGroup) action);
+      } else {
+        // add actions group popup as is
+        group.add(action);
+      }
+    }
+  }
+
+  public static final class ToolbarTextButtonWrapper extends AnActionWrapper implements CustomComponentAction {
+
+    private final List<AnAction> myActions;
+
+    public ToolbarTextButtonWrapper(@NotNull List<AnAction> actions) {
+      super(actions.get(0));
+      myActions = actions;
+    }
+
+    @Override
+    public @NotNull JComponent createCustomComponent(@NotNull Presentation presentation, @NotNull String place) {
+      JBOptionButton button = new JBOptionButton(null, null);
+      button.setAction(new AbstractAction() {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+          performAnActionForComponent(getDelegate(), button);
+        }
+      });
+      if (myActions.size() > 1) {
+        button.setOptions(ContainerUtil.subList(myActions, 1));
+      }
+      setButtonBackgroundColor(button); // Extract method
+      button.putClientProperty(JBOptionButton.PLACE, place);
+      return button;
+    }
+
+    private void setButtonBackgroundColor(JBOptionButton button) {
+      button.setBackground(WelcomeScreenUIManager.getMainAssociatedComponentBackground());
+    }
+
+    @Override
+    public void updateCustomComponent(@NotNull JComponent component, @NotNull Presentation presentation) {
+      if (!(component instanceof JBOptionButton button)) return;
+      button.getAction().putValue(Action.NAME, presentation.getText());
+      UIUtil.setEnabled(button, presentation.isEnabled(), true);
+    }
+
+    public static ToolbarTextButtonWrapper wrapAsTextButton(@NotNull AnAction action) {
+      return new ToolbarTextButtonWrapper(Collections.singletonList(action));
+    }
+
+    public static ToolbarTextButtonWrapper wrapAsOptionButton(@NotNull List<AnAction> actions) {
+      return new ToolbarTextButtonWrapper(actions);
+    }
+  }
+
+  static boolean isActionAvailable(@NotNull AnAction action) {
+    AnActionEvent event = AnActionEvent.createFromAnAction(action, null, ActionPlaces.WELCOME_SCREEN, DataContext.EMPTY_CONTEXT);
+    action.update(event);
+    return event.getPresentation().isVisible();
+  }
+
+  static void performAnActionForComponent(@NotNull AnAction action, @NotNull Component component) {
+    DataContext context = ActionToolbar.getDataContextFor(component);
+    AnActionEvent actionEvent = AnActionEvent.createFromAnAction(action, null, ActionPlaces.WELCOME_SCREEN, context);
+    ActionUtil.performActionDumbAwareWithCallbacks(action, actionEvent);
+  }
+
+  public static final class LargeIconWithTextWrapper extends AnActionWrapper implements CustomComponentAction {
+
+    final JButton myIconButton;
+    final JBLabel myLabel;
+
+    public LargeIconWithTextWrapper() {
+      super(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, JBUI.scale(12), false, false));
+
+      myIconButton = new JButton();
+      myIconButton.setBorder(JBUI.Borders.empty());
+      myIconButton.setHorizontalAlignment(SwingConstants.CENTER);
+      myIconButton.setOpaque(false);
+      myIconButton.setPreferredSize(new JBDimension(60, 60));
+
+      String focusProperty = ExperimentalUI.isNewUI() ?
+          "JButton.focusedBackgroundColor" : "JButton.backgroundColor";
+      myIconButton.putClientProperty(focusProperty, getActionsButtonBackground(false));
+      myIconButton.putClientProperty(JButton.outlineFocusSize", JBUI.scale(2);
+            myIconButton.putClientProperty("JButton.outlineFocusColor", WelcomeScreenUIManager.getActionsButtonSelectionBorder());
+      myIconButton.putClientProperty("JButton.outlineFocusSize", JBUI.scale(2));
+
+      myIconButton.addFocusListener(new FocusListener() {
+        @Override
+        public void focusGained(FocusEvent e) {
+          updateIconBackground(true);
+        }
+
+        @Override
+        public void focusLost(FocusEvent e) {
+          updateIconBackground(false);
+        }
+      });
+      Wrapper iconWrapper = new Wrapper(myIconButton);
+      iconWrapper.setFocusable(false);
+      iconWrapper.setBorder(JBUI.Borders.empty(0, 30));
+
+      myLabel = new JBLabel("", SwingConstants.CENTER);
+      myLabel.setOpaque(false);
+
+      setFocusable(false);
+      add(iconWrapper);
+      add(myLabel);
+      myIconButton.getAccessibleContext().setAccessibleName(myLabel.getText());
+    }
+
+    void updateIconBackground(boolean selected) {
+      String focusProperty = ExperimentalUI.isNewUI() ?
+          "JButton.focusedBackgroundColor" : "JButton.backgroundColor";
+      myIconButton.putClientProperty(focusProperty, getActionsButtonBackground(selected));
+      myIconButton.repaint();
+    }
+
+    public LargeIconWithTextWrapper(@NotNull AnAction action) {
+      super(action);
+    }
+
+    @Override
+    public @NotNull JComponent createCustomComponent(@NotNull Presentation presentation, @NotNull String place) {
+      String text = presentation.getText();
+      if (StringUtil.isEmpty(text)) {
+        Utils.reportEmptyTextMenuItem(getDelegate(), place);
+      }
+      LargeIconWithTextWrapper panel = new LargeIconWithTextWrapper();
+      panel.myIconButton.addActionListener(l -> performAnActionForComponent(
+          getDelegate(), panel.myIconButton));
+      return panel;
+    }
+
+    @Override
+    public void updateCustomComponent(@NotNull JComponent component, @NotNull Presentation presentation) {
+      if (!(component instanceof LargeIconWithTextWrapper panel)) return;
+      panel.myIconButton.setIcon(presentation.getIcon());
+      panel.myIconButton.setSelectedIcon(presentation.getSelectedIcon());
+      //noinspection DialogTitleCapitalization
+      panel.myLabel.setText(presentation.getText());
+      UIUtil.setEnabled(panel, presentation.isEnabled(), true);
+    }
+
+    static @NotNull LargeIconWithTextWrapper wrapAsBigIconWithText(AnAction action) {
+      return new LargeIconWithTextWrapper(action);
+    }
+  }
+
+  public static Couple<DefaultActionGroup> splitAndWrapActions(@NotNull ActionGroup actionGroup,
+                                                                @NotNull Function<? super AnAction, ? extends AnAction> wrapper,
+                                                                int mainButtonsNum) {
+    DefaultActionGroup group = new DefaultActionGroup();
+    collectAllActions(group, actionGroup);
+    AnAction[] actions = group.getChildren(null);
+
+    DefaultActionGroup main = new DefaultActionGroup();
+    DefaultActionGroup more = new DefaultActionGroup(IdeBundle.message("welcome.screen.more.actions.link.text"), true);
+    more.getTemplatePresentation().setHideGroupIfEmpty(true);
+    for (AnAction child : actions) {
+      if (!isActionAvailable(child)) continue;
+      if (main.getChildrenCount() < mainButtonsNum && child.isVisible()) { // Combine conditions
+        main.addAction(wrapper.apply(child));
+      } else {
+        more.addAction(wrapper.apply(child));
+      }
+    }
+    return Couple.of(main, more);
+  }
+}

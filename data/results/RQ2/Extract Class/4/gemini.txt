@@ -1,0 +1,106 @@
+ **Here's the refactored code after applying Extract Class:**
+
+```java
+package org.elasticsearch.xpack.ml.utils;
+
+import org.elasticsearch.common.io.Streams;
+import org.elasticsearch.common.logging.DeprecationCategory;
+import org.elasticsearch.common.logging.DeprecationLogger;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.StringJoiner;
+import java.util.stream.Collectors;
+
+import static java.util.Map.entry;
+
+public final class DomainSplitFunction {
+
+    private static final DeprecationLogger deprecationLogger = DeprecationLogger.getLogger(DomainSplitFunction.class);
+
+    private DomainSplitFunction() {}
+
+    private static String replaceDots(String input) {
+        // ... (code remains the same)
+    }
+
+    private static List<String> splitDomain(String domain) {
+        // ... (code remains the same)
+    }
+
+    static int findPublicSuffix(List<String> parts) {
+        int partsSize = parts.size();
+        for (int i = 0; i < partsSize; i++) {
+            StringJoiner joiner = new StringJoiner(".");
+            for (String s : parts.subList(i, partsSize)) {
+                joiner.add(s);
+            }
+            String ancestorName = joiner.toString();
+            if (DomainConstants.exact.containsKey(ancestorName)) {
+                return i;
+            }
+            /* Excluded domains (e.g. !nhs.uk) use the next highest
+                domain as the effective public suffix (e.g. uk). */
+            if (DomainConstants.excluded.containsKey(ancestorName)) {
+                return i + 1;
+            }
+            String[] pieces = ancestorName.split("\\.");
+            if (pieces.length >= 2 && DomainConstants.under.containsKey(pieces[1])) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+
+    private static String ancestor(List<String> parts, int levels) {
+        // ... (code remains the same)
+    }
+
+    private static String topPrivateDomain(String name, List<String> parts, int publicSuffixIndex) {
+        // ... (code remains the same)
+    }
+
+    // ... (other methods remain the same)
+
+    public static List<String> domainSplit(String host) {
+        // ... (code remains the same)
+    }
+
+}
+
+class DomainConstants {
+    private static final Map<String, String> exact;
+    private static final Map<String, String> under = Map.ofEntries(
+        // ... (entries remain the same)
+    );
+
+    private static final Map<String, String> excluded = Map.of(
+        // ... (entries remain the same)
+    );
+
+    static {
+        exact = AccessController.doPrivileged((PrivilegedAction<Map<String, String>>) () -> {
+            // ... (code remains the same)
+        });
+    }
+}
+```
+
+**Explanation:**
+
+1. **New Class Created:** A new class named `DomainConstants` has been created to encapsulate the extracted code elements.
+2. **Static Members Moved:** The static fields `exact`, `under`, `excluded`, and the static initialization block (`static { ... }`) have been moved from `DomainSplitFunction` to `DomainConstants`.
+3. **Access:** The `DomainSplitFunction` class now accesses these constants using `DomainConstants.exact`, `DomainConstants.under`, etc.
+
+**Benefits:**
+
+- **Improved Readability:** Separating concerns makes the code easier to understand and maintain.
+- **Single Responsibility:** Each class has a clear, focused responsibility.
+- **Encapsulation:** The constants are now encapsulated within their own class, reducing potential naming conflicts and promoting better organization.

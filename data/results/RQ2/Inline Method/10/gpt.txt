@@ -1,0 +1,68 @@
+To refactor the provided code using inline method refactoring, we can eliminate the `chooseJdk(Collection<? extends Module> modules)` method. This method is marked as deprecated and is only called once in the code. We can directly inline its functionality into the `chooseJdk(Project project, Collection<? extends Module> modules)` method, which simplifies the code structure and removes the unnecessary abstraction.
+
+Here's the refactored code:
+
+```java
+package com.intellij.openapi.projectRoots.ex;
+
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.JavaSdkType;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.ProjectRootManager;
+import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.lang.JavaVersion;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+
+/**
+ * @author Eugene Zhuravlev
+ */
+public final class PathUtilEx {
+
+    @Nullable
+    public static Sdk getAnyJdk(@NotNull Project project) {
+        return chooseJdk(project, Arrays.asList(ModuleManager.getInstance(project).getModules()));
+    }
+
+    /**
+     * @deprecated the meaning of this method is unclear, choose a JDK using explicit criteria instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
+    @Nullable
+    private static Sdk chooseJdk(@NotNull Project project, @NotNull Collection<? extends Module> modules) {
+        Sdk projectJdk = ProjectRootManager.getInstance(project).getProjectSdk();
+        if (projectJdk != null && projectJdk.getSdkType() instanceof JavaSdkType) {
+            return projectJdk;
+        }
+        
+        // Inlined method functionality
+        List<Sdk> jdks = ContainerUtil.mapNotNull(modules, module -> {
+            if (module == null) return null;
+            Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
+            if (sdk == null || !(sdk.getSdkType() instanceof JavaSdkType)) return null;
+            return sdk;
+        });
+
+        if (jdks.isEmpty()) {
+            return null;
+        }
+
+        return jdks.stream().max(Comparator.comparing(jdk -> JavaVersion.tryParse(jdk.getVersionString()), Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(null);
+    }
+}
+```
+
+In this refactored version:
+- The logic of `chooseJdk(Collection<? extends Module> modules)` has been moved into `chooseJdk(Project project, Collection<? extends Module> modules)`.
+- The deprecated method `chooseJdk(Collection<? extends Module> modules)` has been removed, as its functionality is now directly incorporated where needed.
+
+This refactoring simplifies the class and removes the deprecated method, making the code more maintainable and understandable.

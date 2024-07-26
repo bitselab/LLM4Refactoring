@@ -1,0 +1,61 @@
+There is a refactoring opportunity in the provided code snippet for the `StreamLoader` class. The variable `result` can be inlined in the `getInputStream` method.
+
+Here's the refactored code:
+
+```java
+package net.sourceforge.pmd.lang.java.symbols.internal.asm;
+
+
+import java.io.IOException;
+import java.io.InputStream;
+
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+abstract class Loader {
+
+
+    @Nullable
+    abstract InputStream getInputStream() throws IOException;
+
+
+    static class FailedLoader extends Loader {
+
+        static final FailedLoader INSTANCE = new FailedLoader();
+
+        @Override
+        @Nullable InputStream getInputStream() {
+            return null;
+        }
+
+        @Override
+        public String toString() {
+            return "(failed loader)";
+        }
+
+    }
+
+    static class StreamLoader extends Loader {
+        private final @NonNull String name;
+        private final @NonNull InputStream stream;
+
+        StreamLoader(@NonNull String name, @NonNull InputStream stream) {
+            this.name = name;
+            this.stream = stream;
+        }
+
+        @Override
+        @NonNull InputStream getInputStream() {
+// Inline variable refactoring applied here
+            return stream;
+        }
+
+        @Override
+        public String toString() {
+            return "(StreamLoader for " + name + ")";
+        }
+    }
+}
+```
+
+By inlining the `result` variable, we eliminate an unnecessary variable assignment and improve code readability. The `getInputStream` method now directly returns the `stream` object.

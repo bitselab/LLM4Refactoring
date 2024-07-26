@@ -1,0 +1,142 @@
+## Refactoring Opportunities in TestTermsHashPerField
+
+There are several refactoring opportunities in the provided code snippet:
+
+1. **Extract Method:** The logic for creating a new `TermsHashPerField` instance in `createNewHash` can be extracted into a separate method to improve readability and maintainability.
+
+2. **Simplify Variable Names:** Some variable names, like `prefDoc` in `testAddAndUpdateRandom`, can be more descriptive to enhance code clarity (e.g., `previousDocId`).
+
+3. **Reduce Code Duplication:** The repetitive logic for asserting doc ID and frequency in `assertDocAndFreq` can be encapsulated in a separate method.
+
+4. **Use Local Variables Effectively:** In `testWriteBytes`, the `randomData` array can be created and initialized within the loop for better memory management.
+
+Here's the refactored code with the suggested changes:
+
+```java
+package org.apache.lucene.index;
+
+import com.carrotsearch.randomizedtesting.generators.RandomPicks;
+import com.carrotsearch.randomizedtesting.generators.RandomStrings;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import org.apache.lucene.tests.util.LuceneTestCase;
+import org.apache.lucene.tests.util.TestUtil;
+import org.apache.lucene.util.ByteBlockPool;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.Counter;
+import org.apache.lucene.util.IntBlockPool;
+
+public class TestTermsHashPerField extends LuceneTestCase {
+
+  private static TermsHashPerField createTermsHashPerField(AtomicInteger newCalled, AtomicInteger addCalled) {
+    IntBlockPool intBlockPool = new IntBlockPool();
+    ByteBlockPool byteBlockPool = new ByteBlockPool(new ByteBlockPool.DirectAllocator());
+    ByteBlockPool termBlockPool = new ByteBlockPool(new ByteBlockPool.DirectAllocator());
+    return new TermsHashPerField(
+        1,
+        intBlockPool,
+        byteBlockPool,
+        termBlockPool,
+        Counter.newCounter(),
+        null,
+        "testfield",
+        IndexOptions.DOCS_AND_FREQS);
+  }
+
+  private static boolean assertDocFreq(ByteSliceReader reader,
+                                       FreqProxTermsWriterPerField.FreqProxPostingsArray postingsArray,
+                                       int prevDocId,
+                                       int termId,
+                                       int docId,
+                                       int frequency) throws IOException {
+    boolean eof = reader.eof();
+    if (eof) {
+      assertEquals("docID mismatch eof: " + eof, docId, postingsArray.lastDocIDs[termId]);
+      assertEquals("freq mismatch eof: " + eof, frequency, postingsArray.termFreqs[termId]);
+      return true;
+    }
+    int code = reader.readVInt();
+    int deltaDocId = code >>> 1;
+    boolean hasSingleFreq = (code & 1) == 0;
+    if (hasSingleFreq) {
+      assertEquals("freq mismatch non-eof: " + eof, 1, frequency);
+    } else {
+      assertEquals("freq mismatch non-eof: " + eof, frequency, reader.readVInt());
+    }
+    assertEquals("docID mismatch non-eof: " + eof, docId, prevDocId + deltaDocId);
+    return eof;
+  }
+
+  // ... rest of the test cases with minor modifications ...
+
+  public void testWriteBytes() throws IOException {
+    for (int i = 0; i < 100; i++) {
+      AtomicInteger newCalled = new AtomicInteger(0);
+      AtomicInteger addCalled = new AtomicInteger(0);
+      TermsHashPerField hash = createTermsHashPerField(newCalled, addCalled);
+      hash.start(null, true);
+      hash.add(newBytesRef("start"), 0); // tid = 0;
+
+      int size = TestUtil.nextInt(random(), 50000, 100000);
+      byte[] randomData = new byte[size];
+      random().nextBytes(randomData);
+
+      int offset = 0;
+      while (offset < randomData.length) {
+                int writeLength = Math.min(randomData.length - offset, TestUtil.nextInt(random(), 1, 200));
+        hash.writeBytes(0, randomData, offset, writeLength);
+        offset += writeLength;
+      }
+
+      ByteSliceReader reader = new ByteSliceReader();
+      reader.init(hash.bytePool, 0, hash.bytePool.byteOffset + hash.bytePool.byteUpto);
+      for (byte expected : randomData) {
+        assertEquals(expected, reader.readByte());
+      }
+    }
+  }
+
+  public void testAllocKnownSizeSlice() {
+    Counter bytesUsed = Counter.newCounter();
+    ByteBlockPool blockPool =
+        new ByteBlockPool(new ByteBlockPool.DirectTrackingAllocator(bytesUsed));
+    blockPool.nextBuffer();
+    ByteSlicePool slicePool = new ByteSlicePool(blockPool);
+    for (int i = 0; i < 100; i++) {
+      int size;
+      if (random().nextBoolean()) {
+        size = TestUtil.nextInt(random(), 100, 1000);
+      } else {
+        size = TestUtil.nextInt(random(), 50000, 100000);
+      }
+
+      byte[] randomData = new byte[size];
+      random().nextBytes(randomData);
+
+      int upto = slicePool.newSlice(ByteSlicePool.FIRST_LEVEL_SIZE);
+
+      for (int offset = 0; offset < size; ) {
+        if ((blockPool.buffer[upto] & 16) == 0) {
+          blockPool.buffer[upto++] = randomData[offset++];
+        } else {
+          int offsetAndLength = slicePool.allocKnownSizeSlice(blockPool.buffer, upto);
+          int sliceLength = offsetAndLength & 0xff;
+          upto = offsetAndLength >> 8;
+          assertNotEquals(0, blockPool.buffer[upto + sliceLength - 1]);
+          assertEquals(0, blockPool.buffer[upto]);
+          int writeLength = Math.min(sliceLength - 1, size - offset);
+          System.arraycopy(randomData, offset, blockPool.buffer, upto, writeLength);
+          offset += writeLength;
+          upto += writeLength;
+        }
+      }
+    }
+  }
+}

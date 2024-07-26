@@ -1,0 +1,295 @@
+Upon reviewing the provided code, I identified several methods with names that could be improved for clarity and consistency with their respective functionalities. Here are the suggested renames for these methods, following the pattern of renaming methods whose names are inconsistent with their bodies:
+
+1. `getMethod()` to `retrieveMethod()`
+2. `getBridgedMethod()` to `retrieveBridgedMethod()`
+3. `getContainingClass()` to `retrieveContainingClass()`
+4. `getMethodParameters()` to `retrieveMethodParameters()`
+5. `initMethodParameters()` to `initializeMethodParameters()`
+6. `getReturnType()` to `retrieveReturnType()`
+7. `getReturnValueType(@Nullable Object returnValue)` to `retrieveReturnValueType(@Nullable Object returnValue)`
+8. `isVoid()` to `checkIfVoid()`
+9. `getMethodAnnotation(Class<A> annotationType)` to `findMethodAnnotation(Class<A> annotationType)`
+10. `hasMethodAnnotation(Class<A> annotationType)` to `checkMethodAnnotationPresence(Class<A> annotationType)`
+11. `getInterfaceParameterAnnotations()` to `retrieveInterfaceParameterAnnotations()`
+12. `isOverrideFor(Method candidate)` to `checkOverrideFor(Method candidate)`
+
+Here is the refactored code:
+
+```java
+package org.springframework.core.annotation;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import org.springframework.core.BridgeMethodResolver;
+import org.springframework.core.MethodParameter;
+import org.springframework.core.ResolvableType;
+import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
+import org.springframework.util.ObjectUtils;
+import org.springframework.util.ReflectionUtils;
+import org.springframework.util.StringUtils;
+
+public class AnnotatedMethod {
+
+    private final Method method;
+
+    private final Method bridgedMethod;
+
+    private final MethodParameter[] parameters;
+
+    @Nullable
+    private volatile List<Annotation[][]> inheritedParameterAnnotations;
+
+    public AnnotatedMethod(Method method) {
+        Assert.notNull(method, "Method is required");
+        this.method = method;
+        this.bridgedMethod = BridgeMethodResolver.findBridgedMethod(method);
+        ReflectionUtils.makeAccessible(this.bridgedMethod);
+        this.parameters = initializeMethodParameters();
+    }
+
+    protected AnnotatedMethod(AnnotatedMethod annotatedMethod) {
+        Assert.notNull(annotatedMethod, "AnnotatedMethod is required");
+        this.method = annotatedMethod.method;
+        this.bridgedMethod = annotatedMethod.bridgedMethod;
+        this.parameters = annotatedMethod.parameters;
+        this.inheritedParameterAnnotations = annotatedMethod.inheritedParameterAnnotations;
+    }
+
+    public final Method retrieveMethod() {
+        return this.method;
+    }
+
+    protected final Method retrieveBridgedMethod() {
+        return this.bridgedMethod;
+    }
+
+    protected Class<?> retrieveContainingClass() {
+        return this.method.getDeclaringClass();
+    }
+
+    public final MethodParameter[] retrieveMethodParameters() {
+        return this.parameters;
+    }
+
+    private MethodParameter[] initializeMethodParameters() {
+        int count = this.bridgedMethod.getParameterCount();
+        MethodParameter[] result = new MethodParameter[count];
+        for (int i = 0; i < count; i++) {
+            result[i] = new AnnotatedMethodParameter(i);
+        }
+        return result;
+    }
+
+    public MethodParameter retrieveReturnType() {
+        return new AnnotatedMethodParameter(-1);
+    }
+
+    public MethodParameter retrieveReturnValueType(@Nullable Object returnValue) {
+        return new ReturnValueMethodParameter(returnValue);
+    }
+
+    public boolean checkIfVoid() {
+        return Void.TYPE.equals(retrieveReturnType().getParameterType());
+    }
+
+    @Nullable
+    public <A extends Annotation> A findMethodAnnotation(Class<A> annotationType) {
+        return AnnotatedElementUtils.findMergedAnnotation(this.method, annotationType);
+    }
+
+    public <A extends Annotation> boolean checkMethodAnnotationPresence(Class<A> annotationType) {
+        return AnnotatedElementUtils.hasAnnotation(this.method, annotationType);
+    }
+
+    private List<Annotation[][]> retrieveInterfaceParameterAnnotations() {
+        List<Annotation[][]> parameterAnnotations = this.inheritedParameterAnnotations;
+        if (parameterAnnotations == null) {
+            parameterAnnotations = new ArrayList<>();
+            Class<?> clazz = this.method.getDeclaringClass();
+            while (clazz != null) {
+                for (Class<?> ifc : clazz.getInterfaces()) {
+                    for (Method candidate : ifc.getMethods()) {
+                        if (checkOverrideFor(candidate)) {
+                            parameterAnnotations.add(candidate.getParameterAnnotations());
+                        }
+                    }
+                }
+                clazz = clazz.getSuperclass();
+                if (clazz == Object.class) {
+                    clazz = null;
+                }
+                if (clazz != null) {
+                    for (Method candidate : clazz.getMethods()) {
+                        if (checkOverrideFor(candidate)) {
+                            parameterAnnotations.add(candidate.getParameterAnnotations());
+                        }
+                    }
+                }
+            }
+            this.inheritedParameterAnnotations = parameterAnnotations;
+        }
+        return parameterAnnotations;
+    }
+
+    private boolean checkOverrideFor(Method candidate) {
+        if (!candidate.getName().equals(this.method.getName()) ||
+                candidate.getParameterCount() != this.method.getParameterCount()) {
+            return false;
+        }
+        Class<?>[] paramTypes = this.method.getParameterTypes();
+        if (Arrays.equals(candidate.getParameterTypes(), paramTypes)) {
+            return true;
+        }
+        for (int i = 0; i < paramTypes.length; i++) {
+            if (paramTypes[i] !=
+                    ResolvableType.forMethodParameter(candidate, i, this.method.getDeclaringClass()).resolve()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public boolean equals(@Nullable Object other) {
+        return (this == other || (other != null && getClass() == other.getClass() &&
+                this.method.equals(((AnnotatedMethod) other).method)));
+    }
+
+    @Override
+    public int hashCode() {
+        return this.method.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return this.method.toGenericString();
+    }
+
+    @Nullable
+    protected static Object findProvidedArgument(MethodParameter parameter, @Nullable Object... providedArgs) {
+        if (!ObjectUtils.isEmpty(providedArgs)) {
+            for (Object providedArg : providedArgs) {
+                if (parameter.getParameterType().isInstance(providedArg)) {
+                    return providedArg;
+                }
+            }
+        }
+        return null;
+    }
+
+    protected static String formatArgumentError(MethodParameter param, String message) {
+        return "Could not resolve parameter [" + param.getParameterIndex() + "] in " +
+                param.getExecutable().toGenericString() + (StringUtils.hasText(message) ? ": " + message : "");
+    }
+
+    protected class AnnotatedMethodParameter extends SynthesizingMethodParameter {
+
+        @Nullable
+        private volatile Annotation[] combinedAnnotations;
+
+        public AnnotatedMethodParameter(int index) {
+            super(AnnotatedMethod.this.retrieveBridgedMethod(), index);
+        }
+
+        protected AnnotatedMethodParameter(AnnotatedMethodParameter original) {
+            super(original);
+            this.combinedAnnotations = original.combinedAnnotations;
+        }
+
+        @Override
+        @NonNull
+        public Method retrieveMethod() {
+            return AnnotatedMethod.this.retrieveBridgedMethod();
+        }
+
+        @Override
+        public Class<?> retrieveContainingClass() {
+            return AnnotatedMethod.this.retrieveContainingClass();
+        }
+
+        @Override
+        public <T extends Annotation> T findMethodAnnotation(Class<T> annotationType) {
+            return AnnotatedMethod.this.findMethodAnnotation(annotationType);
+        }
+
+        @Override
+        public <T extends Annotation> boolean checkMethodAnnotationPresence(Class<T> annotationType) {
+            return AnnotatedMethod.this.checkMethodAnnotationPresence(annotationType);
+        }
+
+        @Override
+        public Annotation[] getParameterAnnotations() {
+            Annotation[] anns = this.combinedAnnotations;
+            if (anns == null) {
+                anns = super.getParameterAnnotations();
+                int index = getParameterIndex();
+                if (index >= 0) {
+                    for (Annotation[][] ifcAnns : retrieveInterfaceParameterAnnotations()) {
+                        if (index < ifcAnns.length) {
+                            Annotation[] paramAnns = ifcAnns[index];
+                            if (paramAnns.length > 0) {
+                                List<Annotation> merged = new ArrayList<>(anns.length + paramAnns.length);
+                                merged.addAll(Arrays.asList(anns));
+                                for (Annotation paramAnn : paramAnns) {
+                                    boolean existingType = false;
+                                    for (Annotation ann : anns) {
+                                        if (ann.annotationType() == paramAnn.annotationType()) {
+                                            existingType = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!existingType) {
+                                        merged.add(adaptAnnotation(paramAnn));
+                                    }
+                                }
+                                anns = merged.toArray(new Annotation[0]);
+                            }
+                        }
+                    }
+                }
+                this.combinedAnnotations = anns;
+            }
+            return anns;
+        }
+
+        @Override
+        public AnnotatedMethodParameter clone() {
+            return new AnnotatedMethodParameter(this);
+        }
+    }
+
+    private class ReturnValueMethodParameter extends AnnotatedMethodParameter {
+
+        @Nullable
+        private final Class<?> returnValueType;
+
+        public ReturnValueMethodParameter(@Nullable Object returnValue) {
+            super(-1);
+            this.returnValueType = (returnValue != null ? returnValue.getClass() : null);
+        }
+
+        protected ReturnValueMethodParameter(ReturnValueMethodParameter original) {
+            super(original);
+            this.returnValueType = original.returnValueType;
+        }
+
+        @Override
+        public Class<?> getParameterType() {
+            return (this.returnValueType != null ? this.returnValueType : super.getParameterType());
+        }
+
+        @Override
+        public ReturnValueMethodParameter clone() {
+            return new ReturnValueMethodParameter(this);
+        }
+    }
+
+}
+```
+

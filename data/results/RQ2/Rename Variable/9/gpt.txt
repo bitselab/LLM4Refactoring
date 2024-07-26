@@ -1,0 +1,51 @@
+In the provided code snippet, the variable `suspectedLT` in the `parseStatement` method could be renamed to improve readability and clarity. The name `suspectedLT` does not effectively convey the purpose or nature of the variable. A more descriptive name would be beneficial for understanding the code's intention.
+
+Here's the refactored version of the `parseStatement` method with the `suspectedLT` variable renamed:
+
+```java
+@Nullable
+public PsiBuilder.Marker parseStatement(@NotNull PsiBuilder builder) {
+    IElementType tokenType = builder.getTokenType();
+    // ... [other code remains unchanged]
+
+    else if (tokenType == JavaTokenType.IDENTIFIER || tokenType == JavaTokenType.AT) {
+        PsiBuilder.Marker refPos = builder.mark();
+        boolean nonSealed = BasicDeclarationParser.isNonSealedToken(builder, tokenType);
+        myParser.getDeclarationParser().parseAnnotations(builder);
+        skipQualifiedName(builder);
+        
+        // Renamed 'suspectedLT' to 'nextTokenType'
+        IElementType nextTokenType = builder.getTokenType(), next = builder.lookAhead(1);
+        refPos.rollbackTo();
+
+        if (nextTokenType == JavaTokenType.LT || nextTokenType == JavaTokenType.DOT && next == JavaTokenType.AT || nonSealed) {
+            PsiBuilder.Marker declStatement = builder.mark();
+
+            if (myParser.getDeclarationParser().parse(builder, BasicDeclarationParser.BaseContext.CODE_BLOCK) != null) {
+                done(declStatement, myJavaElementTypeContainer.DECLARATION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+                return declStatement;
+            }
+
+            BasicReferenceParser.TypeInfo type = myParser.getReferenceParser().parseTypeInfo(builder, 0);
+            if (nextTokenType == JavaTokenType.LT && (type == null || !type.isParameterized)) {
+                declStatement.rollbackTo();
+            }
+            else if (type == null || builder.getTokenType() != JavaTokenType.DOUBLE_COLON) {
+                error(builder, JavaPsiBundle.message("expected.identifier"));
+                if (type == null) builder.advanceLexer();
+                done(declStatement, myJavaElementTypeContainer.DECLARATION_STATEMENT, myWhiteSpaceAndCommentSetHolder);
+                return declStatement;
+            }
+            else {
+                declStatement.rollbackTo();
+            }
+        }
+    }
+
+    // ... [rest of the method remains unchanged]
+}
+```
+
+In this refactoring, `suspectedLT` is renamed to `nextTokenType`, which more clearly indicates that this variable holds the type of the next token in the parsing process. This change should make the code easier to understand for someone reading or maintaining it. 
+
+Remember, the effectiveness of a variable name is context-dependent, so it's always good to consider the broader context of the code when choosing names.

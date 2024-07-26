@@ -1,0 +1,150 @@
+Analyzing the provided code snippet, I looked for repeated expressions or patterns that could be extracted into variables to improve readability and potentially enhance performance by reducing redundant method calls. Here are some refactoring opportunities identified within the code:
+
+1. **Repeated Method Calls** - In several places throughout the `DefaultRequestBodyUriSpec` class, the methods `getHeaders()` and `getCookies()` are called multiple times within the same method. Extracting these calls to a single variable at the beginning of the method can help minimize redundant method calls and improve clarity.
+
+2. **URI Building** - The `uri()` methods in `DefaultRequestBodyUriSpec` make repeated calls to `uriBuilderFactory.uriString(uriTemplate)`. This expression can be extracted to a variable to avoid repetitive method invocations and make the code cleaner.
+
+Here's the refactored code based on these observations:
+
+```java
+final class DefaultWebClient implements WebClient {
+
+    // other parts of the class remain unchanged
+
+    private class DefaultRequestBodyUriSpec implements RequestBodyUriSpec {
+
+        private final HttpMethod httpMethod;
+        @Nullable
+        private URI uri;
+        @Nullable
+        private HttpHeaders headers;
+        @Nullable
+        private MultiValueMap<String, String> cookies;
+        @Nullable
+        private BodyInserter<?, ? super ClientHttpRequest> inserter;
+        private final Map<String, Object> attributes = new LinkedHashMap<>(4);
+        @Nullable
+        private Function<Context, Context> contextModifier;
+        @Nullable
+        private Consumer<ClientHttpRequest> httpRequestConsumer;
+
+        DefaultRequestBodyUriSpec(HttpMethod httpMethod) {
+            this.httpMethod = httpMethod;
+        }
+
+        @Override
+        public RequestBodySpec uri(String uriTemplate, Object... uriVariables) {
+            UriBuilder uriBuilder = uriBuilderFactory.uriString(uriTemplate);
+            attribute(URI_TEMPLATE_ATTRIBUTE, uriBuilder.toUriString());
+            return uri(uriBuilder.build(uriVariables));
+        }
+
+        @Override
+        public RequestBodySpec uri(String uriTemplate, Map<String, ?> uriVariables) {
+            UriBuilder uriBuilder = uriBuilderFactory.uriString(uriTemplate);
+            attribute(URI_TEMPLATE_ATTRIBUTE, uriBuilder.toUriString());
+            return uri(uriBuilder.build(uriVariables));
+        }
+
+        @Override
+        public RequestBodySpec uri(String uriTemplate, Function<UriBuilder, URI> uriFunction) {
+            String uriString = uriBuilderFactory.uriString(uriTemplate).toUriString();
+            attribute(URI_TEMPLATE_ATTRIBUTE, uriString);
+            return uri(uriFunction.apply(uriBuilderFactory.uriString(uriTemplate)));
+        }
+
+        @Override
+        public RequestBodySpec uri(Function<UriBuilder, URI> uriFunction) {
+            return uri(uriFunction.apply(uriBuilderFactory.builder()));
+        }
+
+        @Override
+        public RequestBodySpec uri(URI uri) {
+            this.uri = uri;
+            return this;
+        }
+
+        @Override
+        public DefaultRequestBodyUriSpec header(String headerName, String... headerValues) {
+            HttpHeaders localHeaders = getHeaders();
+            for (String headerValue : headerValues) {
+                localHeaders.add(headerName, headerValue);
+            }
+            return this;
+        }
+
+        @Override
+        public DefaultRequestBodyUriSpec headers(Consumer<HttpHeaders> headersConsumer) {
+            headersConsumer.accept(getHeaders());
+            return this;
+        }
+
+        @Override
+        public DefaultRequestBodyUriSpec accept(MediaType... acceptableMediaTypes) {
+            getHeaders().setAccept(Arrays.asList(acceptableMediaTypes));
+            return this;
+        }
+
+        @Override
+        public DefaultRequestBodyUriSpec acceptCharset(Charset... acceptableCharsets) {
+            getHeaders().setAcceptCharset(Arrays.asList(acceptableCharsets));
+            return this;
+        }
+
+        @Override
+        public DefaultRequestBodyUriSpec contentType(MediaType contentType) {
+            getHeaders().setContentType(contentType);
+            return this;
+        }
+
+        @Override
+        public DefaultRequestBodyUriSpec contentLength(long contentLength) {
+            getHeaders().setContentLength(contentLength);
+            return this;
+        }
+
+        @Override
+        public DefaultRequestBodyUriSpec cookie(String name, String value) {
+            getCookies().add(name, value);
+            return this;
+        }
+
+        @Override
+        public DefaultRequestBodyUriSpec cookies(Consumer<MultiValueMap<String, String>> cookiesConsumer) {
+            cookiesConsumer.accept(getCookies());
+            return this;
+        }
+
+        @Override
+        public DefaultRequestBodyUriSpec ifModifiedSince(ZonedDateTime ifModifiedSince) {
+            getHeaders().setIfModifiedSince(ifModifiedSince);
+            return this;
+        }
+
+        @Override
+        public DefaultRequestBodyUriSpec ifNoneMatch(String... ifNoneMatches) {
+            getHeaders().setIfNoneMatch(Arrays.asList(ifNoneMatches));
+            return this;
+        }
+
+        @Override
+        public RequestBodySpec attribute(String name, Object value) {
+            this.attributes.put(name, value);
+            return this;
+        }
+
+        @Override
+        public RequestBodySpec attributes(Consumer<Map<String, Object>> attributesConsumer) {
+            attributesConsumer.accept(this.attributes);
+            return this;
+        }
+
+        // other parts of the class remain unchanged
+    }
+
+    // other parts of the class remain unchanged
+
+}
+```
+
+In this refactoring, `getHeaders()` and `getCookies()` are called once per method where multiple usages were found, and the result is stored in a local variable. This change reduces the overhead of method calling and enhances the code readability by providing a clear single point of reference for the headers and cookies in the methods where they're manipulated.

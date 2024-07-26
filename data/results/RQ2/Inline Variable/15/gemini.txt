@@ -1,0 +1,27 @@
+ **Here's the refactored code with the unnecessary variable "doc" removed using inline variable refactoring:**
+
+```java
+@SuppressForbidden(reason = "This module does not need to deal with logging context")
+public Iterator<SolrInputDocument> preGenerate(int numDocs) throws InterruptedException {
+  log("preGenerate docs=" + numDocs + " ...");
+  docs.clear();
+  executorService =
+      Executors.newFixedThreadPool(
+          Runtime.getRuntime().availableProcessors() + 1,
+          new SolrNamedThreadFactory("SolrJMH DocMaker"));
+
+  for (int i = 0; i < numDocs; i++) {
+    executorService.submit(() -> {
+      docs.add(Docs.this.inputDocument()); // Inline "doc" variable
+    });
+  }
+
+  // ... (rest of the code remains unchanged)
+}
+```
+
+**Explanation of the refactoring:**
+
+- The original code declared a variable `doc` inside the `executorService.submit` block. Its only purpose was to hold the result of calling `Docs.this.inputDocument()` and then pass it to the `docs.add` method.
+- By inlining the variable, we can eliminate the need for `doc` altogether, making the code more concise and easier to read.
+- Using the expression `Docs.this.inputDocument()` directly within the `docs.add` method achieves the same functionality without an intermediary variable.

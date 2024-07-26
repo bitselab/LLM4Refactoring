@@ -1,0 +1,129 @@
+Reviewing the provided code, there are several opportunities for refactoring to improve readability, maintainability, and efficiency. Here are the changes I would recommend:
+
+1. **Extract Repeated Code into Methods:** The code in `basicAssertions` method repeats similar patterns of assertions for different attributes. This can be refactored into a reusable method.
+
+2. **Use Descriptive Method Names:** The test methods `basicAssertions` and `testUsage` can be renamed to more descriptive names that reflect what they are testing.
+
+3. **Improve Test Data Creation:** The way test entities are created and deleted in `testUsage` can be improved for clarity and to reduce duplication.
+
+4. **Use Constants for Repeated Strings:** Repeated string literals, like `"locale"`, can be replaced with constants to avoid errors and improve maintainability.
+
+5. **Optimize Imports:** Some imports may be unnecessary and can be removed for cleaner code.
+
+6. **Error Handling:** The test method `testUsage` uses a try-finally block without a catch. While this may be intentional, it's worth reviewing to ensure that exceptions are handled as expected.
+
+7. **Entity Class Organization:** The `LocaleMappingTestEntity` class can be moved to its own file for better organization, especially if it's used in multiple test classes.
+
+Let's apply these refactoring steps to the code.
+
+Here is the refactored code with the suggested improvements:
+
+```java
+package org.hibernate.orm.test.mapping.type.java;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import java.sql.Types;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import org.hibernate.dialect.Dialect;
+import org.hibernate.dialect.NationalizationSupport;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.metamodel.mapping.PluralAttributeMapping;
+import org.hibernate.metamodel.mapping.internal.BasicAttributeMapping;
+import org.hibernate.metamodel.mapping.internal.BasicValuedCollectionPart;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.type.descriptor.jdbc.spi.JdbcTypeRegistry;
+import org.hibernate.testing.orm.junit.DomainModel;
+import org.hibernate.testing.orm.junit.JiraKey;
+import org.hibernate.testing.orm.junit.SessionFactory;
+import org.hibernate.testing.orm.junit.SessionFactoryScope;
+import org.junit.jupiter.api.Test;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.MapKeyColumn;
+import jakarta.persistence.Table;
+
+@DomainModel(annotatedClasses = LocaleMappingTests.LocaleMappingTestEntity.class)
+@SessionFactory
+@JiraKey("HHH-17466")
+public class LocaleMappingTests {
+
+    private static final String LOCALE = "locale";
+
+    @Test
+    public void testLocaleMappings(SessionFactoryScope scope) {
+        final SessionFactoryImplementor sessionFactory = scope.getSessionFactory();
+        final JdbcTypeRegistry jdbcTypeRegistry = sessionFactory.getTypeConfiguration().getJdbcTypeRegistry();
+        final EntityPersister entityDescriptor = sessionFactory.getMappingMetamodel().getEntityDescriptor(LocaleMappingTestEntity.class);
+
+        assertBasicAttributeMapping(entityDescriptor, LOCALE, Types.VARCHAR, Locale.class, jdbcTypeRegistry);
+        assertPluralAttributeMapping(entityDescriptor, "locales", Types.VARCHAR, Locale.class, jdbcTypeRegistry, true);
+        assertPluralAttributeMapping(entityDescriptor, "countByLocale", Types.VARCHAR, Locale.class, jdbcTypeRegistry, false);
+    }
+
+    private void assertBasicAttributeMapping(EntityPersister entityDescriptor, String attributeName, int jdbcType, Class<?> javaType, JdbcTypeRegistry jdbcTypeRegistry) {
+        final BasicAttributeMapping attribute = (BasicAttributeMapping) entityDescriptor.findAttributeMapping(attributeName);
+        assertThat(attribute.getJdbcMapping().getJdbcType()).isEqualTo(jdbcTypeRegistry.getDescriptor(jdbcType));
+        assertThat(attribute.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass()).isEqualTo(javaType);
+    }
+
+    private void assertPluralAttributeMapping(EntityPersister entityDescriptor, String attributeName, int jdbcType, Class<?> javaType, JdbcTypeRegistry jdbcTypeRegistry, boolean isElement) {
+        final PluralAttributeMapping attribute = (PluralAttributeMapping) entityDescriptor.findAttributeMapping(attributeName);
+        final BasicValuedCollectionPart partDescriptor = isElement ? (BasicValuedCollectionPart) attribute.getElementDescriptor() : (BasicValuedCollectionPart) attribute.getIndexDescriptor();
+        assertThat(partDescriptor.getJdbcMapping().getJdbcType()).isEqualTo(jdbcTypeRegistry.getDescriptor(jdbcType));
+        assertThat(partDescriptor.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass()).isEqualTo(javaType);
+    }
+
+    @Test
+    public void testLocaleEntityPersistence(SessionFactoryScope scope) {
+        final LocaleMappingTestEntity entity = new LocaleMappingTestEntity(1, Locale.ENGLISH, "Hello");
+        final LocaleMappingTestEntity entity2 = new LocaleMappingTestEntity(2, Locale.FRENCH, "Salut");
+
+        saveEntities(scope, entity, entity2);
+
+        try {
+            scope.inTransaction(session -> assertThat(session.createQuery(
+                            "from LocaleMappingTestEntity where locale = ?1", LocaleMappingTestEntity.class)
+                    .setParameter(1, Locale.FRENCH)
+                    .list())
+                    .extracting(LocaleMappingTestEntity::getId)
+                    .containsExactly(2));
+        } finally {
+            deleteEntities(scope, entity, entity2);
+        }
+    }
+
+    private void saveEntities(SessionFactoryScope scope, LocaleMappingTestEntity... entities) {
+        scope.inTransaction(session -> {
+            for (LocaleMappingTestEntity entity : entities) {
+                session.save(entity);
+            }
+        });
+    }
+
+    private void deleteEntities(SessionFactoryScope scope, LocaleMappingTestEntity... entities) {
+        scope.inTransaction(session -> {
+            for (LocaleMappingTestEntity entity : entities) {
+                session.delete(entity);
+            }
+        });
+    }
+
+    // LocaleMappingTestEntity class definition remains the same
+}
+```
+
+Changes made:
+1. Extracted repeated assertion logic into `assertBasicAttributeMapping` and `assertPluralAttributeMapping`.
+2. Renamed test methods to `testLocaleMappings` and `testLocaleEntityPersistence`.
+3. Created helper methods `saveEntities` and `deleteEntities` to manage entity persistence.
+4. Used a constant `LOCALE` for the repeated string literal.
+
+These changes should make the code more readable and maintainable.

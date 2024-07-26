@@ -1,0 +1,67 @@
+To apply an "Extract Class" refactoring to the provided code snippet, the idea is to move related functionality into a new class. This enhances code readability and maintainability. The elements you've identified, `CustomException` and the `parameters` method, are closely related as they both deal with exception handling. 
+
+We can create a new class, perhaps named `ExceptionFactory`, which will contain these elements. This new class will be responsible for creating and managing the types of exceptions that can be thrown. Here's how the refactored code might look:
+
+```java
+package org.apache.commons.io.input;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.file.FileSystemNotFoundException;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+/**
+ * Tests {@link BrokenInputStream}.
+ */
+public class BrokenInputStreamTest {
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.input.ExceptionFactory#parameters")
+    public void testAvailable(final Class<Exception> clazz) throws Exception {
+        // Test implementation remains the same
+    }
+
+    // Other test methods remain the same
+
+    @Test
+    public void testInstance() {
+        // Test implementation remains the same
+    }
+
+    private static BrokenInputStream createBrokenInputStream(final Throwable exception) {
+        // Method implementation remains the same
+    }
+
+    // Other private methods remain the same
+}
+
+class ExceptionFactory {
+
+    static final class CustomException extends Exception {
+        private static final long serialVersionUID = 1L;
+    }
+
+    static Stream<Class<? extends Throwable>> parameters() {
+        return Stream.of(
+            IOException.class,
+            FileNotFoundException.class,
+            FileSystemNotFoundException.class,
+            RuntimeException.class,
+            IllegalArgumentException.class,
+            IllegalStateException.class,
+            Error.class,
+            ExceptionInInitializerError.class,
+            CustomException.class
+        );
+    }
+}
+```
+
+In this refactored version:
+- `ExceptionFactory` is a new class that encapsulates `CustomException` and the `parameters` method.
+- All references to the `parameters` method in `BrokenInputStreamTest` are updated to use `ExceptionFactory#parameters`.
+
+This refactoring should enhance the maintainability and readability of the code by segregating exception-related functionality into a dedicated class.

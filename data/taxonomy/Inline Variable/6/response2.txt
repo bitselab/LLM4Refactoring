@@ -1,0 +1,37 @@
+Here is the refactored code with unnecessary variables removed, following the inline variable refactoring pattern:
+
+```java
+private static void setUpMocks() throws IOException, NoSuchFieldException {
+    RouterRpcServer spyRpcServer =
+            Mockito.spy(routerContext.getRouter().createRpcServer());
+    Field rpcServerField = Router.class.getDeclaredField("rpcServer");
+    FieldSetter.setField(routerContext.getRouter(), rpcServerField, spyRpcServer);
+    Mockito.doReturn(null).when(spyRpcServer).getFileInfo(Mockito.anyString());
+
+    // mock rpc client for destination check when editing mount tables.
+    mockRpcClient = Mockito.spy(spyRpcServer.getRPCClient());
+    FieldSetter.setField(spyRpcServer, RouterRpcServer.class.getDeclaredField("rpcClient"), mockRpcClient);
+    Mockito.doReturn(
+            Map.of(new RemoteLocation("ns0", "/testdir", null), new HdfsFileStatus.Builder().build())
+    ).when(mockRpcClient).invokeConcurrent(
+            Mockito.eq(Lists.newArrayList(new RemoteLocation("ns0", "/testdir", null))),
+            Mockito.any(RemoteMethod.class),
+            Mockito.eq(false),
+            Mockito.eq(false),
+            Mockito.eq(HdfsFileStatus.class)
+    );
+    Mockito.doReturn(
+            Map.of(new RemoteLocation("ns1", "/", null), new HdfsFileStatus.Builder().build())
+    ).when(mockRpcClient).invokeConcurrent(
+            Mockito.eq(Lists.newArrayList(new RemoteLocation("ns1", "/", null))),
+            Mockito.any(RemoteMethod.class),
+            Mockito.eq(false),
+            Mockito.eq(false),
+            Mockito.eq(HdfsFileStatus.class)
+    );
+}
+```
+
+In this refactoring:
+- The `remoteLocation0` and `remoteLocation1` variables were inlined directly into the method calls where they were used.
+- The `mockResponse0` and `mockResponse1` variables were replaced with inline `Map.of` constructs directly in the `Mockito.doReturn` method calls.

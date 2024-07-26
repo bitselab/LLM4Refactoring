@@ -1,0 +1,86 @@
+In the provided code snippet, there are several opportunities for extract variable refactoring that can enhance the readability and maintainability of the code. Let's go through the potential refactorings:
+
+1. **Repeated Access of `req.getPathTemplateValues().get(...)`:** This expression is accessed multiple times to retrieve different parameters. Extracting these expressions into variables at the beginning of the method can simplify the access and improve clarity.
+
+2. **Repetitive Invocation of `inputStream.readAllBytes()`:** The method `inputStream.readAllBytes()` is called more than once, which could be inefficient if not cached, especially as it involves I/O operations. Extracting this into a variable ensures that the I/O operation is performed only once, and the result is reused.
+
+Here is how the refactored code would look:
+
+```java
+package org.apache.solr.handler.configsets;
+
+import static org.apache.solr.client.solrj.SolrRequest.METHOD.PUT;
+import static org.apache.solr.security.PermissionNameProvider.Name.CONFIG_EDIT_PERM;
+
+import java.io.InputStream;
+import org.apache.solr.api.EndPoint;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.cloud.ZkMaintenanceUtils;
+import org.apache.solr.common.params.ConfigSetParams;
+import org.apache.solr.core.CoreContainer;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.util.FileTypeMagicUtil;
+
+/**
+ * V2 API for adding or updating a single file within a configset.
+ *
+ * <p>This API (PUT /v2/cluster/configs/configsetName/someFilePath) is analogous to the v1
+ * /admin/configs?action=UPLOAD&amp;filePath=someFilePath command.
+ */
+public class UploadConfigSetFileAPI extends ConfigSetAPIBase {
+
+    public static final String CONFIGSET_NAME_PLACEHOLDER =
+            UploadConfigSetAPI.CONFIGSET_NAME_PLACEHOLDER;
+    public static final String FILEPATH_PLACEHOLDER = "*";
+
+    private static final String API_PATH =
+            "/cluster/configs/{" + CONFIGSET_NAME_PLACEHOLDER + "}/" + FILEPATH_PLACEHOLDER;
+
+    public UploadConfigSetFileAPI(CoreContainer coreContainer) {
+        super(coreContainer);
+    }
+
+    @EndPoint(method = PUT, path = API_PATH, permission = CONFIG_EDIT_PERM)
+    public void updateConfigSetFile(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
+        ensureConfigSetUploadEnabled();
+
+        final String configSetName = req.getPathTemplateValues().get("name");
+        final String singleFilePath = req.getPathTemplateValues().getOrDefault(FILEPATH_PLACEHOLDER, "");
+        boolean overwritesExisting = configSetService.checkConfigExists(configSetName);
+        boolean requestIsTrusted =
+                isTrusted(req.getUserPrincipal(), coreContainer.getAuthenticationPlugin());
+        boolean allowOverwrite = req.getParams().getBool(ConfigSetParams.OVERWRITE, true);
+        boolean cleanup = req.getParams().getBool(ConfigSetParams.CLEANUP, false);
+        
+        final InputStream inputStream = ensureNonEmptyInputStream(req);
+        final byte[] fileBytes = inputStream.readAllBytes();
+
+        String fixedSingleFilePath = singleFilePath.charAt(0) == '/' ? singleFilePath.substring(1) : singleFilePath;
+        
+        if (fixedSingleFilePath.isEmpty()) {
+            throw new SolrException(
+                    SolrException.ErrorCode.BAD_REQUEST,
+                    "The file path provided for upload, '" + singleFilePath + "', is not valid.");
+        } else if (ZkMaintenanceUtils.isFileForbiddenInConfigSets(fixedSingleFilePath)
+                || FileTypeMagicUtil.isFileForbiddenInConfigset(fileBytes)) {
+            throw new SolrException(
+                    SolrException.ErrorCode.BAD_REQUEST,
+                    "The file type provided for upload, '"
+                            + singleFilePath
+                            + "', is forbidden for use in configSets.");
+        } else if (cleanup) {
+            throw new SolrException(
+                    SolrException.ErrorCode.BAD_REQUEST,
+                    "ConfigSet uploads do not allow cleanup=true when file path is used.");
+        } else {
+            createBaseNode(configSetService, overwritesExisting, requestIsTrusted, configSetName);
+            configSetService.uploadFileToConfig(configSetName, fixedSingleFilePath, fileBytes, allowOverwrite);
+        }
+    }
+}
+```
+
+In this refactoring:
+- We've extracted the repeated `getPathTemplateValues().get()` calls into variables at the beginning of the method.
+- We cached the result of `inputStream.readAllBytes()` into `fileBytes` to avoid multiple I/O operations.

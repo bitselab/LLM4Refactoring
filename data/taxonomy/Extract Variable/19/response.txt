@@ -1,0 +1,95 @@
+Analyzing the given code snippet, I will focus on potential opportunities to refactor by extracting complex or long expressions into separate variables. This is done to improve code readability and maintainability.
+
+Here are the considerations for possible extract variable refactorings in the provided code:
+
+1. **In the `createHttpHandler` method**:
+   - The expression `StringUtils.hasLength(this.contextPath)` checks if `contextPath` has any length and is used directly in an `if` statement to decide whether to add a prefix path to the handler. Although this expression isn't overly complex, extracting it into a variable could clarify the intent and reduce duplication if this logic needs to be used elsewhere in the future.
+
+2. **In the `getStartLogMessage` method**:
+   - The ternary expression `StringUtils.hasText(this.contextPath) ? this.contextPath : "/"` decides the context path string to append. This is a candidate for extraction to improve readability and clarify what the expression represents.
+
+Here is the refactored code:
+
+```java
+package org.springframework.boot.web.embedded.undertow;
+
+import io.undertow.Handlers;
+import io.undertow.Undertow.Builder;
+import io.undertow.server.HttpHandler;
+import io.undertow.servlet.api.DeploymentManager;
+
+import org.springframework.boot.web.server.WebServer;
+import org.springframework.util.StringUtils;
+
+/**
+ * {@link WebServer} that can be used to control an embedded Undertow server. Typically
+ * this class should be created using {@link UndertowServletWebServerFactory} and not
+ * directly.
+ *
+ * @author Ivan Sopov
+ * @author Andy Wilkinson
+ * @author Eddú Meléndez
+ * @author Christoph Dreis
+ * @author Kristine Jetzke
+ * @since 2.0.0
+ * @see UndertowServletWebServerFactory
+ */
+public class UndertowServletWebServer extends UndertowWebServer {
+
+    private final String contextPath;
+
+    private final DeploymentManager manager;
+
+    /**
+     * Create a new {@link UndertowServletWebServer} instance.
+     * @param builder the builder
+     * @param httpHandlerFactories the handler factories
+     * @param contextPath the root context path
+     * @param autoStart if the server should be started
+     * @since 2.3.0
+     */
+    public UndertowServletWebServer(Builder builder, Iterable<HttpHandlerFactory> httpHandlerFactories,
+                                    String contextPath, boolean autoStart) {
+        super(builder, httpHandlerFactories, autoStart);
+        this.contextPath = contextPath;
+        this.manager = findManager(httpHandlerFactories);
+    }
+
+    private DeploymentManager findManager(Iterable<HttpHandlerFactory> httpHandlerFactories) {
+        for (HttpHandlerFactory httpHandlerFactory : httpHandlerFactories) {
+            if (httpHandlerFactory instanceof DeploymentManagerHttpHandlerFactory deploymentManagerFactory) {
+                return deploymentManagerFactory.getDeploymentManager();
+            }
+        }
+        return null;
+    }
+
+    @Override
+    protected HttpHandler createHttpHandler() {
+        HttpHandler handler = super.createHttpHandler();
+        boolean hasContextPath = StringUtils.hasLength(this.contextPath);
+        if (hasContextPath) {
+            handler = Handlers.path().addPrefixPath(this.contextPath, handler);
+        }
+        return handler;
+    }
+
+    @Override
+    protected String getStartLogMessage() {
+        boolean hasTextInContextPath = StringUtils.hasText(this.contextPath);
+        String displayedContextPath = hasTextInContextPath ? this.contextPath : "/";
+        StringBuilder message = new StringBuilder(super.getStartLogMessage());
+        message.append(" with context path '");
+        message.append(displayedContextPath);
+        message.append("'");
+        return message.toString();
+    }
+
+    public DeploymentManager getDeploymentManager() {
+        return this.manager;
+    }
+
+}
+```
+
+This refactoring introduces new variables `hasContextPath` and `displayedContextPath` to simplify the conditionals in `createHttpHandler` and `getStartLogMessage`, respectively. This should improve readability by making the checks more understandable at a glance and potentially simplify future modifications to the code.

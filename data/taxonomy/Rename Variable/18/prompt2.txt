@@ -1,0 +1,59 @@
+Rename variable refactorings are frequently employed to modify low-quality identifiers to improve readability.
+##################################################
+A rename variable refactoring pattern is to rename variables whose semantics are inappropriate in the context. Here is an example of the rename variable refactoring that follows this pattern.
+The source code before refactoring is:
+```
+private Availability availability() {
+    if (isShutdown.get()) {
+        return Availability.SHUTDOWN;
+    }
+    int val = requirementCount.get();
+    if (val == 0) {
+        return Availability.AVAILABLE;
+    }
+    assert (val > 0); 
+    return Availability.UNAVAILABLE;
+}
+```
+The source code after refactoring is:
+```
+private Availability availability() {
+    if (isShutdown.get()) {
+        return Availability.SHUTDOWN;
+    }
+    int count = requirementCount.get();
+    if (count == 0) {
+        return Availability.AVAILABLE;
+    }
+    assert (count > 0);
+    return Availability.UNAVAILABLE;
+}
+```
+In this example, the developer renamed the variable "val" to "count".
+##################################################
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename variable refactoring opportunities that follows the refactoring pattern above. The original code snippet is as follows:
+```
+public SolrDocumentList getHistory(long since, AtomicBoolean found) {
+    if (history == null) {
+        return null;
+    }
+
+    SolrDocumentList docs = new SolrDocumentList();
+    Iterator<SolrDocument> iter = history.iterator();
+    while (iter.hasNext()) {
+        SolrDocument e = iter.next();
+        long ts = ((Date) e.getFirstValue("time")).getTime();
+        if (ts == since) {
+            if (found != null) {
+                found.set(true);
+            }
+        }
+        if (ts > since) {
+            docs.add(e);
+        }
+    }
+    docs.setNumFound(docs.size()); // make it not look too funny
+    return docs;
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

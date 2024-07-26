@@ -1,0 +1,77 @@
+In the provided code snippet, there is a clear opportunity for Extract Method refactoring to improve the readability and maintainability of the code. The logging functionality within the `updateClusterCredentials` method is a prime candidate for this. It is used twice in the same method, indicating a need to encapsulate this logic in a separate method to avoid duplication.
+
+I will refactor the code to extract the logging functionality into its own method. This change will not only make the code cleaner but also make it easier to update or modify the logging behavior in the future.
+
+Here's the refactored code:
+
+```java
+package org.elasticsearch.transport;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.settings.SecureString;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.util.set.Sets;
+import org.elasticsearch.core.Nullable;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+
+import static org.elasticsearch.transport.RemoteClusterService.REMOTE_CLUSTER_CREDENTIALS;
+
+public class RemoteClusterCredentialsManager {
+    private static final Logger logger = LogManager.getLogger(RemoteClusterCredentialsManager.class);
+
+    private volatile Map<String, SecureString> clusterCredentials = Collections.emptyMap();
+
+    public RemoteClusterCredentialsManager(Settings settings) {
+        updateClusterCredentials(settings);
+    }
+
+    public final synchronized UpdateRemoteClusterCredentialsResult updateClusterCredentials(Settings settings) {
+        final Map<String, SecureString> newClusterCredentials = REMOTE_CLUSTER_CREDENTIALS.getAsMap(settings);
+        if (clusterCredentials.isEmpty()) {
+            clusterCredentials = newClusterCredentials;
+            logCredentialsUpdate();
+            return new UpdateRemoteClusterCredentialsResult(Set.copyOf(newClusterCredentials.keySet()), Collections.emptySet());
+        }
+
+        final Set<String> addedClusterAliases = Sets.difference(newClusterCredentials.keySet(), clusterCredentials.keySet());
+        final Set<String> removedClusterAliases = Sets.difference(clusterCredentials.keySet(), newClusterCredentials.keySet());
+        clusterCredentials = newClusterCredentials;
+        logCredentialsUpdate();
+        assert Sets.haveEmptyIntersection(removedClusterAliases, addedClusterAliases);
+        return new UpdateRemoteClusterCredentialsResult(addedClusterAliases, removedClusterAliases);
+    }
+
+    private void logCredentialsUpdate() {
+        logger.debug(
+                () -> Strings.format(
+                        "Updated remote cluster credentials for clusters: [%s]",
+                        Strings.collectionToCommaDelimitedString(clusterCredentials.keySet())
+                )
+        );
+    }
+
+    public record UpdateRemoteClusterCredentialsResult(Set<String> addedClusterAliases, Set<String> removedClusterAliases) {}
+
+    @Nullable
+    public SecureString resolveCredentials(String clusterAlias) {
+        return clusterCredentials.get(clusterAlias);
+    }
+
+    public boolean hasCredentials(String clusterAlias) {
+        return clusterCredentials.containsKey(clusterAlias);
+    }
+
+    public static final RemoteClusterCredentialsManager EMPTY = new RemoteClusterCredentialsManager(Settings.EMPTY);
+}
+```
+
+Changes made:
+- Extracted the logging logic into a private method `logCredentialsUpdate`.
+- Replaced the duplicated logging code in `updateClusterCredentials` with calls to the new method.
+
+This refactoring keeps the functionality intact while improving the code structure.

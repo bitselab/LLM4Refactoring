@@ -1,0 +1,88 @@
+Upon reviewing the provided code from the `PulsarPropertiesMapper` class, there are several potential refactoring opportunities to improve modularity and readability by extracting certain segments into their own methods. Specifically, the customization logic for various builder types (ClientBuilder, AdminBuilder, etc.) shares a common pattern that can be extracted. Here's how we can refactor the code:
+
+1. **Extract Customization of Timeout Properties:** The timeout properties are set in a similar manner across different builders. This can be encapsulated into a method to reduce redundancy.
+
+2. **Extract Customization of Authentication:** The authentication customization logic, especially where it constructs a JSON string of parameters and handles exceptions, can be extracted into a separate method. This improves the clarity of the methods where authentication is being set up.
+
+### Refactored Code
+
+```java
+package org.springframework.boot.autoconfigure.pulsar;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+
+import org.apache.pulsar.client.admin.PulsarAdminBuilder;
+import org.apache.pulsar.client.api.ClientBuilder;
+import org.apache.pulsar.client.api.ConsumerBuilder;
+import org.apache.pulsar.client.api.ProducerBuilder;
+import org.apache.pulsar.client.api.PulsarClientException.UnsupportedAuthenticationException;
+import org.apache.pulsar.client.api.ReaderBuilder;
+import org.apache.pulsar.common.util.ObjectMapperFactory;
+
+import org.springframework.boot.context.properties.PropertyMapper;
+import org.springframework.pulsar.listener.PulsarContainerProperties;
+import org.springframework.pulsar.reader.PulsarReaderContainerProperties;
+import org.springframework.util.StringUtils;
+
+final class PulsarPropertiesMapper {
+
+    private final PulsarProperties properties;
+
+    PulsarPropertiesMapper(PulsarProperties properties) {
+        this.properties = properties;
+    }
+
+    void customizeClientBuilder(ClientBuilder clientBuilder, PulsarConnectionDetails connectionDetails) {
+        PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
+        applyStandardCustomizations(map, connectionDetails, clientBuilder, properties.getClient());
+        customizeAuthentication(clientBuilder::authentication, properties.getClient().getAuthentication());
+    }
+
+    void customizeAdminBuilder(PulsarAdminBuilder adminBuilder, PulsarConnectionDetails connectionDetails) {
+        PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
+        applyStandardCustomizations(map, connectionDetails, adminBuilder, properties.getAdmin());
+        customizeAuthentication(adminBuilder::authentication, properties.getAdmin().getAuthentication());
+    }
+
+    private void applyStandardCustomizations(PropertyMapper map, PulsarConnectionDetails connectionDetails, Object builder, PulsarProperties.TimeoutProperties timeoutProperties) {
+        map.from(connectionDetails::getBrokerUrl).to(builder::serviceUrl);
+        map.from(timeoutProperties::getConnectionTimeout).to(timeoutProperty(builder::connectionTimeout));
+        map.from(timeoutProperties::getOperationTimeout).to(timeoutProperty(builder::operationTimeout));
+        map.from(timeoutProperties::getLookupTimeout).to(timeoutProperty(builder::lookupTimeout));
+    }
+
+    private void customizeAuthentication(AuthenticationConsumer authentication, PulsarProperties.Authentication properties) {
+        if (StringUtils.hasText(properties.getPluginClassName())) {
+            try {
+                authentication.accept(properties.getPluginClassName(), getAuthParamString(properties.getAuthParameters()));
+            } catch (UnsupportedAuthenticationException ex) {
+                throw new IllegalStateException("Unable to configure Pulsar authentication", ex);
+            }
+        }
+    }
+
+    private String getAuthParamString(Map<String, String> params) {
+        try {
+            return ObjectMapperFactory.create().writeValueAsString(new TreeMap<>(params));
+        } catch (Exception ex) {
+            throw new IllegalStateException("Could not convert auth parameters to encoded string", ex);
+        }
+    }
+
+    // Additional customization methods and other unchanged parts of the class
+}
+```
+
+### Summary of Refactorings:
+
+- **Extracted `applyStandardCustomizations`**: This method now handles the setting of service URLs and timeout properties, which are common across different builder customizations.
+- **Extracted `customizeAuthentication`**: This method encapsulates the logic for setting up authentication, reducing complexity in the main customization methods.
+- **Extracted `getAuthParamString`**: Handles JSON serialization of authentication parameters, simplifying the authentication setup.
+
+These refactorings help in making the code more modular, easier to read, and maintainable, following the best practices similar to those demonstrated in your example of extract method refactoring.

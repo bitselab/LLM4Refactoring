@@ -1,0 +1,92 @@
+To apply extract class refactoring to the specified segment of your Java code, we will create a new class that encapsulates the functionality related to the `JButton` and `JBLabel` components. The goal is to improve the readability and maintainability of the code by separating concerns.
+
+Here's how the refactored code might look:
+
+### New Class: `IconButtonWithLabel`
+
+```java
+public class IconButtonWithLabel extends JPanel {
+    private final JButton myIconButton;
+    private final JBLabel myLabel;
+
+    public IconButtonWithLabel() {
+        super(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, JBUI.scale(12), false, false));
+        myIconButton = createIconButton();
+        myLabel = new JBLabel("", SwingConstants.CENTER);
+        myLabel.setOpaque(false);
+
+        setFocusable(false);
+        Wrapper iconWrapper = new Wrapper(myIconButton);
+        iconWrapper.setFocusable(false);
+        iconWrapper.setBorder(JBUI.Borders.empty(0, 30));
+
+        add(iconWrapper);
+        add(myLabel);
+        myIconButton.getAccessibleContext().setAccessibleName(myLabel.getText());
+    }
+
+    private JButton createIconButton() {
+        JButton button = new JButton();
+        button.setBorder(JBUI.Borders.empty());
+        button.setHorizontalAlignment(SwingConstants.CENTER);
+        button.setOpaque(false);
+        button.setPreferredSize(new JBDimension(60, 60));
+
+        setupButtonProperties(button);
+        button.addFocusListener(new FocusListener() {
+            @Override
+            public void focusGained(FocusEvent e) {
+                updateIconBackground(button, true);
+            }
+
+            @Override
+            public void focusLost(FocusEvent e) {
+                updateIconBackground(button, false);
+            }
+        });
+
+        return button;
+    }
+
+    private void setupButtonProperties(JButton button) {
+        if (ExperimentalUI.isNewUI()) {
+            button.putClientProperty("JButton.focusedBackgroundColor", getActionsButtonBackground(false));
+            button.putClientProperty("JButton.outlineFocusColor", WelcomeScreenUIManager.getActionsButtonSelectionBorder());
+            button.putClientProperty("JButton.outlineFocusSize", JBUI.scale(2));
+        } else {
+            button.putClientProperty("JButton.focusedBackgroundColor", getActionsButtonBackground(true));
+        }
+        button.putClientProperty("JButton.backgroundColor", getActionsButtonBackground(false));
+    }
+
+    private void updateIconBackground(JButton button, boolean selected) {
+        if (!ExperimentalUI.isNewUI()) {
+            button.setSelected(selected);
+            button.putClientProperty("JButton.backgroundColor", getActionsButtonBackground(selected));
+            button.repaint();
+        }
+    }
+
+    // Additional methods to interact with myIconButton and myLabel
+}
+```
+
+### Modifications in `LargeIconWithTextWrapper`
+
+In the `LargeIconWithTextWrapper` class, you should replace the relevant parts with an instance of `IconButtonWithLabel`. For example:
+
+```java
+static final class LargeIconWithTextWrapper extends AnActionWrapper implements CustomComponentAction {
+    private final IconButtonWithLabel iconButtonWithLabel;
+
+    LargeIconWithTextWrapper() {
+        super(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, JBUI.scale(12), false, false));
+        iconButtonWithLabel = new IconButtonWithLabel();
+        // ... rest of the constructor ...
+    }
+
+    // ... rest of the class ...
+}
+```
+
+This refactoring will make `LargeIconWithTextWrapper` class cleaner and more focused on its primary responsibilities, while `IconButtonWithLabel` encapsulates the details of creating and managing the button and label components.
