@@ -1,0 +1,49 @@
+## Refactoring Opportunities in ClasspathClassLoaderTest
+
+Here are some methods in the provided code snippet that could benefit from rename refactoring:
+
+1. **assertClassFile**: This method seems specific to verifying the format of a class file. A more descriptive name could be `verifyClassFileFormat`.
+
+Here's the refactored code with the renamed method:
+
+```java
+private void verifyClassFileFormat(DataInputStream data, int javaVersion) throws IOException {
+  int magicNumber = data.readInt();
+  assertEquals(0xcafebabe, magicNumber);
+  data.readUnsignedShort(); // minorVersion
+  int majorVersion = data.readUnsignedShort();
+  assertEquals(44 + javaVersion, majorVersion);
+}
+```
+
+2. **loadFromJava17**: This method name doesn't clearly indicate its purpose. A better name could be `verifyLoadFromJrtFsForJavaVersion`.
+
+Here's the refactored code with the renamed method:
+
+```java
+@ParameterizedTest
+@ValueSource(ints = {11, 17, 21})
+void verifyLoadFromJrtFsForJavaVersion(int javaVersion) throws IOException {
+  Path javaHome = Paths.get(System.getProperty("user.home"), "openjdk" + javaVersion);
+  assumeTrue(Files.isDirectory(javaHome), "Couldn't find java" + javaVersion + " installation at " + javaHome);
+
+  Path jrtfsPath = javaHome.resolve("lib/jrt-fs.jar");
+  assertTrue(Files.isRegularFile(jrtfsPath), "java" + javaVersion + " installation is incomplete. " + jrtfsPath + " not found!");
+  String classPath = jrtfsPath.toString();
+
+  try (ClasspathClassLoader loader = new ClasspathClassLoader(classPath, null)) {
+    assertEquals(javaHome.toString(), loader.javaHome);
+    try (InputStream stream = loader.getResourceAsStream("java/lang/Object.class")) {
+      assertNotNull(stream);
+      try (DataInputStream data = new DataInputStream(stream)) {
+        verifyClassFileFormat(data, javaVersion);
+      }
+    }
+
+    // should not fail for resources without a package
+    assertNull(loader.getResourceAsStream("ClassInDefaultPackage.class"));
+  }
+}
+```
+
+These are the suggested refactorings. The original code functioned correctly, but these changes improve readability and maintainability by making the method names more descriptive of their functionality.

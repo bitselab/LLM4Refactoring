@@ -1,0 +1,179 @@
+After reviewing the provided code, there are several potential refactoring opportunities for the types of refactoring mentioned: **Extract Class**, **Extract Method**, **Extract Variable**, **Inline Method**, **Inline Variable**, **Rename Attribute**, **Rename Method**, **Rename Parameter**, and **Rename Variable**. Below are the key areas for potential improvement:
+
+### 1. **Extract Method**:  
+   - The methods `notifyOpened` and `notifyClosed` contain repetitive logic that could be extracted into a single method. Both methods are handling a listener notification and catching any thrown exceptions. This can be simplified.
+
+   **Before:**
+   ```java
+   private void notifyOpened(Listener listener) {
+       try {
+           listener.onOpened(this);
+       } catch (Throwable x) {
+           LOG.info("failure notifying listener {}", listener, x);
+       }
+   }
+
+   private void notifyClosed(Listener listener) {
+       try {
+           listener.onClosed(this);
+       } catch (Throwable x) {
+           LOG.info("failure notifying listener {}", listener, x);
+       }
+   }
+   ```
+
+   **After:**
+   ```java
+   private void notifyListener(Listener listener, Consumer<Listener> callback) {
+       try {
+           callback.accept(listener);
+       } catch (Throwable x) {
+           LOG.info("failure notifying listener {}", listener, x);
+       }
+   }
+
+   private void notifyOpened(Listener listener) {
+       notifyListener(listener, l -> l.onOpened(this));
+   }
+
+   private void notifyClosed(Listener listener) {
+       notifyListener(listener, l -> l.onClosed(this));
+   }
+   ```
+
+### 2. **Extract Variable**:
+   - In the `shutdown()` method, the assignment to `session` is redundant. This can be simplified into a single return statement.
+
+   **Before:**
+   ```java
+   public CompletableFuture<Void> shutdown() {
+       ProtocolSession session = this.protocolSession;
+       if (session != null)
+           return session.shutdown();
+       return CompletableFuture.completedFuture(null);
+   }
+   ```
+
+   **After:**
+   ```java
+   public CompletableFuture<Void> shutdown() {
+       return protocolSession != null ? protocolSession.shutdown() : CompletableFuture.completedFuture(null);
+   }
+   ```
+
+### 3. **Inline Method**:
+   - The `pollTask()` method is unused and does nothing. It can be removed since it doesn't add value to the class.
+
+   **Before:**
+   ```java
+   // TODO: this is ugly, is there a better solution?
+   protected Runnable pollTask() {
+       return null;
+   }
+   ```
+
+   **After:**
+   (Removed the method entirely)
+
+### 4. **Rename Method**:
+   - The method `flush()` is a common name, and the context is related to QUIC connection, so renaming it to something more specific like `flushQuicConnection()` will make it clearer.
+
+   **Before:**
+   ```java
+   public void flush() {
+       if (LOG.isDebugEnabled())
+           LOG.debug("flushing {}", this);
+       flusher.iterate();
+   }
+   ```
+
+   **After:**
+   ```java
+   public void flushQuicConnection() {
+       if (LOG.isDebugEnabled())
+           LOG.debug("flushing {}", this);
+       flusher.iterate();
+   }
+   ```
+
+### 5. **Rename Parameter**:
+   - The parameter `failure` in methods like `remove()` and `finishOutwardClose()` could be renamed to `cause` or `error` to provide better clarity on what this variable represents.
+
+   **Before:**
+   ```java
+   public void remove(QuicStreamEndPoint endPoint, Throwable failure) {
+       boolean removed = endPoints.remove(endPoint.getStreamId()) != null;
+       if (removed) {
+           if (LOG.isDebugEnabled())
+               LOG.debug("removed {} from {}", endPoint, this);
+           endPoint.closed(failure);
+       }
+   }
+   ```
+
+   **After:**
+   ```java
+   public void remove(QuicStreamEndPoint endPoint, Throwable error) {
+       boolean removed = endPoints.remove(endPoint.getStreamId()) != null;
+       if (removed) {
+           if (LOG.isDebugEnabled())
+               LOG.debug("removed {} from {}", endPoint, this);
+           endPoint.closed(error);
+       }
+   }
+   ```
+
+### 6. **Extract Class**:
+   - The `Flusher` class is somewhat large and can be extracted into its own file. This will make the code more modular and easier to maintain.
+
+   **Before:**
+   The `Flusher` class is defined within the `QuicSession` class. It manages timeout and cipher buffer flushing.
+
+   **After:**
+   - Create a new file `Flusher.java` and move the `Flusher` class into it. It can then be refactored separately.
+
+### 7. **Inline Variable**:
+   - The `created` variable in `getOrCreateStreamEndPoint` is only used to check if the endpoint was newly created. Instead of creating a `Boolean` variable, the logic can be inlined to improve readability.
+
+   **Before:**
+   ```java
+   AtomicBoolean created = new AtomicBoolean();
+   QuicStreamEndPoint endPoint = endPoints.computeIfAbsent(streamId, id -> {
+       if (LOG.isDebugEnabled())
+           LOG.debug("creating endpoint for stream #{} for {}", id, this);
+       QuicStreamEndPoint result = newQuicStreamEndPoint(id);
+       created.set(true);
+       return result;
+   });
+
+   if (created.get())
+       consumer.accept(endPoint);
+   ```
+
+   **After:**
+   ```java
+   QuicStreamEndPoint endPoint = endPoints.computeIfAbsent(streamId, id -> {
+       if (LOG.isDebugEnabled())
+           LOG.debug("creating endpoint for stream #{} for {}", id, this);
+       return newQuicStreamEndPoint(id);
+   });
+
+   if (endPoint != null)
+       consumer.accept(endPoint);
+   ```
+
+### 8. **Rename Variable**:
+   - The `cipherBuffer` variable in `Flusher` can be renamed to something more descriptive like `buffer` to indicate it's a general-purpose buffer.
+
+   **Before:**
+   ```java
+   private ByteBuffer cipherBuffer;
+   ```
+
+   **After:**
+   ```java
+   private ByteBuffer buffer;
+   ```
+
+### Conclusion:
+The above changes will make the code cleaner, more modular, and easier to maintain. The key refactoring actions were primarily to **extract methods**, **inline methods and variables**, and **rename parameters and methods** for clarity. Additionally, **extracting the `Flusher` class** into its own file is a good step toward modularization.

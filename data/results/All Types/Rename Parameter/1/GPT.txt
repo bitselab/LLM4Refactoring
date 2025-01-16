@@ -1,0 +1,122 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The `format()` method is doing too much; it can be broken down into smaller methods for better readability.  
+   - The logic for appending severity level, file info, and module name can be extracted.
+
+2. **Extract Variable:**  
+   - The repeated use of `event.getFileName()`, `event.getMessage()`, and `event.getSeverityLevel()` can be stored in local variables.  
+
+3. **Rename Parameter:**  
+   - The parameter `severityLevelNameLength` in `initStringBuilderWithOptimalBuffer()` is misleading. It actually holds the **severity level name**, not its length. Renaming it to `severityLevelName` improves clarity.
+
+4. **Inline Method:**  
+   - `getCheckShortName(event)` is simple enough to be inlined in `initStringBuilderWithOptimalBuffer()` or simplified.
+
+---
+
+### **Refactored Code**
+
+```java
+package com.puppycrawl.tools.checkstyle;
+
+import java.util.Locale;
+
+import com.puppycrawl.tools.checkstyle.api.AuditEvent;
+import com.puppycrawl.tools.checkstyle.api.SeverityLevel;
+
+/**
+ * Represents the default formatter for log messages.
+ * Default log message format:
+ * [SEVERITY LEVEL] filePath:lineNo:columnNo: message. [CheckName]
+ * When the module id is set, the format is:
+ * [SEVERITY LEVEL] filePath:lineNo:columnNo: message. [ModuleId]
+ */
+public class AuditEventDefaultFormatter implements AuditEventFormatter {
+
+    private static final int LENGTH_OF_ALL_SEPARATORS = 10;
+    private static final String CHECK_SUFFIX = "Check";
+
+    @Override
+    public String format(AuditEvent event) {
+        String severityLevelName = getSeverityLevelName(event.getSeverityLevel());
+        StringBuilder logMessage = buildLogMessage(event, severityLevelName);
+        return logMessage.toString();
+    }
+
+    private static String getSeverityLevelName(SeverityLevel severityLevel) {
+        return severityLevel == SeverityLevel.WARNING ? "WARN" : severityLevel.getName().toUpperCase(Locale.US);
+    }
+
+    private static StringBuilder buildLogMessage(AuditEvent event, String severityLevelName) {
+        StringBuilder sb = initStringBuilderWithOptimalBuffer(event, severityLevelName);
+        appendSeverityAndFileInfo(sb, event, severityLevelName);
+        appendMessageAndModuleInfo(sb, event);
+        return sb;
+    }
+
+    private static void appendSeverityAndFileInfo(StringBuilder sb, AuditEvent event, String severityLevelName) {
+        sb.append('[').append(severityLevelName).append("] ")
+          .append(event.getFileName()).append(':').append(event.getLine());
+
+        if (event.getColumn() > 0) {
+            sb.append(':').append(event.getColumn());
+        }
+    }
+
+    private static void appendMessageAndModuleInfo(StringBuilder sb, AuditEvent event) {
+        sb.append(": ").append(event.getMessage()).append(" [");
+        sb.append(event.getModuleId() == null ? getCheckShortName(event) : event.getModuleId());
+        sb.append(']');
+    }
+
+    /**
+     * Initializes a StringBuilder with an optimal size to minimize resizing.
+     */
+    private static StringBuilder initStringBuilderWithOptimalBuffer(AuditEvent event, String severityLevelName) {
+        int bufferLength = LENGTH_OF_ALL_SEPARATORS + event.getFileName().length()
+                + event.getMessage().length() + severityLevelName.length()
+                + getCheckShortName(event).length();
+        return new StringBuilder(bufferLength);
+    }
+
+    /**
+     * Extracts the check name without the 'Check' suffix.
+     */
+    private static String getCheckShortName(AuditEvent event) {
+        String fullName = event.getSourceName();
+        String shortName = fullName.substring(fullName.lastIndexOf('.') + 1);
+        return shortName.endsWith(CHECK_SUFFIX)
+                ? shortName.substring(0, shortName.length() - CHECK_SUFFIX.length())
+                : shortName;
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Method:**  
+   - Split the `format()` method into smaller, more focused methods:  
+     - `getSeverityLevelName()` → Handles severity level formatting.  
+     - `buildLogMessage()` → Builds the entire log message.  
+     - `appendSeverityAndFileInfo()` → Handles severity and file info.  
+     - `appendMessageAndModuleInfo()` → Handles the message and module info.
+
+2. **Extract Variable:**  
+   - Simplified the use of `severityLevelName` and reused it across methods.
+
+3. **Rename Parameter:**  
+   - Renamed `severityLevelNameLength` to `severityLevelName` in `initStringBuilderWithOptimalBuffer()`.
+
+4. **Code Readability:**  
+   - Improved method naming and reduced complexity.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Clearer structure with logically divided methods.  
+- **Maintainability:** Easier to modify or extend individual components.  
+- **Efficiency:** StringBuilder initialization is optimized and better named.

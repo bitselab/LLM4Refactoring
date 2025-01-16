@@ -1,0 +1,139 @@
+## Refactoring opportunities in the provided code:
+
+**1. Extract Class:**
+
+* The `initStringBuilderWithOptimalBuffer` method could be extracted into a separate class called `StringBuilderUtil`. This would improve code organization and make the `AuditEventDefaultFormatter` class more focused.
+
+**2. Extract Method:**
+
+* The `getCheckShortName` method could be extracted into a separate method called `extractCheckShortName`. This would improve code readability and make the `getCheckShortName` method more reusable.
+
+**3. Extract Variable:**
+
+* The `LENGTH_OF_ALL_SEPARATORS` constant could be extracted into a separate variable called `SEPARATOR_LENGTH`. This would improve code readability and make the constant more descriptive.
+
+* The `SUFFIX` constant could be extracted into a separate variable called `CHECK_SUFFIX`. This would improve code readability and make the constant more descriptive.
+
+**4. Inline Method:**
+
+* The `extractCheckShortName` method could be inlined into the `getCheckShortName` method. This would reduce the number of methods in the class and make the code more concise.
+
+**5. Inline Variable:**
+
+* The `bufLen` variable in the `initStringBuilderWithOptimalBuffer` method could be inlined. This would reduce the number of variables in the method and make the code more concise.
+
+**6. Rename Attribute:**
+
+* The `severityLevelName` variable in the `format` method could be renamed to `severityName`. This would make the variable name more descriptive and consistent with the naming convention used in other parts of the code.
+
+* The `checkShortName` variable in the `format` method could be renamed to `checkName`. This would make the variable name more descriptive and consistent with the naming convention used in other parts of the code.
+
+**7. Rename Method:**
+
+* The `initStringBuilderWithOptimalBuffer` method could be renamed to `createStringBuilderWithOptimalBuffer`. This would make the method name more descriptive and consistent with the naming convention used in other parts of the code.
+
+**8. Rename Parameter:**
+
+* The `severityLevelNameLength` parameter in the `initStringBuilderWithOptimalBuffer` method could be renamed to `severityNameLength`. This would make the parameter name more descriptive and consistent with the naming convention used in other parts of the code.
+
+**9. Rename Variable:**
+
+* The `checkFullName` variable in the `getCheckShortName` method could be renamed to `checkClassName`. This would make the variable name more descriptive and consistent with the naming convention used in other parts of the code.
+
+## Refactored code:
+
+```java
+package com.puppycrawl.tools.checkstyle;
+
+import java.util.Locale;
+
+import com.puppycrawl.tools.checkstyle.api.AuditEvent;
+import com.puppycrawl.tools.checkstyle.api.SeverityLevel;
+
+/**
+ * Represents the default formatter for log message.
+ * Default log message format is:
+ * [SEVERITY LEVEL] filePath:lineNo:columnNo: message. [CheckName]
+ * When the module id of the message has been set, the format is:
+ * [SEVERITY LEVEL] filePath:lineNo:columnNo: message. [ModuleId]
+ */
+public class AuditEventDefaultFormatter implements AuditEventFormatter {
+
+    /** Length of all separators. */
+    private static final int SEPARATOR_LENGTH = 10;
+
+    /** Suffix of module names like XXXXCheck. */
+    private static final String CHECK_SUFFIX = "Check";
+
+    @Override
+    public String format(AuditEvent event) {
+        final String fileName = event.getFileName();
+        final String message = event.getMessage();
+
+        final SeverityLevel severityLevel = event.getSeverityLevel();
+        final String severityName;
+        if (severityLevel == SeverityLevel.WARNING) {
+            // We change the name of severity level intentionally
+            // to shorten the length of the log message.
+            severityName = "WARN";
+        }
+        else {
+            severityName = severityLevel.getName().toUpperCase(Locale.US);
+        }
+
+        final StringBuilder sb = StringBuilderUtil.createStringBuilderWithOptimalBuffer(event, severityName);
+
+        sb.append('[').append(severityName).append("] ")
+                .append(fileName).append(':').append(event.getLine());
+        if (event.getColumn() > 0) {
+            sb.append(':').append(event.getColumn());
+        }
+        sb.append(": ").append(message).append(" [");
+        if (event.getModuleId() == null) {
+            final String checkName = extractCheckShortName(event);
+            sb.append(checkName);
+        }
+        else {
+            sb.append(event.getModuleId());
+        }
+        sb.append(']');
+
+        return sb.toString();
+    }
+
+    /**
+     * Returns the StringBuilder that should avoid StringBuffer.expandCapacity.
+     * bufferLength = fileNameLength + messageLength + lengthOfAllSeparators +
+     * + severityNameLength + checkNameLength.
+     * Method is excluded from pitest validation.
+     *
+     * @param event audit event.
+     * @param severityNameLength severity level name.
+     * @return optimal StringBuilder.
+     */
+    private static StringBuilder createStringBuilderWithOptimalBuffer(AuditEvent event,
+                                                                    String severityNameLength) {
+        final int bufLen = SEPARATOR_LENGTH + event.getFileName().length()
+                + event.getMessage().length() + severityNameLength.length()
+                + extractCheckShortName(event).length();
+        return new StringBuilder(bufLen);
+    }
+
+    /**
+     * Returns check name without 'Check' suffix.
+     *
+     * @param event audit event.
+     * @return check name without 'Check' suffix.
+     */
+    private static String extractCheckShortName(AuditEvent event) {
+        final String checkClassName = event.getSourceName();
+        String checkShortName = checkClassName.substring(checkClassName.lastIndexOf('.') + 1);
+        if (checkShortName.endsWith(CHECK_SUFFIX)) {
+            final int endIndex = checkShortName.length() - CHECK_SUFFIX.length();
+            checkShortName = checkShortName.substring(0, endIndex);
+        }
+        return checkShortName;
+    }
+
+}
+```

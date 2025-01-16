@@ -1,0 +1,44 @@
+The refactoring opportunity in the given code snippet is within the `computeNumberOfSubpartitions` method. The logic for calculating the number of subpartitions can be inlined into the getter method `getNumberOfSubpartitions` since it's only called within that method.
+
+Here's the refactored code:
+
+```java
+package org.apache.flink.runtime.executiongraph;
+
+import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
+import org.apache.flink.runtime.jobgraph.DistributionPattern;
+import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.scheduler.strategy.ConsumedPartitionGroup;
+import org.apache.flink.runtime.scheduler.strategy.ConsumerVertexGroup;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import static org.apache.flink.util.Preconditions.checkState;
+
+public class IntermediateResultPartition {
+
+  // ... other fields and methods
+
+  public int getNumberOfSubpartitions() {
+    if (!getProducer().getExecutionGraphAccessor().isDynamic()) {
+      List<ConsumerVertexGroup> consumerVertexGroups = getConsumerVertexGroups();
+      checkState(!consumerVertexGroups.isEmpty());
+
+      // The produced data is partitioned among a number of subpartitions, one for each
+      // consuming sub task. All vertex groups must have the same number of consumers
+      // for non-dynamic graph.
+      return consumerVertexGroups.get(0).size();
+    } else {
+      return numberOfSubpartitionsForDynamicGraph;
+    }
+  }
+
+  // ... other methods
+
+}
+```
+
+The `computeNumberOfSubpartitions` method has been removed as its functionality is now directly included in the `getNumberOfSubpartitions` getter method. This refactoring improves code readability and reduces redundancy.

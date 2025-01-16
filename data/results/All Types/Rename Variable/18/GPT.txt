@@ -1,0 +1,185 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The logic in `newRegisteredLogWatcher` and `createWatcher` can be broken down into smaller methods for readability.  
+   - The `getHistory` method's iteration logic can be extracted for clarity.  
+
+2. **Extract Variable:**  
+   - Extract conditions for determining the logger type to named variables for clarity.  
+
+3. **Rename Method:**  
+   - `fname` is unclear; renaming to `frameworkName` would improve readability.  
+
+4. **Inline Method:**  
+   - The `unmodifiable` method is small and only used once; it can be inlined.  
+
+5. **Rename Attribute:**  
+   - `last` is ambiguous; renaming it to `lastEventTimestamp` for clarity.  
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.solr.logging;
+
+import java.lang.invoke.MethodHandles;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.core.SolrResourceLoader;
+import org.apache.solr.logging.jul.JulWatcher;
+import org.apache.solr.logging.log4j2.Log4j2Watcher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * A Class to monitor Logging events and hold N events in memory.
+ *
+ * <p>This is abstract so we can support both JUL and Log4j2 (and other logging platforms).
+ */
+public abstract class LogWatcher<E> {
+
+    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+    protected CircularList<SolrDocument> history;
+    protected long lastEventTimestamp = -1;
+
+    public abstract String getName();
+
+    public abstract List<String> getAllLevels();
+
+    public abstract void setLogLevel(String category, String level);
+
+    public abstract Collection<LoggerInfo> getAllLoggers();
+
+    public abstract void setThreshold(String level);
+
+    public abstract String getThreshold();
+
+    public void add(E event, long timestamp) {
+        history.add(new SolrDocument(Collections.unmodifiableMap(toSolrDocument(event).getFieldValueMap())));
+        lastEventTimestamp = timestamp;
+    }
+
+    public long getLastEvent() {
+        return lastEventTimestamp;
+    }
+
+    public int getHistorySize() {
+        return (history == null) ? -1 : history.getBufferSize();
+    }
+
+    public SolrDocumentList getHistory(long since, AtomicBoolean found) {
+        if (history == null) return null;
+        return buildHistoryDocumentList(since, found);
+    }
+
+    private SolrDocumentList buildHistoryDocumentList(long since, AtomicBoolean found) {
+        SolrDocumentList docs = new SolrDocumentList();
+        for (SolrDocument e : history) {
+            long ts = ((Date) e.getFirstValue("time")).getTime();
+            if (ts == since && found != null) found.set(true);
+            if (ts > since) docs.add(e);
+        }
+        docs.setNumFound(docs.size());
+        return docs;
+    }
+
+    public abstract SolrDocument toSolrDocument(E event);
+
+    public abstract void registerListener(ListenerConfig cfg);
+
+    public void reset() {
+        history.clear();
+        lastEventTimestamp = -1;
+    }
+
+    public static LogWatcher<?> newRegisteredLogWatcher(LogWatcherConfig config, SolrResourceLoader loader) {
+        if (!config.isEnabled()) {
+            log.debug("A LogWatcher is not enabled");
+            return null;
+        }
+
+        LogWatcher<?> logWatcher = createLogWatcher(config, loader);
+
+        if (logWatcher != null && config.getWatcherSize() > 0) {
+            log.debug("Registering Log Listener [{}]", logWatcher.getName());
+            logWatcher.registerListener(config.asListenerConfig());
+        }
+
+        return logWatcher;
+    }
+
+    private static LogWatcher<?> createLogWatcher(LogWatcherConfig config, SolrResourceLoader loader) {
+        String frameworkName = detectLoggingFramework(config);
+        if (frameworkName == null) {
+            log.debug("No LogWatcher configured");
+            return null;
+        }
+
+        switch (frameworkName.toUpperCase(Locale.ROOT)) {
+            case "JUL":
+                return new JulWatcher(LoggerFactory.getILoggerFactory().getClass().getName());
+            case "LOG4J2":
+                return new Log4j2Watcher();
+            default:
+                return loadCustomLogWatcher(loader, frameworkName);
+        }
+    }
+
+    private static String detectLoggingFramework(LogWatcherConfig config) {
+        String slf4jImpl = LoggerFactory.getILoggerFactory().getClass().getName();
+        log.debug("SLF4J implementation is {}", slf4jImpl);
+
+        if (config.getLoggingClass() != null) return config.getLoggingClass();
+
+        if ("org.apache.logging.slf4j.Log4jLoggerFactory".equals(slf4jImpl)) {
+            return "Log4j2";
+        } else if (slf4jImpl.contains("JDK")) {
+            return "JUL";
+        }
+
+        return null;
+    }
+
+    private static LogWatcher<?> loadCustomLogWatcher(SolrResourceLoader loader, String frameworkName) {
+        try {
+            return loader != null ? loader.newInstance(frameworkName, LogWatcher.class) : null;
+        } catch (Throwable e) {
+            log.warn("Unable to load LogWatcher {}: {}", frameworkName, e);
+            if (e instanceof OutOfMemoryError) throw (OutOfMemoryError) e;
+            return null;
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Method:**  
+   - `buildHistoryDocumentList` extracted from `getHistory`.  
+   - `detectLoggingFramework` extracted from `createLogWatcher`.  
+   - `loadCustomLogWatcher` extracted for custom loader logic.
+
+2. **Extract Variable:**  
+   - Replaced `fname` with `frameworkName` for clarity.
+
+3. **Rename Attribute:**  
+   - `last` renamed to `lastEventTimestamp` for better clarity.
+
+4. **Inline Method:**  
+   - Inlined the `unmodifiable` method directly within the `add` method.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** The logic is now modular, making the code easier to follow.  
+- **Maintainability:** Small, focused methods are easier to debug and extend.  
+- **Clarity:** Renamed variables and methods improve code understanding.
+
+No further refactoring is necessary.

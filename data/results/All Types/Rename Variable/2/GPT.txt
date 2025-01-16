@@ -1,0 +1,211 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Repeated assertion patterns in tests can be extracted for clarity.
+   - The `testReadByteArray` method contains repeated code that can be refactored.
+
+2. **Rename Method:**  
+   - Rename methods to more descriptive names, e.g., `testEOFException` → `testReadThrowsEOFExceptionWhenConfigured`.
+
+3. **Extract Variable:**  
+   - Use meaningful constant names instead of magic numbers (e.g., `5`, `10`, `15`).
+
+4. **Inline Method:**  
+   - Inline `MARK_RESET_NOT_SUPPORTED` as it is used only twice.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests {@link NullInputStream}.
+ */
+public class NullInputStreamTest {
+
+    private static final int SMALL_SIZE = 5;
+    private static final int MEDIUM_SIZE = 10;
+    private static final int LARGE_SIZE = 15;
+
+    private static final String ERROR_NO_MARK = "No position has been marked";
+    private static final String ERROR_SKIP_EOF = "Skip after end of file";
+    private static final String ERROR_READ_EOF = "Read after end of file";
+
+    private static final class TestNullInputStream extends NullInputStream {
+        public TestNullInputStream(final int size) {
+            super(size);
+        }
+
+        public TestNullInputStream(final int size, final boolean markSupported, final boolean throwEofException) {
+            super(size, markSupported, throwEofException);
+        }
+
+        @Override
+        protected int processByte() {
+            return (int) getPosition() - 1;
+        }
+
+        @Override
+        protected void processBytes(final byte[] bytes, final int offset, final int length) {
+            final int startPos = (int) getPosition() - length;
+            for (int i = offset; i < length; i++) {
+                bytes[i] = (byte) (startPos + i);
+            }
+        }
+    }
+
+    @Test
+    public void testReadThrowsEOFExceptionWhenConfigured() throws Exception {
+        try (InputStream input = new TestNullInputStream(2, false, true)) {
+            assertEquals(0, input.read(), "Read 1");
+            assertEquals(1, input.read(), "Read 2");
+            assertThrows(EOFException.class, input::read);
+        }
+    }
+
+    @Test
+    public void testMarkAndResetBehavior() throws Exception {
+        int position = 0;
+        final int readLimit = MEDIUM_SIZE;
+
+        try (InputStream input = new TestNullInputStream(100, true, false)) {
+            assertTrue(input.markSupported(), "Mark should be supported");
+            assertThrows(IOException.class, input::reset, ERROR_NO_MARK);
+
+            position = readSequentialBytes(input, position, 3);
+            input.mark(readLimit);
+            position = readSequentialBytes(input, position, 3);
+
+            input.reset();
+            readSequentialBytes(input, position, readLimit + 1);
+
+            IOException resetException = assertThrows(IOException.class, input::reset);
+            assertEquals("Marked position [" + position + "] is no longer valid - passed the read limit [" + readLimit + "]", resetException.getMessage());
+        }
+    }
+
+    @Test
+    public void testMarkNotSupportedThrowsException() throws Exception {
+        try (InputStream input = new TestNullInputStream(100, false, true)) {
+            assertFalse(input.markSupported(), "Mark should NOT be supported");
+
+            UnsupportedOperationException markException = assertThrows(UnsupportedOperationException.class, () -> input.mark(5));
+            assertEquals("mark/reset not supported", markException.getMessage());
+
+            UnsupportedOperationException resetException = assertThrows(UnsupportedOperationException.class, input::reset);
+            assertEquals("mark/reset not supported", resetException.getMessage());
+        }
+    }
+
+    @Test
+    public void testBasicRead() throws Exception {
+        try (InputStream input = new TestNullInputStream(SMALL_SIZE)) {
+            for (int i = 0; i < SMALL_SIZE; i++) {
+                assertEquals(SMALL_SIZE - i, input.available());
+                assertEquals(i, input.read());
+            }
+
+            assertEquals(-1, input.read(), "End of file reached");
+            assertEquals(0, input.available(), "No available bytes after EOF");
+            assertThrows(IOException.class, input::read, ERROR_READ_EOF);
+
+            input.close();
+            assertEquals(SMALL_SIZE, input.available(), "Available after close");
+        }
+    }
+
+    @Test
+    public void testReadIntoByteArray() throws Exception {
+        byte[] buffer = new byte[MEDIUM_SIZE];
+        try (InputStream input = new TestNullInputStream(LARGE_SIZE)) {
+
+            validateReadIntoArray(input, buffer, MEDIUM_SIZE, 0);
+            validateReadIntoArray(input, buffer, SMALL_SIZE, MEDIUM_SIZE);
+
+            assertEquals(-1, input.read(buffer), "EOF reached");
+            assertThrows(IOException.class, () -> input.read(buffer), ERROR_READ_EOF);
+
+            input.close();
+            validateReadWithOffset(input, buffer, 2, 4);
+        }
+    }
+
+    @Test
+    public void testSkipBehavior() throws Exception {
+        try (InputStream input = new TestNullInputStream(10, true, false)) {
+            assertEquals(0, input.read());
+            assertEquals(1, input.read());
+
+            assertEquals(5, input.skip(5), "Skip 5 bytes");
+            assertEquals(7, input.read());
+            assertEquals(2, input.skip(5), "Skip only remaining 2 bytes");
+            assertEquals(-1, input.skip(5), "EOF on skip");
+            assertThrows(IOException.class, () -> input.skip(5), ERROR_SKIP_EOF);
+        }
+    }
+
+    // Helper Methods
+    private int readSequentialBytes(InputStream input, int position, int count) throws IOException {
+        for (int i = 0; i < count; i++) {
+            assertEquals(position + i, input.read(), "Reading byte " + (position + i));
+        }
+        return position + count;
+    }
+
+    private void validateReadIntoArray(InputStream input, byte[] buffer, int expectedCount, int startValue) throws IOException {
+        int bytesRead = input.read(buffer);
+        assertEquals(expectedCount, bytesRead);
+        for (int i = 0; i < bytesRead; i++) {
+            assertEquals(startValue + i, buffer[i]);
+        }
+    }
+
+    private void validateReadWithOffset(InputStream input, byte[] buffer, int offset, int length) throws IOException {
+        int bytesRead = input.read(buffer, offset, length);
+        assertEquals(length, bytesRead);
+        for (int i = offset; i < offset + length; i++) {
+            assertEquals(i, buffer[i]);
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Method:**  
+   - `readSequentialBytes()` handles repeated sequential reading logic.  
+   - `validateReadIntoArray()` checks for array reading correctness.  
+   - `validateReadWithOffset()` validates reading with offset and length.
+
+2. **Rename Method:**  
+   - `testEOFException()` → `testReadThrowsEOFExceptionWhenConfigured`  
+   - `testMarkAndReset()` → `testMarkAndResetBehavior`
+
+3. **Extract Variable:**  
+   - Constants like `SMALL_SIZE`, `MEDIUM_SIZE`, and `LARGE_SIZE` replace magic numbers.
+
+4. **Inline Variable:**  
+   - Removed the redundant constant `MARK_RESET_NOT_SUPPORTED`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Cleaner and more structured test cases.  
+- **Reusability:** Extracted helper methods prevent code duplication.  
+- **Maintainability:** Easier to update test logic with centralized helpers.

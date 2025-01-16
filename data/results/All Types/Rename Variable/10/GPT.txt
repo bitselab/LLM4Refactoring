@@ -1,0 +1,152 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The `solveSymbol` method is too long and contains deeply nested logic. Extract smaller methods for:
+     - Enum constant and field resolution.
+     - Iterating over `SwitchEntry` statements.
+
+2. **Extract Variable:**  
+   - Introduce meaningful variable names for complex expressions (e.g., `type.asReferenceType().getTypeDeclaration().get()`).
+
+3. **Inline Variable:**  
+   - Inline trivial or redundant variables where appropriate.
+
+4. **Rename Method:**  
+   - Rename ambiguous methods to make the purpose clearer.
+
+---
+
+### **Refactored Code**
+
+```java
+package com.github.javaparser.symbolsolver.javaparsermodel.contexts;
+
+import com.github.javaparser.ast.nodeTypes.SwitchNode;
+import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.stmt.SwitchEntry;
+import com.github.javaparser.resolution.SymbolDeclarator;
+import com.github.javaparser.resolution.TypeSolver;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedValueDeclaration;
+import com.github.javaparser.resolution.model.SymbolReference;
+import com.github.javaparser.resolution.model.typesystem.ReferenceTypeImpl;
+import com.github.javaparser.resolution.types.ResolvedType;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFacade;
+import com.github.javaparser.symbolsolver.javaparsermodel.JavaParserFactory;
+
+import java.util.List;
+
+import static com.github.javaparser.resolution.Navigator.demandParentNode;
+
+/**
+ * Refactored by ChatGPT
+ */
+public class SwitchEntryContext extends AbstractJavaParserContext<SwitchEntry> {
+
+    public SwitchEntryContext(SwitchEntry wrappedNode, TypeSolver typeSolver) {
+        super(wrappedNode, typeSolver);
+    }
+
+    @Override
+    public SymbolReference<? extends ResolvedValueDeclaration> solveSymbol(String name) {
+        SwitchNode switchStmt = (SwitchNode) demandParentNode(wrappedNode);
+        ResolvedType selectorType = JavaParserFacade.get(typeSolver).getType(switchStmt.getSelector());
+
+        SymbolReference<? extends ResolvedValueDeclaration> symbol = resolveEnumConstantOrField(selectorType, name);
+        if (symbol.isSolved()) {
+            return symbol;
+        }
+
+        return resolveSymbolInSwitchEntries(switchStmt, name);
+    }
+
+    /**
+     * Extracted method to resolve Enum constants or fields in the switch selector.
+     */
+    private SymbolReference<? extends ResolvedValueDeclaration> resolveEnumConstantOrField(ResolvedType type, String name) {
+        if (type.isReferenceType()) {
+            ResolvedReferenceTypeDeclaration typeDeclaration = type.asReferenceType().getTypeDeclaration().orElse(null);
+
+            if (typeDeclaration != null && typeDeclaration.isEnum() && type instanceof ReferenceTypeImpl) {
+                ReferenceTypeImpl referenceType = (ReferenceTypeImpl) type;
+                ResolvedReferenceTypeDeclaration enumDeclaration = referenceType.getTypeDeclaration().orElse(null);
+
+                if (enumDeclaration != null) {
+                    if (enumDeclaration.asEnum().hasEnumConstant(name)) {
+                        return SymbolReference.solved(enumDeclaration.asEnum().getEnumConstant(name));
+                    }
+                    if (enumDeclaration.hasField(name)) {
+                        return SymbolReference.solved(enumDeclaration.getField(name));
+                    }
+                }
+            }
+        }
+        return SymbolReference.unsolved(ResolvedValueDeclaration.class);
+    }
+
+    /**
+     * Extracted method to resolve symbols declared in the switch entries.
+     */
+    private SymbolReference<? extends ResolvedValueDeclaration> resolveSymbolInSwitchEntries(SwitchNode switchStmt, String name) {
+        for (SwitchEntry switchEntry : switchStmt.getEntries()) {
+            SymbolReference<? extends ResolvedValueDeclaration> symbol = searchSymbolInStatements(switchEntry, name);
+            if (symbol.isSolved()) {
+                return symbol;
+            }
+            if (switchEntry == wrappedNode) {
+                break; // Stop once we reach the current switch entry
+            }
+        }
+        return solveSymbolInParentContext(name);
+    }
+
+    /**
+     * Extracted method to search for a symbol in a switch entry's statements.
+     */
+    private SymbolReference<? extends ResolvedValueDeclaration> searchSymbolInStatements(SwitchEntry switchEntry, String name) {
+        for (Statement statement : switchEntry.getStatements()) {
+            SymbolDeclarator declarator = JavaParserFactory.getSymbolDeclarator(statement, typeSolver);
+            SymbolReference<? extends ResolvedValueDeclaration> symbol = solveWith(declarator, name);
+            if (symbol.isSolved()) {
+                return symbol;
+            }
+        }
+        return SymbolReference.unsolved(ResolvedValueDeclaration.class);
+    }
+
+    @Override
+    public SymbolReference<ResolvedMethodDeclaration> solveMethod(String name, List<ResolvedType> argumentTypes, boolean staticOnly) {
+        // TODO: Explain why staticOnly is always false
+        return solveMethodInParentContext(name, argumentTypes, false);
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Method:**  
+   - `resolveEnumConstantOrField`: Handles enum constant and field resolution.  
+   - `resolveSymbolInSwitchEntries`: Searches in the current and previous switch entries.  
+   - `searchSymbolInStatements`: Iterates through the statements within a `SwitchEntry`.
+
+2. **Extract Variable:**  
+   - Simplified complex expressions for readability.
+
+3. **Inline Variable:**  
+   - Removed unnecessary temporary variables to reduce clutter.
+
+4. **Rename Method:**  
+   - Improved method names for clarity (`searchSymbolInStatements` vs. inline logic).
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Simplified the `solveSymbol` method, making it easier to understand.  
+- **Maintainability:** Modularized logic allows easier updates or bug fixes.  
+- **Reusability:** Extracted methods can be reused elsewhere if needed.
+
+No further refactoring is necessary.

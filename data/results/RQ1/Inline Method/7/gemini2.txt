@@ -1,0 +1,121 @@
+Absolutely, there are a few inline method refactoring opportunities in the provided code snippet. Here's the refactored code with explanations for the changes made:
+
+```java
+package org.hibernate.dialect;
+
+import oracle.jdbc.OracleConnection;
+import org.hibernate.HibernateException;
+import org.hibernate.boot.model.relational.Database;
+import org.hibernate.boot.model.relational.NamedAuxiliaryDatabaseObject;
+import org.hibernate.engine.jdbc.Size;
+import org.hibernate.type.SqlTypes;
+import org.hibernate.type.descriptor.ValueBinder;
+import org.hibernate.type.descriptor.ValueExtractor;
+import org.hibernate.type.descriptor.WrapperOptions;
+import org.hibernate.type.descriptor.java.BasicPluralJavaType;
+import org.hibernate.type.descriptor.java.JavaType;
+import org.hibernate.type.descriptor.jdbc.BasicBinder;
+import org.hibernate.type.descriptor.jdbc.BasicExtractor;
+import org.hibernate.type.descriptor.jdbc.JdbcLiteralFormatter;
+import org.hibernate.type.descriptor.jdbc.JdbcType;
+import org.hibernate.type.internal.BasicTypeImpl;
+import org.hibernate.type.spi.TypeConfiguration;
+
+import java.lang.reflect.Array;
+import java.sql.CallableStatement;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Locale;
+
+import static java.sql.Types.ARRAY;
+import static java.util.Collections.emptySet;
+import static org.hibernate.internal.util.StringHelper.truncate;
+import static org.hibernate.internal.util.collections.ArrayHelper.EMPTY_STRING_ARRAY;
+
+/**
+ * Descriptor for {@link Types#ARRAY ARRAY} handling.
+ *
+ * @author Christian Beikov
+ * @author Jordan Gigov
+ */
+public class OracleNestedTableJdbcType implements JdbcType {
+
+    private final JdbcType elementJdbcType;
+    private final String typeName;
+
+    public OracleNestedTableJdbcType(JdbcType elementJdbcType, String typeName) {
+        this.elementJdbcType = elementJdbcType;
+        this.typeName = typeName;
+    }
+
+    @Override
+    public int getJdbcTypeCode() {
+        return Types.ARRAY;
+    }
+
+    @Override
+    public int getDdlTypeCode() {
+        return SqlTypes.TABLE;
+    }
+
+    public JdbcType getElementJdbcType() {
+        return elementJdbcType;
+    }
+
+    @Override
+    public <T> JavaType<T> getJdbcRecommendedJavaTypeMapping(
+            Integer precision,
+            Integer scale,
+            TypeConfiguration typeConfiguration) {
+        final JavaType<Object> elementJavaType = elementJdbcType.getJdbcRecommendedJavaTypeMapping(
+                precision,
+                scale,
+                typeConfiguration
+        );
+        return typeConfiguration.getJavaTypeRegistry().resolveDescriptor(
+                Array.newInstance( elementJavaType.getJavaTypeClass(), 0 ).getClass()
+        );
+    }
+
+    @Override
+    public <T> JdbcLiteralFormatter<T> getJdbcLiteralFormatter(JavaType<T> javaTypeDescriptor) {
+        return null;
+    }
+
+    @Override
+    public Class<?> getPreferredJavaTypeClass(WrapperOptions options) {
+        return java.sql.Array.class;
+    }
+
+    @Override
+    public <X> ValueBinder<X> getBinder(final JavaType<X> javaTypeDescriptor) {
+        // Refactored - extract typeName logic into a separate method
+    String typeName = getTypeName(javaTypeDescriptor, options);
+    
+    // Rest of the binder code remains the same...
+    
+    }
+
+    @Override
+    public <X> ValueExtractor<X> getExtractor(final JavaType<X> javaTypeDescriptor) {
+        return new BasicExtractor<>( javaTypeDescriptor, this ) {
+            // ...
+    };
+    }
+
+  // Utility method to avoid code duplication
+  private String getTypeName(JavaType<?> javaTypeDescriptor, WrapperOptions options) {
+      if (typeName != null) {
+          return typeName.toUpperCase(Locale.ROOT);
+      } else {
+          return getTypeName(javaTypeDescriptor.unwrap(null, Object[].class, options), options.getSessionFactory().getJdbcServices().getDialect());
+      }
+  }
+
+    // ... rest of the class remains the same
+}
+```
+
+In the original code, there was duplicate logic for getting the type name within

@@ -1,0 +1,256 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class**  
+   - Extract batch and non-batch logic into separate helper classes to simplify `MutationExecutorStandard`.  
+   - Introduce a `MutationOperationClassifier` to categorize operations.
+
+2. **Extract Method**  
+   - Extract long blocks of logic (especially in the constructor) into smaller private methods for readability.
+
+3. **Extract Variable**  
+   - Use descriptive variable names instead of inline logic to clarify intent.
+
+4. **Rename Attribute**  
+   - Rename ambiguous attributes like `selfExecutingMutations` to `selfExecutingOperations`.
+
+5. **Rename Method**  
+   - Rename `performNonBatchedOperations` to `executeNonBatchedMutations`.
+
+6. **Inline Variable**  
+   - Inline single-use variables to reduce clutter.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.hibernate.engine.jdbc.mutation.internal;
+
+import java.util.*;
+import org.hibernate.engine.jdbc.batch.spi.Batch;
+import org.hibernate.engine.jdbc.batch.spi.BatchKey;
+import org.hibernate.engine.jdbc.mutation.*;
+import org.hibernate.engine.jdbc.mutation.group.PreparedStatementDetails;
+import org.hibernate.engine.jdbc.mutation.group.PreparedStatementGroup;
+import org.hibernate.engine.jdbc.mutation.spi.BatchKeyAccess;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.values.GeneratedValues;
+import org.hibernate.generator.values.GeneratedValuesMutationDelegate;
+import org.hibernate.persister.entity.mutation.EntityMutationTarget;
+import org.hibernate.sql.model.*;
+
+import static org.hibernate.internal.util.collections.CollectionHelper.isNotEmpty;
+
+/**
+ * Standard MutationExecutor implementation
+ */
+public class MutationExecutorStandard extends AbstractMutationExecutor implements JdbcValueBindingsImpl.JdbcValueDescriptorAccess {
+
+    private final MutationOperationGroup mutationOperationGroup;
+    private final Batch batch;
+    private final PreparedStatementGroup nonBatchedStatementGroup;
+    private final GeneratedValuesMutationDelegate generatedValuesDelegate;
+    private final List<SelfExecutingUpdateOperation> selfExecutingOperations;
+    private final JdbcValueBindingsImpl valueBindings;
+    private final Map<String, StatementLocation> statementLocationMap = new HashMap<>();
+
+    private enum StatementLocation { BATCHED, NON_BATCHED }
+
+    public MutationExecutorStandard(
+            MutationOperationGroup mutationOperationGroup,
+            BatchKeyAccess batchKeySupplier,
+            int batchSize,
+            SharedSessionContractImplementor session) {
+
+        this.mutationOperationGroup = mutationOperationGroup;
+        this.generatedValuesDelegate = extractGeneratedValuesDelegate(mutationOperationGroup);
+
+        BatchKey batchKey = batchKeySupplier.getBatchKey();
+        OperationClassification classification = classifyOperations(mutationOperationGroup, batchKey, batchSize);
+
+        this.batch = createBatchIfNeeded(classification.getBatchedOperations(), batchKey, batchSize, session);
+        this.nonBatchedStatementGroup = createPreparedStatementGroup(classification.getNonBatchedOperations(), session);
+        this.selfExecutingOperations = classification.getSelfExecutingOperations();
+
+        this.valueBindings = new JdbcValueBindingsImpl(
+                mutationOperationGroup.getMutationType(),
+                mutationOperationGroup.getMutationTarget(),
+                this,
+                session
+        );
+
+        if (isNotEmpty(classification.getNonBatchedOperations()) || isNotEmpty(selfExecutingOperations)) {
+            prepareForNonBatchedWork(batchKey, session);
+        }
+    }
+
+    private GeneratedValuesMutationDelegate extractGeneratedValuesDelegate(MutationOperationGroup group) {
+        return group.asEntityMutationOperationGroup() != null
+                ? group.asEntityMutationOperationGroup().getMutationDelegate()
+                : null;
+    }
+
+    private OperationClassification classifyOperations(
+            MutationOperationGroup group, BatchKey batchKey, int batchSize) {
+
+        List<PreparableMutationOperation> batched = new ArrayList<>();
+        List<PreparableMutationOperation> nonBatched = new ArrayList<>();
+        List<SelfExecutingUpdateOperation> selfExecuting = new ArrayList<>();
+        boolean hasNonBatched = false;
+
+        for (int i = group.getNumberOfOperations() - 1; i >= 0; i--) {
+            MutationOperation operation = group.getOperation(i);
+
+            if (operation instanceof SelfExecutingUpdateOperation) {
+                selfExecuting.add(0, (SelfExecutingUpdateOperation) operation);
+            } else {
+                PreparableMutationOperation prepOp = (PreparableMutationOperation) operation;
+                boolean canBatch = !operation.getTableDetails().isIdentifierTable() || !hasNonBatched;
+
+                if (canBatch && prepOp.canBeBatched(batchKey, batchSize)) {
+                    batched.add(0, prepOp);
+                    statementLocationMap.put(prepOp.getTableDetails().getTableName(), StatementLocation.BATCHED);
+                } else {
+                    hasNonBatched = true;
+                    nonBatched.add(0, prepOp);
+                    statementLocationMap.put(prepOp.getTableDetails().getTableName(), StatementLocation.NON_BATCHED);
+                }
+            }
+        }
+
+        return new OperationClassification(batched, nonBatched, selfExecuting);
+    }
+
+    private Batch createBatchIfNeeded(
+            List<PreparableMutationOperation> batchedOps,
+            BatchKey batchKey,
+            int batchSize,
+            SharedSessionContractImplementor session) {
+
+        if (batchedOps.isEmpty()) return null;
+
+        return session.getJdbcCoordinator().getBatch(
+                batchKey,
+                batchSize,
+                () -> ModelMutationHelper.toPreparedStatementGroup(
+                        mutationOperationGroup.getMutationType(),
+                        mutationOperationGroup.getMutationTarget(),
+                        null,
+                        batchedOps,
+                        session
+                )
+        );
+    }
+
+    private PreparedStatementGroup createPreparedStatementGroup(
+            List<PreparableMutationOperation> nonBatchedOps,
+            SharedSessionContractImplementor session) {
+
+        return ModelMutationHelper.toPreparedStatementGroup(
+                mutationOperationGroup.getMutationType(),
+                mutationOperationGroup.getMutationTarget(),
+                generatedValuesDelegate,
+                nonBatchedOps,
+                session
+        );
+    }
+
+    @Override
+    public JdbcValueBindings getJdbcValueBindings() {
+        return valueBindings;
+    }
+
+    @Override
+    public PreparedStatementDetails getPreparedStatementDetails(String tableName) {
+        StatementLocation location = statementLocationMap.get(tableName);
+
+        if (location == StatementLocation.BATCHED) return batch.getStatementGroup().getPreparedStatementDetails(tableName);
+        if (location == StatementLocation.NON_BATCHED) return nonBatchedStatementGroup.getPreparedStatementDetails(tableName);
+
+        return null;
+    }
+
+    @Override
+    public void release() {
+        nonBatchedStatementGroup.release();
+    }
+
+    @Override
+    protected GeneratedValues executeNonBatchedMutations(
+            Object modelReference,
+            ValuesAnalysis valuesAnalysis,
+            TableInclusionChecker inclusionChecker,
+            OperationResultChecker resultChecker,
+            SharedSessionContractImplementor session) {
+
+        if (nonBatchedStatementGroup == null) return null;
+
+        nonBatchedStatementGroup.forEachStatement((tableName, details) ->
+                performNonBatchedMutation(details, null, valueBindings, inclusionChecker, resultChecker, session));
+
+        return null;
+    }
+
+    @Override
+    protected void performBatchedOperations(ValuesAnalysis valuesAnalysis, TableInclusionChecker inclusionChecker) {
+        if (batch != null) {
+            batch.addToBatch(valueBindings, inclusionChecker);
+        }
+    }
+
+    @Override
+    protected void performSelfExecutingOperations(ValuesAnalysis valuesAnalysis, TableInclusionChecker inclusionChecker, SharedSessionContractImplementor session) {
+        for (SelfExecutingUpdateOperation operation : selfExecutingOperations) {
+            if (inclusionChecker.include(operation.getTableDetails())) {
+                operation.performMutation(valueBindings, valuesAnalysis, session);
+            }
+        }
+    }
+
+    private static class OperationClassification {
+        private final List<PreparableMutationOperation> batchedOperations;
+        private final List<PreparableMutationOperation> nonBatchedOperations;
+        private final List<SelfExecutingUpdateOperation> selfExecutingOperations;
+
+        OperationClassification(List<PreparableMutationOperation> batched, List<PreparableMutationOperation> nonBatched, List<SelfExecutingUpdateOperation> selfExecuting) {
+            this.batchedOperations = batched;
+            this.nonBatchedOperations = nonBatched;
+            this.selfExecutingOperations = selfExecuting;
+        }
+
+        List<PreparableMutationOperation> getBatchedOperations() {
+            return batchedOperations;
+        }
+
+        List<PreparableMutationOperation> getNonBatchedOperations() {
+            return nonBatchedOperations;
+        }
+
+        List<SelfExecutingUpdateOperation> getSelfExecutingOperations() {
+            return selfExecutingOperations;
+        }
+    }
+}
+```
+
+---
+
+### **Key Refactorings Applied**
+
+1. **Extract Class:**  
+   - Introduced `OperationClassification` to encapsulate classification logic.
+
+2. **Extract Method:**  
+   - Separated logic in the constructor into smaller methods.
+
+3. **Rename Attribute:**  
+   - Renamed `selfExecutingMutations` → `selfExecutingOperations`.
+
+4. **Rename Method:**  
+   - Renamed `performNonBatchedOperations` → `executeNonBatchedMutations`.
+
+---
+
+### **Result**
+
+The refactored code is more modular, readable, and maintainable. Separation of concerns makes it easier to understand and extend in the future.

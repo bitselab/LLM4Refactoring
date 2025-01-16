@@ -1,0 +1,241 @@
+## Refactoring Opportunities in PartialMockingWithSpiesTest
+
+After reviewing the provided code, I've identified the following potential refactoring opportunities:
+
+**1. Extract Method:**
+
+* The `makeStackTracesClean` method in the `@Before` annotation can be extracted into a separate method called `cleanStackTraces`.
+* The `shouldStackTraceGetFilteredOnUserExceptionsReflection` and `shouldStackTraceGetFilteredOnUserExceptionsReflectionForJava21AndHigher` test methods can be extracted into a single method called `shouldStackTraceGetFilteredOnUserExceptionsReflection`.
+
+**2. Extract Variable:**
+
+* The `JAVA_V21` constant can be extracted into a variable called `javaVersion21`.
+
+**3. Inline Method:**
+
+* The `cleanStackTraces` method is a simple method and can be inlined within the `@Before` annotation.
+
+**4. Rename Variable:**
+
+* The `spy` variable can be renamed to `personSpy` for better clarity.
+
+**5. Rename Parameter:**
+
+* The `name` parameter in the `Name` constructor can be renamed to `nameValue` to avoid confusion with the `name` field.
+
+**Refactored Code:**
+
+```java
+package org.mockitousage.spies;
+
+import static net.bytebuddy.ClassFileVersion.JAVA_V21;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.not;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockitoutil.Conditions.methodsInStackTrace;
+
+import net.bytebuddy.ClassFileVersion;
+import org.assertj.core.api.Assertions;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.internal.configuration.plugins.Plugins;
+import org.mockito.internal.creation.bytebuddy.InlineByteBuddyMockMaker;
+import org.mockito.internal.util.reflection.ReflectionMemberAccessor;
+import org.mockitoutil.TestBase;
+
+@SuppressWarnings("unchecked")
+public class PartialMockingWithSpiesTest extends TestBase {
+
+    private static final ClassFileVersion javaVersion21 = JAVA_V21;
+
+    @Before
+    public void cleanStackTraces() {
+        makeStackTracesClean();
+    }
+
+    class InheritMe {
+        private String inherited = "100$";
+
+        protected String getInherited() {
+            return inherited;
+        }
+    }
+
+    class Person extends InheritMe {
+        private final Name defaultName = new Name("Default name");
+
+        public String getName() {
+            return guessName().name;
+        }
+
+        Name guessName() {
+            return defaultName;
+        }
+
+        public String howMuchDidYouInherit() {
+            return getInherited();
+        }
+
+        public String getNameButDelegateToMethodThatThrows() {
+            throwSomeException();
+            return guessName().name;
+        }
+
+        private void throwSomeException() {
+            throw new RuntimeException("boo");
+        }
+    }
+
+    class Name {
+        private final String nameValue;
+
+        public Name(String nameValue) {
+            this.nameValue = nameValue;
+        }
+    }
+
+    Person personSpy = spy(new Person());
+
+    @Test
+    public void shouldCallRealMethdsEvenDelegatedToOtherSelfMethod() {
+        // when
+        String name = personSpy.getName();
+
+        // then
+        assertEquals("Default name", name);
+    }
+
+    @Test
+    public void shouldAllowStubbingOfMethodsThatDelegateToOtherMethods() {
+        // when
+        when(personSpy.getName()).thenReturn("foo");
+
+        // then
+        assertEquals("foo", personSpy.getName());
+    }
+
+    @Test
+    public void shouldAllowStubbingWithThrowablesMethodsThatDelegateToOtherMethods() {
+        // when
+        doThrow(new RuntimeException("appetite for destruction"))
+                .when(personSpy)
+                .getNameButDelegateToMethodThatThrows();
+
+        // then
+        try {
+            personSpy.getNameButDelegateToMethodThatThrows();
+            fail();
+        } catch (Exception e) {
+            assertEquals("appetite for destruction", e.getMessage());
+        }
+    }
+
+    @Test
+    public void shouldStackTraceGetFilteredOnUserExceptions() {
+        Assume.assumeThat(
+                Plugins.getMemberAccessor(), not(instanceOf(ReflectionMemberAccessor.class)));
+
+        try {
+            // when
+            personSpy.getNameButDelegateToMethodThatThrows();
+            fail();
+        } catch (Throwable t) {
+            // then
+            Assertions.assertThat(t)
+                    .has(
+                            methodsInStackTrace(
+                                    "throwSomeException",
+                                    "getNameButDelegateToMethodThatThrows",
+                                    "shouldStackTraceGetFilteredOnUserExceptions"));
+        }
+    }
+
+    @Test
+    public void shouldStackTraceGetFilteredOnUserExceptionsReflection() {
+        Assume.assumeThat(Plugins.getMockMaker(), instanceOf(InlineByteBuddyMockMaker.class));
+        Assume.assumeThat(Plugins.getMemberAccessor(), instanceOf(ReflectionMemberAccessor.class));
+        Assume.assumeTrue(ClassFileVersion.ofThisVm().isLessThan(javaVersion21));
+
+        try {
+            // when
+            personSpy.getNameButDelegateToMethodThatThrows();
+            fail();
+        } catch (Throwable t) {
+            // then
+            Assertions.assertThat(t)
+                    .has(
+                            methodsInStackTrace(
+                                    "throwSomeException",
+                                    "invoke0",
+                                    "invoke",
+                                    "invoke",
+                                    "invoke",
+                                    "getNameButDelegateToMethodThatThrows",
+                                    "shouldStackTraceGetFilteredOnUserExceptionsReflection"));
+        }
+    }
+
+    @Test
+    public void shouldStackTraceGetFilteredOnUserExceptionsReflectionForJava21AndHigher() {
+        Assume.assumeThat(Plugins.getMockMaker(), instanceOf(InlineByteBuddyMockMaker.class));
+        Assume.assumeThat(Plugins.getMemberAccessor(), instanceOf(ReflectionMemberAccessor.class));
+        Assume.assumeTrue(ClassFileVersion.ofThisVm().isAtLeast(javaVersion21));
+
+        try {
+            // when
+            personSpy.getNameButDelegateToMethodThatThrows();
+            fail();
+        } catch (Throwable t) {
+            // then
+            Assertions.assertThat(t)
+                    .has(
+                            methodsInStackTrace(
+                                    "throwSomeException",
+                                    "invoke",
+                                    "invoke",
+                                    "getNameButDelegateToMethodThatThrows",
+                                    "shouldStackTraceGetFilteredOnUserExceptionsReflectionForJava21AndHigher"));
+        }
+    }
+
+    //    @Test //manual verification
+    public void verifyTheStackTrace() {
+        personSpy.getNameButDelegateToMethodThatThrows();
+    }
+
+    @Test
+    public void shouldVerify() {
+        // when
+        personSpy.getName();
+
+        // then
+        verify(personSpy).guessName();
+    }
+
+    @Test
+    public void shouldStub() {
+        // given
+        when(personSpy.guessName()).thenReturn(new Name("John"));
+        // when
+        String name = personSpy.getName();
+        // then
+        assertEquals("John", name);
+    }
+
+    @Test
+    public void shouldDealWithPrivateFieldsOfSubclasses() {
+        assertEquals("100$", personSpy.howMuchDidYouInherit());
+    }
+}
+```
+
+## Additional Notes
+
+* The `makeStackTracesClean` method is a private method and cannot be accessed from other classes. Therefore, it cannot be extracted into a separate method.
+* The `verifyTheStackTrace` test method is a manual verification test and does not need to be refactored.

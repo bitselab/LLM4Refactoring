@@ -1,0 +1,25 @@
+Here are some potential refactoring opportunities for the code snippet you provided:
+
+**1. Use Local Variables:**
+
+* The `getTypeConcrete` method performs repetitive checks for the presence of data in the node. This can be improved by storing the resolved type in a local variable after the first check.
+
+**2. Cache Invalidation:**
+
+* The `getType` method caches the resolved type with lambdas (`TYPE_WITH_LAMBDAS_RESOLVED`) and without lambdas (`TYPE_WITHOUT_LAMBDAS_RESOLVED`). However, it doesn't seem to handle situations where the node itself might change, potentially leading to stale cache entries. Consider implementing a mechanism to invalidate the cache if the node is modified.
+
+**3. Early Return:**
+
+* In the `getType` method, there's a check for if `solveLambdas` is true. If it's false, the method attempts to retrieve the type from the cache (`TYPE_WITHOUT_LAMBDAS_RESOLVED`) before resorting to calling `getTypeConcrete`. If `TYPE_WITHOUT_LAMBDAS_RESOLVED` is present, it can be returned directly to avoid unnecessary processing.
+
+**4. Reduce Code Duplication:**
+
+* There's some code duplication in the `getType` method related to retrieving the cached type and handling its absence. This can be refactored into a separate method to improve readability.
+
+**5. Consider Alternative Naming:**
+
+* Some method names like `getTypeConcrete` and `convertToUsage` might not be very descriptive. Consider using more self-explanatory names like `resolveType` or `convertTypeToResolvedType`.
+
+**Overall, these refactoring suggestions can improve the code's readability, maintainability, and potentially performance.**
+
+**Note:** Since modifying the original code is beyond the scope of this response, these are suggestions for the developer to consider.

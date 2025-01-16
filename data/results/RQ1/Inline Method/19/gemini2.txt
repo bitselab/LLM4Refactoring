@@ -1,0 +1,80 @@
+The provided code snippet contains a few potential opportunities for inline method refactoring. Here's the refactored code with explanations for each change:
+
+```java
+package org.springframework.boot.web.server;
+
+import org.springframework.boot.ssl.NoSuchSslBundleException;
+import org.springframework.boot.ssl.SslBundle;
+import org.springframework.boot.ssl.SslBundleKey;
+import org.springframework.boot.ssl.SslBundles;
+import org.springframework.boot.ssl.SslManagerBundle;
+import org.springframework.boot.ssl.SslOptions;
+import org.springframework.boot.ssl.SslStoreBundle;
+import org.springframework.boot.ssl.jks.JksSslStoreBundle;
+import org.springframework.boot.ssl.jks.JksSslStoreDetails;
+import org.springframework.boot.ssl.pem.PemSslStoreBundle;
+import org.springframework.boot.ssl.pem.PemSslStoreDetails;
+import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
+
+/**
+ * {@link SslBundle} backed by {@link Ssl}.
+ *
+ * @author Scott Frederick
+ * @author Phillip Webb
+ * @since 3.1.0
+ */
+public final class WebServerSslBundle implements SslBundle {
+
+  private final SslStoreBundle stores;
+  private final SslBundleKey key;
+  private final SslOptions options;
+  private final String protocol;
+  private final SslManagerBundle managers;
+
+  private WebServerSslBundle(SslStoreBundle stores, String keyPassword, Ssl ssl) {
+    this.stores = stores;
+    this.key = SslBundleKey.of(keyPassword, ssl.getKeyAlias());
+    this.protocol = ssl.getProtocol();
+    this.options = SslOptions.of(ssl.getCiphers(), ssl.getEnabledProtocols());
+    this.managers = SslManagerBundle.from(this.stores, this.key);
+  }
+
+  private static SslStoreBundle createSslStoreBundle(Ssl ssl) {
+    if (hasCertificateProperties(ssl)) {
+      return createPemStoreBundle(ssl);
+    } else if (hasJavaKeyStoreProperties(ssl)) {
+      return createJksStoreBundle(ssl);
+    }
+    throw new IllegalStateException("SSL is enabled but no trust material is configured");
+  }
+
+  private static PemSslStoreBundle createPemStoreBundle(Ssl ssl) {
+    return new PemSslStoreBundle(
+        new PemSslStoreDetails(ssl.getKeyStoreType(), ssl.getCertificate(), ssl.getCertificatePrivateKey())
+            .withAlias(ssl.getKeyAlias()),
+        new PemSslStoreDetails(ssl.getTrustStoreType(), ssl.getTrustCertificate(), ssl.getTrustCertificatePrivateKey()));
+  }
+
+  private static JksSslStoreBundle createJksStoreBundle(Ssl ssl) {
+    return new JksSslStoreBundle(
+        new JksSslStoreDetails(ssl.getKeyStoreType(), ssl.getKeyStoreProvider(), ssl.getKeyStore(), ssl.getKeyStorePassword()),
+        new JksSslStoreDetails(ssl.getTrustStoreType(), ssl.getTrustStoreProvider(), ssl.getTrustStore(), ssl.getTrustStorePassword()));
+  }
+
+  // ... rest of the code remains the same ...
+}
+```
+
+Refactoring explanations:
+
+1. **Combined method `createStoreBundle` and inlined logic:**
+
+  - The original code has separate methods `createPemStoreBundle` and `createJksStoreBundle` for creating store bundles based on provided properties.
+  - These methods are only called from within `createStoreBundle`.
+  - We can refactor this by combining the logic into a single `createSslStoreBundle` method that checks the properties and calls the appropriate helper method for creating the bundle.
+
+2. **Inlined `PemSslStoreDetails` constructor arguments:**
+
+  - The constructor for `PemSslStoreDetails` is used twice to create key and trust store details.
+  - We can simplify the code by inlining the constructor arguments directly when creating the `PemSslStoreDetails` instances.

@@ -1,0 +1,41 @@
+Absolutely! The code snippet you identified is a perfect candidate for an extract method refactoring. Here's the refactored code with the extracted method:
+
+```java
+final class PulsarPropertiesMapper {
+
+  // ... existing code ...
+
+  private String convertAuthParamsToString(Map<String, String> params) throws IllegalStateException {
+    Map<String, String> sortedParams = new TreeMap<>(params);
+    try {
+      return ObjectMapperFactory.create().writeValueAsString(sortedParams);
+    } catch (Exception ex) {
+      throw new IllegalStateException("Could not convert auth parameters to encoded string", ex);
+    }
+  }
+
+  private void customizeAuthentication(AuthenticationConsumer authentication,
+                                      PulsarProperties.Authentication properties) {
+    if (StringUtils.hasText(properties.getPluginClassName())) {
+      try {
+        String authParamString = convertAuthParamsToString(properties.getAuthParams());
+        authentication.accept(properties.getPluginClassName(), authParamString);
+      } catch (UnsupportedAuthenticationException ex) {
+        throw new IllegalStateException("Unable to configure Pulsar authentication", ex);
+      }
+    }
+  }
+
+  // ... existing code ...
+}
+```
+
+Changes made:
+
+1. **New Method:** A new private method named `convertAuthParamsToString` is created.
+2. **Extracted Code:** The code block you identified is copied and placed inside the new method.
+3. **Method Arguments:** The new method takes a `Map<String, String>` argument named `params`.
+4. **Method Return Type:** The new method returns a `String`.
+5. **Calling the Method:** Inside `customizeAuthentication`, the extracted code is replaced with a call to the new method `convertAuthParamsToString(properties.getAuthParams())`.
+
+This refactoring improves code readability by separating the logic of converting authentication parameters into a String from the core functionality of configuring authentication. 

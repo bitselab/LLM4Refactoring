@@ -1,0 +1,208 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Repeated EOF checks in `read()`, `skip()`, and `read(byte[], int, int)` can be extracted.  
+   - Mark/reset-related validation logic can be extracted for clarity.
+
+2. **Extract Variable:**  
+   - Magic strings like `"read()"`, `"skip(long)"`, and `"No position has been marked"` should be extracted as constants.
+
+3. **Rename Attribute:**  
+   - `eof` could be renamed to `isEof` for clarity.
+
+4. **Rename Method:**  
+   - `doEndOfFile()` could be renamed to `handleEndOfFile()` for better readability.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.commons.io.input;
+
+import static org.apache.commons.io.IOUtils.EOF;
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+
+/**
+ * An {@link InputStream} that emulates a stream with a configurable size.
+ */
+public class NullInputStream extends InputStream {
+
+    public static final NullInputStream INSTANCE = new NullInputStream();
+
+    private static final String ERROR_MARK_NOT_SUPPORTED = "Mark not supported";
+    private static final String ERROR_NO_MARKED_POSITION = "No position has been marked";
+    private static final String ERROR_MARK_INVALID = "Marked position [%d] is no longer valid - passed the read limit [%d]";
+
+    private final long size;
+    private long position;
+    private long mark = -1;
+    private long readLimit;
+    private boolean isEof;
+    private final boolean throwEofException;
+    private final boolean markSupported;
+
+    public NullInputStream() {
+        this(0, true, false);
+    }
+
+    public NullInputStream(final long size) {
+        this(size, true, false);
+    }
+
+    public NullInputStream(final long size, final boolean markSupported, final boolean throwEofException) {
+        this.size = size;
+        this.markSupported = markSupported;
+        this.throwEofException = throwEofException;
+    }
+
+    @Override
+    public int available() {
+        long available = size - position;
+        return available <= 0 ? 0 : (int) Math.min(available, Integer.MAX_VALUE);
+    }
+
+    private void throwIfEof(String methodName) throws EOFException {
+        if (throwEofException) {
+            throw new EOFException(methodName + ": End of file reached");
+        }
+    }
+
+    private int handleEndOfFile(String methodName) throws EOFException {
+        isEof = true;
+        throwIfEof(methodName);
+        return EOF;
+    }
+
+    @Override
+    public void close() throws IOException {
+        resetState();
+    }
+
+    private void resetState() {
+        isEof = false;
+        position = 0;
+        mark = -1;
+    }
+
+    public long getPosition() {
+        return position;
+    }
+
+    public long getSize() {
+        return size;
+    }
+
+    @Override
+    public synchronized void mark(final int readLimit) {
+        if (!markSupported) {
+            throw new UnsupportedOperationException(ERROR_MARK_NOT_SUPPORTED);
+        }
+        mark = position;
+        this.readLimit = readLimit;
+    }
+
+    @Override
+    public boolean markSupported() {
+        return markSupported;
+    }
+
+    protected int processByte() {
+        return 0;
+    }
+
+    protected void processBytes(final byte[] bytes, final int offset, final int length) {
+        // Overridable
+    }
+
+    @Override
+    public int read() throws IOException {
+        if (isEndOfStream()) {
+            return handleEndOfFile("read()");
+        }
+        position++;
+        return processByte();
+    }
+
+    @Override
+    public int read(final byte[] bytes) throws IOException {
+        return read(bytes, 0, bytes.length);
+    }
+
+    @Override
+    public int read(final byte[] bytes, final int offset, final int length) throws IOException {
+        if (isEndOfStream()) {
+            return handleEndOfFile("read(byte[], int, int)");
+        }
+
+        long bytesToRead = Math.min(length, size - position);
+        position += bytesToRead;
+
+        processBytes(bytes, offset, (int) bytesToRead);
+        return (int) bytesToRead;
+    }
+
+    private boolean isEndOfStream() {
+        return isEof || position >= size;
+    }
+
+    @Override
+    public synchronized void reset() throws IOException {
+        validateMarkReset();
+        position = mark;
+        isEof = false;
+    }
+
+    private void validateMarkReset() throws IOException {
+        if (!markSupported) {
+            throw new UnsupportedOperationException(ERROR_MARK_NOT_SUPPORTED);
+        }
+        if (mark < 0) {
+            throw new IOException(ERROR_NO_MARKED_POSITION);
+        }
+        if (position > mark + readLimit) {
+            throw new IOException(String.format(ERROR_MARK_INVALID, mark, readLimit));
+        }
+    }
+
+    @Override
+    public long skip(final long numberOfBytes) throws IOException {
+        if (isEndOfStream()) {
+            return handleEndOfFile("skip(long)");
+        }
+
+        long skipped = Math.min(numberOfBytes, size - position);
+        position += skipped;
+        return skipped;
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Method:**  
+   - `isEndOfStream()` consolidates EOF checks.  
+   - `throwIfEof()` and `handleEndOfFile()` simplify EOF handling.  
+   - `validateMarkReset()` cleans up the `reset()` method.
+
+2. **Extract Variable:**  
+   - Error messages like `"Mark not supported"` are now constants.
+
+3. **Rename Attribute:**  
+   - Renamed `eof` to `isEof` for clarity.
+
+4. **Rename Method:**  
+   - Renamed `doEndOfFile()` to `handleEndOfFile()` for clarity.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Code is clearer, with descriptive method and variable names.  
+- **Maintainability:** Consolidated error handling improves maintainability.  
+- **Extensibility:** Simplified methods make it easier to extend functionality.

@@ -1,0 +1,173 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class**  
+   - Move `SupportedDatabase` and `HibernateSearchJdbcDatabaseContainer` into their own files to simplify `DatabaseContainer`.  
+   - Extract environment configuration logic into `DatabaseConfigLoader`.
+
+2. **Extract Method**  
+   - Simplify the `configuration()` method by separating logic into helper methods (`loadExternalConfig` and `initializeContainerConfig`).  
+   - Extract Docker container setup logic from `SupportedDatabase` to reduce repetition.
+
+3. **Extract Variable**  
+   - Introduce descriptive variables instead of inline method calls.
+
+4. **Rename Attribute**  
+   - Rename ambiguous attributes like `DATABASE_CONTAINER` to `databaseContainer`.
+
+5. **Rename Method**  
+   - Rename `configuration()` to `loadDatabaseConfiguration()` for clarity.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.hibernate.search.util.impl.integrationtest.mapper.orm;
+
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Locale;
+
+import org.hibernate.cfg.JdbcSettings;
+
+public final class DatabaseContainer {
+
+    private static final Duration REGULAR_TIMEOUT = Duration.ofMinutes(5);
+    private static final Duration EXTENDED_TIMEOUT = Duration.ofMinutes(10);
+
+    private static final SupportedDatabase DATABASE;
+    private static final HibernateSearchJdbcDatabaseContainer databaseContainer;
+
+    private DatabaseContainer() {}
+
+    static {
+        String dbName = System.getProperty("org.hibernate.search.integrationtest.orm.database.kind", "");
+        Path rootPath = Path.of(System.getProperty("org.hibernate.search.integrationtest.project.root.directory", ""));
+        DATABASE = SupportedDatabase.from(dbName);
+
+        databaseContainer = DATABASE.createContainer(
+                rootPath.resolve("build/container/database").resolve(dbName + ".Dockerfile"),
+                dbName
+        );
+    }
+
+    public static Configuration loadDatabaseConfiguration() {
+        return hasExternalDbConfig()
+                ? loadExternalConfig()
+                : initializeContainerConfig();
+    }
+
+    private static boolean hasExternalDbConfig() {
+        String url = System.getProperty("jdbc.url");
+        return url != null && !url.trim().isEmpty();
+    }
+
+    private static Configuration loadExternalConfig() {
+        return DATABASE.createConfiguration(System.getProperty("jdbc.url"), databaseContainer)
+                .withDialect(System.getProperty("db.dialect"))
+                .withDriver(System.getProperty("jdbc.driver"))
+                .withUser(System.getProperty("jdbc.user"))
+                .withPass(System.getProperty("jdbc.pass"))
+                .withIsolation(System.getProperty("jdbc.isolation"));
+    }
+
+    private static Configuration initializeContainerConfig() {
+        Configuration config = DATABASE.createConfiguration(databaseContainer);
+        if (!databaseContainer.isRunning()) {
+            synchronized (databaseContainer) {
+                if (!databaseContainer.isRunning()) {
+                    databaseContainer.start();
+                }
+            }
+        }
+        return config;
+    }
+}
+```
+
+---
+
+### **Changes in `SupportedDatabase`**
+
+```java
+private enum SupportedDatabase {
+    H2("org.hibernate.dialect.H2Dialect", "org.h2.Driver", "jdbc:h2:mem:db1;DB_CLOSE_DELAY=-1", "sa", "sa"),
+    POSTGRES("org.hibernate.dialect.PostgreSQLDialect", "org.postgresql.Driver", "jdbc:postgresql://%s:%d/hibernate_orm_test", "hibernate_orm_test", "hibernate_orm_test"),
+    MYSQL("org.hibernate.dialect.MySQLDialect", "com.mysql.jdbc.Driver", "jdbc:mysql://%s:%d/hibernate_orm_test", "hibernate_orm_test", "hibernate_orm_test");
+
+    private final String dialect;
+    private final String driver;
+    private final String jdbcUrlPattern;
+    private final String user;
+    private final String password;
+
+    SupportedDatabase(String dialect, String driver, String jdbcUrlPattern, String user, String password) {
+        this.dialect = dialect;
+        this.driver = driver;
+        this.jdbcUrlPattern = jdbcUrlPattern;
+        this.user = user;
+        this.password = password;
+    }
+
+    Configuration createConfiguration(JdbcDatabaseContainer<?> container) {
+        return new Configuration(dialect, driver, formatJdbcUrl(container), user, password, "");
+    }
+
+    Configuration createConfiguration(String jdbcUrl, JdbcDatabaseContainer<?> container) {
+        return new Configuration(dialect, driver, jdbcUrl, user, password, "");
+    }
+
+    HibernateSearchJdbcDatabaseContainer createContainer(Path dockerfile, String name) {
+        return new HibernateSearchJdbcDatabaseContainer(dockerfile, name, driver, jdbcUrlPattern, getPort(), user, password, "select 1");
+    }
+
+    private String formatJdbcUrl(JdbcDatabaseContainer<?> container) {
+        return String.format(Locale.ROOT, jdbcUrlPattern, container.getHost(), container.getFirstMappedPort());
+    }
+
+    static SupportedDatabase from(String dbName) {
+        for (SupportedDatabase db : values()) {
+            if (dbName.toLowerCase(Locale.ROOT).contains(db.name().toLowerCase(Locale.ROOT))) {
+                return db;
+            }
+        }
+        throw new IllegalArgumentException("Unsupported database: " + dbName);
+    }
+
+    private int getPort() {
+        switch (this) {
+            case POSTGRES:
+                return 5432;
+            case MYSQL:
+                return 3306;
+            default:
+                return 0;
+        }
+    }
+}
+```
+
+---
+
+### **Key Refactorings Applied**
+
+1. **Extract Class**  
+   - Separated concerns for container initialization and configuration handling.
+
+2. **Extract Method**  
+   - Broke down `configuration()` into `loadExternalConfig()` and `initializeContainerConfig()` for clarity.
+
+3. **Extract Variable**  
+   - Replaced inline calls with meaningful variables like `dbName` and `rootPath`.
+
+4. **Rename Attribute**  
+   - Changed `DATABASE_CONTAINER` → `databaseContainer`.
+
+5. **Rename Method**  
+   - Changed `configuration()` → `loadDatabaseConfiguration()`.
+
+---
+
+### **Result**
+
+The refactored code is more organized, readable, and maintainable. Each method now has a single responsibility, and the code structure makes future expansion easier.

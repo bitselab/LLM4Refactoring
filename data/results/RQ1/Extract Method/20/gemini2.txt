@@ -1,0 +1,59 @@
+## Refactoring Opportunities: Extract Method
+
+There are two potential opportunities for Extract Method refactoring in the provided code:
+
+1. **Extracting `isResolvedTypeMatch` method:**
+
+The logic within the `isResolvedTypeMatch` method is well defined and reusable. It checks if the type signatures of two methods (generic and concrete) are equal after resolving all types against the declaring type. This functionality can be extracted into a separate method with a descriptive name like `typesMatchAfterResolution`.
+
+Here's the refactored code with the extracted method:
+
+```java
+private static boolean typesMatchAfterResolution(Method genericMethod, Method candidateMethod, Class<?> targetClass) {
+  Type[] genericParameters = genericMethod.getGenericParameterTypes();
+  if (genericParameters.length != candidateMethod.getParameterCount()) {
+    return false;
+  }
+  Class<?>[] candidateParameters = candidateMethod.getParameterTypes();
+  for (int i = 0; i < candidateParameters.length; i++) {
+    ResolvableType genericParameter = ResolvableType.forMethodParameter(genericMethod, i, targetClass);
+    Class<?> candidateParameter = candidateParameters[i];
+    if (candidateParameter.isArray()) {
+      // Compare component types
+      if (!candidateParameter.componentType().equals(genericParameter.getComponentType().toClass())) {
+        return false;
+      }
+    } else {
+      // Compare types themselves
+      if (!ClassUtils.resolvePrimitiveIfNecessary(candidateParameter).equals(
+          ClassUtils.resolvePrimitiveIfNecessary(genericParameter.toClass()))) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+```
+
+The original `isResolvedTypeMatch` method calls can be replaced with calls to the new `typesMatchAfterResolution` method.
+
+2. **Extracting `searchForMatch` method:**
+
+The `searchForMatch` method is another candidate for extraction. It searches for a declared method within a class whose signature matches the provided bridge method. This functionality can be extracted into a separate method with a name like `findMatchingMethodInClass`.
+
+Here's the refactored code with the extracted method:
+
+```java
+@Nullable
+private static Method findMatchingMethodInClass(Class<?> type, Method bridgeMethod) {
+  try {
+    return type.getDeclaredMethod(bridgeMethod.getName(), bridgeMethod.getParameterTypes());
+  } catch (NoSuchMethodException ex) {
+    return null;
+  }
+}
+```
+
+The original `searchForMatch` method calls can be replaced with calls to the new `findMatchingMethodInClass` method.
+
+These refactorings improve code readability and maintainability by separating reusable logic into well-named methods.

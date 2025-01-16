@@ -1,0 +1,76 @@
+## Refactoring Opportunities in TransactionAutoConfiguration
+
+There are a few opportunities for Extract Class refactoring in the provided code:
+
+1. **TransactionManagerCustomizer Extractor:** The `platformTransactionManagerCustomizers` bean creation logic can be extracted into a separate class named `TransactionManagerCustomizerFactory`. This class would encapsulate the logic of retrieving and converting `PlatformTransactionManagerCustomizer` beans.
+
+2. **TransactionalOperator Extractor:** Similar to the first point, the logic for creating the `transactionalOperator` bean can be extracted into a separate class named `TransactionalOperatorFactory`.
+
+Here's the refactored code with the extracted classes:
+
+```java
+package org.springframework.boot.autoconfigure.transaction;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.ReactiveTransactionManager;
+import org.springframework.transaction.annotation.AbstractTransactionManagementConfiguration;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.reactive.TransactionalOperator;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * {@link org.springframework.boot.autoconfigure.EnableAutoConfiguration
+ * Auto-configuration} for Spring transaction.
+ *
+ * @author Stephane Nicoll
+ * @since 1.3.0
+ */
+@AutoConfiguration
+@ConditionalOnClass(PlatformTransactionManager.class)
+@EnableConfigurationProperties(TransactionProperties.class)
+public class TransactionAutoConfiguration {
+
+  @Bean
+  @ConditionalOnMissingBean
+  TransactionManagerCustomizers platformTransactionManagerCustomizers(
+      ObjectProvider<PlatformTransactionManagerCustomizer<?>> customizers) {
+    return TransactionManagerCustomizerFactory.create(customizers.orderedStream().toList());
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  @ConditionalOnSingleCandidate(ReactiveTransactionManager.class)
+  public TransactionalOperator transactionalOperator(ReactiveTransactionManager transactionManager) {
+    return TransactionalOperatorFactory.create(transactionManager);
+  }
+
+  // ... rest of the code remains unchanged ...
+
+  public static class TransactionManagerCustomizerFactory {
+
+    public static TransactionManagerCustomizers create(List<PlatformTransactionManagerCustomizer<?>> customizers) {
+      return new TransactionManagerCustomizers(customizers);
+    }
+  }
+
+  public static class TransactionalOperatorFactory {
+
+    public static TransactionalOperator create(ReactiveTransactionManager transactionManager) {
+      return TransactionalOperator.create(transactionManager);
+    }
+  }
+}
+```
+
+This refactoring improves code organization and reusability by separating logic into dedicated classes responsible for specific tasks.

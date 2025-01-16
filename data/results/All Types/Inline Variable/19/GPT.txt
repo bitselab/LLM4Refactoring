@@ -1,0 +1,163 @@
+### **Refactoring Analysis**
+
+The `StandardConfigDataResource` class is well-structured, but there are a few opportunities to improve the code’s readability, maintainability, and clarity.
+
+---
+
+### **Identified Refactoring Opportunities**
+
+1. **Extract Method**  
+   - **Problem:** The logic in `equals` and `hashCode` for comparing files and resources is complex.  
+   - **Solution:** Extract comparison logic into dedicated methods.
+
+2. **Extract Variable**  
+   - **Problem:** Repetitive checks like `resource instanceof ClassPathResource || resource instanceof FileSystemResource` reduce clarity.  
+   - **Solution:** Extract this condition into a descriptive method.
+
+3. **Rename Attribute/Method**  
+   - **Problem:** The method `getUnderlyingFile` could be more descriptive.  
+   - **Solution:** Rename it to `resolveUnderlyingFile`.
+
+4. **Inline Variable**  
+   - **Problem:** In `isSameFile`, the method could be simplified by inlining the conditional check.  
+   - **Solution:** Directly return the comparison result.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.springframework.boot.context.config;
+
+import java.io.File;
+import java.io.IOException;
+
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.FileUrlResource;
+import org.springframework.core.io.Resource;
+import org.springframework.util.Assert;
+
+/**
+ * {@link ConfigDataResource} backed by a {@link Resource}.
+ */
+public class StandardConfigDataResource extends ConfigDataResource {
+
+    private final StandardConfigDataReference reference;
+    private final Resource resource;
+    private final boolean emptyDirectory;
+
+    /**
+     * Create a new {@link StandardConfigDataResource} instance.
+     * @param reference the resource reference
+     * @param resource the underlying resource
+     */
+    StandardConfigDataResource(StandardConfigDataReference reference, Resource resource) {
+        this(reference, resource, false);
+    }
+
+    /**
+     * Create a new {@link StandardConfigDataResource} instance.
+     * @param reference the resource reference
+     * @param resource the underlying resource
+     * @param emptyDirectory if the resource is an empty directory that we know exists
+     */
+    StandardConfigDataResource(StandardConfigDataReference reference, Resource resource, boolean emptyDirectory) {
+        Assert.notNull(reference, "Reference must not be null");
+        Assert.notNull(resource, "Resource must not be null");
+        this.reference = reference;
+        this.resource = resource;
+        this.emptyDirectory = emptyDirectory;
+    }
+
+    StandardConfigDataReference getReference() {
+        return this.reference;
+    }
+
+    public Resource getResource() {
+        return this.resource;
+    }
+
+    public String getProfile() {
+        return this.reference.getProfile();
+    }
+
+    boolean isEmptyDirectory() {
+        return this.emptyDirectory;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+
+        StandardConfigDataResource other = (StandardConfigDataResource) obj;
+        return this.emptyDirectory == other.emptyDirectory && isSameResource(this.resource, other.resource);
+    }
+
+    private boolean isSameResource(Resource first, Resource second) {
+        return first.equals(second) || isSameFile(resolveUnderlyingFile(first), resolveUnderlyingFile(second));
+    }
+
+    private boolean isSameFile(File firstFile, File secondFile) {
+        return firstFile != null && firstFile.equals(secondFile);
+    }
+
+    @Override
+    public int hashCode() {
+        File underlyingFile = resolveUnderlyingFile(this.resource);
+        return (underlyingFile != null) ? underlyingFile.hashCode() : this.resource.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        if (isFileBasedResource(this.resource)) {
+            try {
+                return "file [" + this.resource.getFile() + "]";
+            } catch (IOException ignored) {
+            }
+        }
+        return this.resource.toString();
+    }
+
+    private boolean isFileBasedResource(Resource resource) {
+        return resource instanceof ClassPathResource || resource instanceof FileSystemResource || resource instanceof FileUrlResource;
+    }
+
+    private File resolveUnderlyingFile(Resource resource) {
+        try {
+            if (isFileBasedResource(resource)) {
+                return resource.getFile().getAbsoluteFile();
+            }
+        } catch (IOException ignored) {
+        }
+        return null;
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Method:**  
+   - Created `isFileBasedResource(Resource resource)` for checking file-based resources.  
+   - Renamed `getUnderlyingFile` to `resolveUnderlyingFile` for clarity.  
+   - Extracted resource comparison logic into `isSameResource`.
+
+2. **Extract Variable:**  
+   - Simplified condition checks with `isFileBasedResource`.
+
+3. **Inline Variable:**  
+   - Inlined the null check in `isSameFile`.
+
+4. **Rename Attribute/Method:**  
+   - Renamed `getUnderlyingFile` → `resolveUnderlyingFile` for better readability.
+
+---
+
+### **Refactoring Benefits**
+
+- **Readability:** Cleaner, more modular logic.  
+- **Maintainability:** Easier to update and test specific functionalities.  
+- **Clarity:** Descriptive method names clarify intent.

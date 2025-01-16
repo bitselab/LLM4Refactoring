@@ -354,7 +354,37 @@ Otherwise, simply state that no refactoring is necessary.
 
 &emsp;**Search Space Limitation:** The to-be-refactored attribute and other attributes within the enclosing class.
 
-&emsp; **ii. Attribute Type**
+&emsp; **ii. Inconsistent Context**
+
+&emsp;**P2 + Refactoring Subcategory:**
+
+````
+Rename attribute refactorings are frequently employed to modify low-quality identifiers to improve readability
+###
+A rename attribute refactoring pattern is to rename attributes to align with the naming convention in other attributes. Here is an example of the rename attribute refactoring that follows this pattern.
+The source code before refactoring is:
+```
+[example code before refactoring]
+```
+The source code after refactoring is:
+```
+[example code after refactoring]
+```
+In this example, the developer renamed the attribute "oldName" to "newName".
+####
+As a developer, imagine your team leader requests you to review a piece of code to identify potential rename attribute refactoring opportunities. The original code snippet is as follows:
+```
+[original code]
+```
+If there are any refactoring opportunities, please do it and generate the refactored code.
+Otherwise, simply state that no refactoring is necessary.
+````
+
+------
+
+&emsp;**Search Space Limitation:** The to-be-refactored attribute and other attributes within the enclosing class.
+
+&emsp; **iii. Attribute Type**
 
 &emsp;**P2 + Refactoring Subcategory**
 
@@ -384,7 +414,7 @@ Otherwise, simply state that no refactoring is necessary.
 
 &emsp;**Search Space Limitation:** The to-be-refactored attribute and other attributes within the enclosing class.
 
-&emsp; **iii. Inconsistent Context**
+&emsp; **iv. Ambiguous Semantic**
 
 &emsp;**P2 + Refactoring Subcategory:**
 

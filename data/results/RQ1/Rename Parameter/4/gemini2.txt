@@ -1,0 +1,65 @@
+## Refactoring Opportunities:
+
+There are a few rename parameter refactoring opportunities in the provided code snippet:
+
+1. **`date` parameter**: The name `date` can be more descriptive since it refers to the field containing the date value. A better name could be `value` or `dateTime`.
+2. **`format` parameter**: The name `format` is clear but can be slightly more specific considering its purpose. A possible rename could be `dateFormat` or `outputFormat`.
+
+## Refactored Code:
+
+Here's the refactored code with the suggested parameter renaming:
+
+```java
+package org.elasticsearch.xpack.esql.expression.function.scalar.date;
+
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.common.time.DateFormatter;
+import org.elasticsearch.compute.ann.Evaluator;
+import org.elasticsearch.compute.ann.Fixed;
+import org.elasticsearch.compute.operator.EvalOperator.ExpressionEvaluator;
+import org.elasticsearch.xpack.esql.evaluator.mapper.EvaluatorMapper;
+import org.elasticsearch.xpack.esql.expression.function.FunctionInfo;
+import org.elasticsearch.xpack.esql.expression.function.Param;
+import org.elasticsearch.xpack.esql.session.EsqlConfiguration;
+import org.elasticsearch.xpack.ql.expression.Expression;
+import org.elasticsearch.xpack.ql.expression.function.OptionalArgument;
+import org.elasticsearch.xpack.ql.expression.function.scalar.ConfigurationFunction;
+import org.elasticsearch.xpack.ql.expression.gen.script.ScriptTemplate;
+import org.elasticsearch.xpack.ql.session.Configuration;
+import org.elasticsearch.xpack.ql.tree.NodeInfo;
+import org.elasticsearch.xpack.ql.tree.Source;
+import org.elasticsearch.xpack.ql.type.DataType;
+import org.elasticsearch.xpack.ql.type.DataTypes;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.function.Function;
+
+import static org.elasticsearch.xpack.ql.expression.TypeResolutions.ParamOrdinal.FIRST;
+import static org.elasticsearch.xpack.ql.expression.TypeResolutions.ParamOrdinal.SECOND;
+import static org.elasticsearch.xpack.ql.expression.TypeResolutions.isDate;
+import static org.elasticsearch.xpack.ql.expression.TypeResolutions.isStringAndExact;
+import static org.elasticsearch.xpack.ql.util.DateUtils.UTC_DATE_TIME_FORMATTER;
+
+public class DateFormat extends ConfigurationFunction implements OptionalArgument, EvaluatorMapper {
+
+  private final Expression value; // renamed from 'date'
+  private final Expression dateFormat; // renamed from 'format'
+
+  @FunctionInfo(returnType = "keyword", description = "Returns a string representation of a date, in the provided format.")
+  public DateFormat(
+      Source source,
+      @Param(optional = true, name = "dateFormat", type = { "keyword" }, description = "A valid date pattern") Expression first,
+      @Param(name = "value", type = { "date" }, description = "Date expression") Expression date,
+      Configuration configuration
+  ) {
+    super(source, date != null ? List.of(first, date) : List.of(first), configuration);
+    this.value = date != null ? date : first;
+    this.dateFormat = date != null ? first : null;
+  }
+
+  // ... rest of the code remains unchanged ...
+}
+```
+
+These refactorings improve code readability by making parameter names more specific to their purpose.

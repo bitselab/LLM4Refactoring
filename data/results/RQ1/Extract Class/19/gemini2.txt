@@ -1,0 +1,61 @@
+Absolutely! There are several opportunities for Extract Class refactoring in the presented `JacksonProperties` class. Here's the refactored code with three new classes:
+
+**1. JacksonMapperFeatures:**
+
+This class encapsulates features related to Jackson serialization, deserialization, mapper, parser, generator, and JsonNode functionalities.
+
+```java
+public class JacksonMapperFeatures {
+
+  private final Map<SerializationFeature, Boolean> serialization = new EnumMap<>(SerializationFeature.class);
+  private final Map<DeserializationFeature, Boolean> deserialization = new EnumMap<>(DeserializationFeature.class);
+  private final Map<MapperFeature, Boolean> mapper = new EnumMap<>(MapperFeature.class);
+  private final Map<JsonParser.Feature, Boolean> parser = new EnumMap<>(JsonParser.Feature.class);
+  private final Map<JsonGenerator.Feature, Boolean> generator = new EnumMap<>(JsonGenerator.Feature.class);
+  private final Map<JsonNodeFeature, Boolean> jsonNode = new EnumMap<>(JsonNodeFeature.class);
+
+  // Getters and Setters for each map
+  // ...
+}
+```
+
+**2. JacksonVisibility:**
+
+This class holds visibility thresholds for auto-detection of methods and fields during Jackson configuration.
+
+```java
+public class JacksonVisibility {
+
+  private final Map<PropertyAccessor, JsonAutoDetect.Visibility> visibility = new EnumMap<>(PropertyAccessor.class);
+
+  // Getter and Setter for visibility map
+  // ...
+}
+```
+
+**3. JacksonDatatype:**
+
+Since `Datatype` is already an inner class within `JacksonProperties`, it can remain as is.
+
+Here's the refactored `JacksonProperties` class with the new classes:
+
+```java
+public class JacksonProperties {
+
+  private String dateFormat;
+  private String propertyNamingStrategy;
+  private JsonInclude.Include defaultPropertyInclusion;
+  private Boolean defaultLeniency;
+  private ConstructorDetectorStrategy constructorDetector;
+  private TimeZone timeZone;
+  private Locale locale;
+  private final JacksonVisibility visibility = new JacksonVisibility();
+  private final JacksonMapperFeatures mapperFeatures = new JacksonMapperFeatures();
+  private final Datatype datatype = new Datatype();
+
+  // Getters and Setters for all the properties
+  // ...
+}
+```
+
+These changes promote better code organization and maintainability by separating configuration concerns. 

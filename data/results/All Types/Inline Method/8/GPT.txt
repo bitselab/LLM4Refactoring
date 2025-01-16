@@ -1,0 +1,253 @@
+The provided `RootFailureCollector` class and its nested classes (`NonRootFailureCollector` and `ContextualFailureCollectorImpl`) handle failure collection with hierarchical context management. While the design works, it has several responsibilities tightly coupled in one file, reducing clarity and maintainability.  
+
+### **Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem**: All classes (`RootFailureCollector`, `NonRootFailureCollector`, and `ContextualFailureCollectorImpl`) are tightly coupled in a single file.  
+   - **Solution**: Extract `NonRootFailureCollector` and `ContextualFailureCollectorImpl` into separate classes to follow the Single Responsibility Principle.  
+
+2. **Extract Method**  
+   - **Problem**: Complex methods like `checkNoFailure()` and `doAdd()` are doing multiple things.  
+   - **Solution**: Split into smaller helper methods.  
+
+3. **Extract Variable**  
+   - **Problem**: Repeated calls to `failureCount.get()` and complex expressions reduce readability.  
+   - **Solution**: Extract repeated or complex expressions into variables.  
+
+4. **Inline Method**  
+   - **Problem**: `withDefaultContext()` is a thin wrapper.  
+   - **Solution**: Inline its logic directly.  
+
+5. **Rename Attribute**  
+   - **Problem**: `delegate` is vague.  
+   - **Solution**: Rename to `childFailureCollector` for clarity.  
+
+6. **Rename Method**  
+   - **Problem**: `doAdd()` is ambiguous.  
+   - **Solution**: Rename to `logFailure()` for clarity.  
+
+7. **Rename Parameter**  
+   - **Problem**: Parameters like `st` and `e` are not descriptive.  
+   - **Solution**: Rename to `statement` and `exception`.  
+
+8. **Rename Variable**  
+   - **Problem**: `builder` and `failures` are used ambiguously.  
+   - **Solution**: Rename to `failureReportBuilder` and `collectedFailures`.  
+
+---
+
+### **Refactored Code**
+
+#### 1. **`RootFailureCollector.java`**
+
+```java
+package org.hibernate.search.engine.reporting.spi;
+
+import java.lang.invoke.MethodHandles;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.hibernate.search.engine.logging.impl.Log;
+import org.hibernate.search.engine.reporting.impl.EngineEventContextMessages;
+import org.hibernate.search.util.common.logging.impl.LoggerFactory;
+import org.hibernate.search.util.common.impl.ToStringStyle;
+import org.hibernate.search.util.common.impl.ToStringTreeBuilder;
+
+public final class RootFailureCollector implements FailureCollector {
+
+    private static final Log log = LoggerFactory.make(Log.class, MethodHandles.lookup());
+    static final int FAILURE_LIMIT = 100;
+
+    private final String process;
+    private final NonRootFailureCollector childFailureCollector;
+    private final AtomicInteger failureCount = new AtomicInteger();
+
+    public RootFailureCollector(String process) {
+        this.process = process;
+        this.childFailureCollector = new NonRootFailureCollector(this);
+    }
+
+    public void checkNoFailure() {
+        if (failureCount.get() > 0) {
+            List<Throwable> collectedFailures = new ArrayList<>();
+            ToStringTreeBuilder failureReportBuilder = buildFailureReport(collectedFailures);
+            throw log.collectedFailures(process, failureReportBuilder.toString(), collectedFailures);
+        }
+    }
+
+    private ToStringTreeBuilder buildFailureReport(List<Throwable> collectedFailures) {
+        ToStringStyle style = ToStringStyle.multilineIndentStructure(
+                EngineEventContextMessages.INSTANCE.failureReportContextFailuresSeparator(),
+                EngineEventContextMessages.INSTANCE.failureReportContextIndent(),
+                EngineEventContextMessages.INSTANCE.failureReportFailuresBulletPoint(),
+                EngineEventContextMessages.INSTANCE.failureReportFailuresNoBulletPoint()
+        );
+        ToStringTreeBuilder builder = new ToStringTreeBuilder(style).startObject();
+        if (failureCount.get() > FAILURE_LIMIT) {
+            builder.value(log.collectedFailureLimitReached(process, FAILURE_LIMIT, failureCount.get()));
+        }
+        childFailureCollector.appendChildrenFailuresTo(collectedFailures, builder);
+        builder.endObject();
+        return builder;
+    }
+
+    @Override
+    public ContextualFailureCollector withContext(EventContext context) {
+        return childFailureCollector.withContext(context);
+    }
+
+    @Override
+    public ContextualFailureCollector withContext(EventContextElement contextElement) {
+        return childFailureCollector.withContext(contextElement);
+    }
+
+    boolean shouldAddFailure() {
+        return failureCount.incrementAndGet() <= FAILURE_LIMIT;
+    }
+}
+```
+
+---
+
+#### 2. **`NonRootFailureCollector.java`**
+
+```java
+package org.hibernate.search.engine.reporting.spi;
+
+import java.util.Map;
+import java.util.List;
+import java.util.StringJoiner;
+import java.util.concurrent.ConcurrentSkipListMap;
+
+import org.hibernate.search.util.common.data.impl.InsertionOrder;
+import org.hibernate.search.util.common.reporting.EventContext;
+import org.hibernate.search.util.common.reporting.EventContextElement;
+
+class NonRootFailureCollector implements FailureCollector {
+
+    protected final RootFailureCollector root;
+    private final InsertionOrder<EventContextElement> childrenOrder = new InsertionOrder<>();
+    private final Map<InsertionOrder.Key<EventContextElement>, ContextualFailureCollectorImpl> children = new ConcurrentSkipListMap<>();
+
+    NonRootFailureCollector(RootFailureCollector root) {
+        this.root = root;
+    }
+
+    @Override
+    public ContextualFailureCollectorImpl withContext(EventContext context) {
+        if (context == null) {
+            return withDefaultContext();
+        }
+        NonRootFailureCollector collector = this;
+        for (EventContextElement contextElement : context.elements()) {
+            collector = collector.withContext(contextElement);
+        }
+        return (ContextualFailureCollectorImpl) collector;
+    }
+
+    @Override
+    public ContextualFailureCollectorImpl withContext(EventContextElement contextElement) {
+        if (contextElement == null) {
+            return withDefaultContext();
+        }
+        return children.computeIfAbsent(
+                childrenOrder.wrapKey(contextElement),
+                key -> new ContextualFailureCollectorImpl(this, key.get())
+        );
+    }
+
+    ContextualFailureCollectorImpl withDefaultContext() {
+        return withContext(EventContexts.defaultContext());
+    }
+
+    void appendChildrenFailuresTo(List<Throwable> failures, ToStringTreeBuilder builder) {
+        for (ContextualFailureCollectorImpl child : children.values()) {
+            if (child.hasFailure()) {
+                child.appendFailuresTo(failures, builder);
+            }
+        }
+    }
+}
+```
+
+---
+
+#### 3. **`ContextualFailureCollectorImpl.java`**
+
+```java
+package org.hibernate.search.engine.reporting.spi;
+
+import java.util.Collection;
+import java.util.StringJoiner;
+import java.util.concurrent.ConcurrentLinkedDeque;
+
+import org.hibernate.search.util.common.reporting.EventContextElement;
+
+class ContextualFailureCollectorImpl extends NonRootFailureCollector implements ContextualFailureCollector {
+
+    private final EventContextElement context;
+    private final Collection<Throwable> failures = new ConcurrentLinkedDeque<>();
+    private final Collection<String> failureMessages = new ConcurrentLinkedDeque<>();
+
+    ContextualFailureCollectorImpl(NonRootFailureCollector parent, EventContextElement context) {
+        super(parent.root);
+        this.context = context;
+    }
+
+    @Override
+    public boolean hasFailure() {
+        return !failureMessages.isEmpty() || children().stream().anyMatch(ContextualFailureCollectorImpl::hasFailure);
+    }
+
+    @Override
+    public void add(Throwable throwable) {
+        String message = (throwable instanceof SearchException e) ? e.messageWithoutContext() : throwable.getMessage();
+        logFailure(throwable, message);
+    }
+
+    @Override
+    public void add(String failureMessage) {
+        logFailure(null, failureMessage);
+    }
+
+    private void logFailure(Throwable throwable, String failureMessage) {
+        if (root.shouldAddFailure()) {
+            failureMessages.add(failureMessage);
+        }
+    }
+
+    void appendFailuresTo(Collection<Throwable> failures, ToStringTreeBuilder builder) {
+        builder.startObject(context.render());
+        failures.addAll(this.failures);
+        builder.endObject();
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extracted Classes**:  
+   - `NonRootFailureCollector` and `ContextualFailureCollectorImpl` are now standalone classes.
+
+2. **Extracted Methods**:  
+   - Failure report generation is extracted into `buildFailureReport()`.
+
+3. **Renamed Attributes/Methods**:  
+   - `delegate` → `childFailureCollector`.  
+   - `doAdd()` → `logFailure()`.
+
+4. **Improved Readability**:  
+   - More focused methods and classes reduce complexity.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Separation of Concerns**: Clear boundaries between root collector, non-root collectors, and contextual collectors.  
+- **Readability**: Simplified class and method structures.  
+- **Maintainability**: Easier to extend or modify failure handling logic.
+
+Let me know if you'd like further refinements or additional clarifications!

@@ -1,0 +1,216 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method**  
+   - The constructor of `AttributeMethods` performs multiple checks, which can be split into separate methods.  
+   - `compute()` method is complex and can be simplified by extracting logic.  
+
+2. **Extract Variable**  
+   - Repeated calls to `method.getReturnType()` and other expressions can be stored in local variables for clarity.  
+
+3. **Rename Method**  
+   - `compute()` → `computeAttributeMethods()` for better clarity.  
+
+4. **Inline Variable**  
+   - The `methodComparator` is used only once and can be inlined.  
+
+---
+
+### **Refactored Code**
+
+```java
+package org.springframework.core.annotation;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Map;
+
+import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
+import org.springframework.util.ConcurrentReferenceHashMap;
+import org.springframework.util.ReflectionUtils;
+
+final class AttributeMethods {
+
+    static final AttributeMethods NONE = new AttributeMethods(null, new Method[0]);
+
+    static final Map<Class<? extends Annotation>, AttributeMethods> cache = new ConcurrentReferenceHashMap<>();
+
+    @Nullable
+    private final Class<? extends Annotation> annotationType;
+
+    private final Method[] attributeMethods;
+
+    private final boolean[] canThrowTypeNotPresentException;
+
+    private final boolean hasDefaultValueMethod;
+
+    private final boolean hasNestedAnnotation;
+
+    private AttributeMethods(@Nullable Class<? extends Annotation> annotationType, Method[] attributeMethods) {
+        this.annotationType = annotationType;
+        this.attributeMethods = attributeMethods;
+        this.canThrowTypeNotPresentException = new boolean[attributeMethods.length];
+
+        this.hasDefaultValueMethod = detectDefaultValueMethod(attributeMethods);
+        this.hasNestedAnnotation = detectNestedAnnotations(attributeMethods);
+        initializeTypeNotPresentChecks(attributeMethods);
+    }
+
+    private boolean detectDefaultValueMethod(Method[] methods) {
+        return Arrays.stream(methods).anyMatch(method -> method.getDefaultValue() != null);
+    }
+
+    private boolean detectNestedAnnotations(Method[] methods) {
+        return Arrays.stream(methods).anyMatch(method -> {
+            Class<?> type = method.getReturnType();
+            return type.isAnnotation() || (type.isArray() && type.componentType().isAnnotation());
+        });
+    }
+
+    private void initializeTypeNotPresentChecks(Method[] methods) {
+        for (int i = 0; i < methods.length; i++) {
+            Class<?> type = methods[i].getReturnType();
+            ReflectionUtils.makeAccessible(methods[i]);
+            this.canThrowTypeNotPresentException[i] = (type == Class.class || type == Class[].class || type.isEnum());
+        }
+    }
+
+    boolean isValid(Annotation annotation) {
+        assertAnnotation(annotation);
+        for (int i = 0; i < size(); i++) {
+            if (canThrowTypeNotPresentException(i)) {
+                try {
+                    AnnotationUtils.invokeAnnotationMethod(get(i), annotation);
+                } catch (IllegalStateException ignored) {
+                } catch (Throwable ex) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    void validate(Annotation annotation) {
+        assertAnnotation(annotation);
+        for (int i = 0; i < size(); i++) {
+            if (canThrowTypeNotPresentException(i)) {
+                try {
+                    AnnotationUtils.invokeAnnotationMethod(get(i), annotation);
+                } catch (Throwable ex) {
+                    throw new IllegalStateException("Could not obtain annotation attribute value for " +
+                            get(i).getName() + " declared on " + annotation.annotationType(), ex);
+                }
+            }
+        }
+    }
+
+    private void assertAnnotation(Annotation annotation) {
+        Assert.notNull(annotation, "Annotation must not be null");
+        if (this.annotationType != null) {
+            Assert.isInstanceOf(this.annotationType, annotation);
+        }
+    }
+
+    @Nullable
+    Method get(String name) {
+        int index = indexOf(name);
+        return (index != -1 ? this.attributeMethods[index] : null);
+    }
+
+    Method get(int index) {
+        return this.attributeMethods[index];
+    }
+
+    boolean canThrowTypeNotPresentException(int index) {
+        return this.canThrowTypeNotPresentException[index];
+    }
+
+    int indexOf(String name) {
+        for (int i = 0; i < this.attributeMethods.length; i++) {
+            if (this.attributeMethods[i].getName().equals(name)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    int indexOf(Method attribute) {
+        for (int i = 0; i < this.attributeMethods.length; i++) {
+            if (this.attributeMethods[i].equals(attribute)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    int size() {
+        return this.attributeMethods.length;
+    }
+
+    boolean hasDefaultValueMethod() {
+        return this.hasDefaultValueMethod;
+    }
+
+    boolean hasNestedAnnotation() {
+        return this.hasNestedAnnotation;
+    }
+
+    static AttributeMethods forAnnotationType(@Nullable Class<? extends Annotation> annotationType) {
+        if (annotationType == null) {
+            return NONE;
+        }
+        return cache.computeIfAbsent(annotationType, AttributeMethods::computeAttributeMethods);
+    }
+
+    private static AttributeMethods computeAttributeMethods(Class<? extends Annotation> annotationType) {
+        Method[] methods = Arrays.stream(annotationType.getDeclaredMethods())
+                .filter(AttributeMethods::isAttributeMethod)
+                .sorted((m1, m2) -> m1.getName().compareTo(m2.getName()))
+                .toArray(Method[]::new);
+
+        return methods.length == 0 ? NONE : new AttributeMethods(annotationType, methods);
+    }
+
+    private static boolean isAttributeMethod(Method method) {
+        return method.getParameterCount() == 0 && method.getReturnType() != void.class;
+    }
+
+    static String describe(@Nullable Method attribute) {
+        return (attribute == null) ? "(none)" : describe(attribute.getDeclaringClass(), attribute.getName());
+    }
+
+    static String describe(@Nullable Class<?> annotationType, @Nullable String attributeName) {
+        if (attributeName == null) {
+            return "(none)";
+        }
+        String in = (annotationType != null ? " in annotation [" + annotationType.getName() + "]" : "");
+        return "attribute '" + attributeName + "'" + in;
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Method:**  
+   - Extracted `detectDefaultValueMethod()`, `detectNestedAnnotations()`, and `initializeTypeNotPresentChecks()` from the constructor for readability.  
+   - Renamed `compute()` → `computeAttributeMethods()` for clarity.  
+
+2. **Extract Variable:**  
+   - Avoided redundant calls by extracting return type checks into methods.  
+
+3. **Inline Variable:**  
+   - Inlined the `methodComparator` since it's used only once.
+
+4. **Rename Method:**  
+   - Improved method names for clarity.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Improved Readability:** Cleaner and more structured logic in the constructor.  
+- **Maintainability:** Modular methods simplify updates and debugging.  
+- **Clarity:** Clearer method names and logic improve understanding of the class's behavior.

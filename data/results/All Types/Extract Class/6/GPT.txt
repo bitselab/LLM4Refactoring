@@ -1,0 +1,261 @@
+### Refactoring Opportunities:
+
+Upon reviewing the code, several potential refactoring opportunities exist:
+
+1. **Extract Method**: There are repetitive sections where the same setup logic is applied across multiple tests, particularly when initializing `exceptions[]`, `abbreviations[]`, and calling `testClientRequestIdForTimeoutRetry` with these arrays. These can be extracted into separate helper methods to avoid duplication.
+
+2. **Extract Variable**: Repetitive strings like error messages (e.g., `"SocketTimeoutException"`) and constants could be replaced with variables to improve readability and manageability.
+
+3. **Inline Variable**: In some places, the variables `exceptions` and `abbreviations` can be inlined within the method call when their usage is minimal.
+
+4. **Extract Class**: The `addGeneralMockBehaviourToRestOpAndHttpOp` and `addGeneralMockBehaviourToAbfsClient` methods contain a lot of mock initialization logic. Extracting them into a dedicated helper class for mocking behaviors could improve maintainability.
+
+### Refactored Code:
+
+```java
+package org.apache.hadoop.fs.azurebfs.services;
+
+import java.io.IOException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+
+import org.assertj.core.api.Assertions;
+import org.junit.Test;
+import org.mockito.Mockito;
+import org.mockito.stubbing.Stubber;
+
+import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
+
+import static java.net.HttpURLConnection.*;
+import static org.apache.hadoop.fs.azurebfs.contracts.services.AzureServiceErrorCode.*;
+import static org.apache.hadoop.fs.azurebfs.services.RetryReasonConstants.*;
+
+public class TestAbfsRestOperationMockFailures {
+
+    @Test
+    public void testClientRequestIdForConnectTimeoutRetry() throws Exception {
+        testClientRequestIdForTimeoutRetry(
+                new SocketTimeoutException(CONNECTION_TIMEOUT_JDK_MESSAGE),
+                CONNECTION_TIMEOUT_ABBREVIATION
+        );
+    }
+
+    @Test
+    public void testClientRequestIdForConnectAndReadTimeoutRetry() throws Exception {
+        testClientRequestIdForTimeoutRetry(
+                new SocketTimeoutException(CONNECTION_TIMEOUT_JDK_MESSAGE),
+                CONNECTION_TIMEOUT_ABBREVIATION,
+                new SocketTimeoutException(READ_TIMEOUT_JDK_MESSAGE),
+                READ_TIMEOUT_ABBREVIATION
+        );
+    }
+
+    @Test
+    public void testClientRequestIdForReadTimeoutRetry() throws Exception {
+        testClientRequestIdForTimeoutRetry(
+                new SocketTimeoutException(READ_TIMEOUT_JDK_MESSAGE),
+                READ_TIMEOUT_ABBREVIATION
+        );
+    }
+
+    @Test
+    public void testClientRequestIdForUnknownHostRetry() throws Exception {
+        testClientRequestIdForTimeoutRetry(
+                new UnknownHostException(),
+                UNKNOWN_HOST_EXCEPTION_ABBREVIATION
+        );
+    }
+
+    @Test
+    public void testClientRequestIdForConnectionResetRetry() throws Exception {
+        testClientRequestIdForTimeoutRetry(
+                new SocketTimeoutException(CONNECTION_RESET_MESSAGE + " by peer"),
+                CONNECTION_RESET_ABBREVIATION
+        );
+    }
+
+    @Test
+    public void testClientRequestIdForUnknownSocketExRetry() throws Exception {
+        testClientRequestIdForTimeoutRetry(
+                new SocketException("unknown"),
+                SOCKET_EXCEPTION_ABBREVIATION
+        );
+    }
+
+    @Test
+    public void testClientRequestIdForIOERetry() throws Exception {
+        testClientRequestIdForTimeoutRetry(
+                new InterruptedIOException(),
+                IO_EXCEPTION_ABBREVIATION
+        );
+    }
+
+    @Test
+    public void testClientRequestIdFor400Retry() throws Exception {
+        testClientRequestIdForStatusRetry(HTTP_BAD_REQUEST, "", "400");
+    }
+
+    @Test
+    public void testClientRequestIdFor500Retry() throws Exception {
+        testClientRequestIdForStatusRetry(HTTP_INTERNAL_ERROR, "", "500");
+    }
+
+    @Test
+    public void testClientRequestIdFor503INGRetry() throws Exception {
+        testClientRequestIdForStatusRetry(HTTP_UNAVAILABLE,
+                INGRESS_OVER_ACCOUNT_LIMIT.getErrorMessage(),
+                INGRESS_LIMIT_BREACH_ABBREVIATION);
+    }
+
+    @Test
+    public void testClientRequestIdFor503egrRetry() throws Exception {
+        testClientRequestIdForStatusRetry(HTTP_UNAVAILABLE,
+                EGRESS_OVER_ACCOUNT_LIMIT.getErrorMessage(),
+                EGRESS_LIMIT_BREACH_ABBREVIATION);
+    }
+
+    @Test
+    public void testClientRequestIdFor503OPRRetry() throws Exception {
+        testClientRequestIdForStatusRetry(HTTP_UNAVAILABLE,
+                OPERATION_BREACH_MESSAGE, OPERATION_LIMIT_BREACH_ABBREVIATION);
+    }
+
+    @Test
+    public void testClientRequestIdFor503OtherRetry() throws Exception {
+        testClientRequestIdForStatusRetry(HTTP_UNAVAILABLE, "Other.", "503");
+    }
+
+    // Helper method for testing timeout retries
+    private void testClientRequestIdForTimeoutRetry(Exception... exceptions) throws Exception {
+        String[] abbreviationsExpected = getAbbreviations(exceptions);
+
+        AbfsClient abfsClient = Mockito.mock(AbfsClient.class);
+        ExponentialRetryPolicy retryPolicy = Mockito.mock(ExponentialRetryPolicy.class);
+        addGeneralMockBehaviourToAbfsClient(abfsClient, retryPolicy);
+
+        AbfsRestOperation abfsRestOperation = Mockito.spy(new AbfsRestOperation(
+                AbfsRestOperationType.ReadFile,
+                abfsClient,
+                "PUT",
+                null,
+                new ArrayList<>()
+        ));
+
+        AbfsHttpOperation httpOperation = Mockito.mock(AbfsHttpOperation.class);
+        addGeneralMockBehaviourToRestOpAndHttpOp(abfsRestOperation, httpOperation);
+
+        Stubber stubber = Mockito.doThrow(exceptions[0]);
+        for (int iteration = 1; iteration < exceptions.length; iteration++) {
+            stubber.doThrow(exceptions[iteration]);
+        }
+        stubber.doNothing().when(httpOperation).processResponse(Mockito.nullable(byte[].class), Mockito.nullable(int.class), Mockito.nullable(int.class));
+
+        Mockito.doReturn(HTTP_OK).when(httpOperation).getStatusCode();
+
+        TracingContext tracingContext = Mockito.mock(TracingContext.class);
+        Mockito.doNothing().when(tracingContext).setRetryCount(Mockito.nullable(int.class));
+        Mockito.doReturn(tracingContext).when(abfsRestOperation).createNewTracingContext(Mockito.any());
+
+        int[] count = new int[1];
+        count[0] = 0;
+        Mockito.doAnswer(invocationOnMock -> {
+            if (count[0] > 0 && count[0] <= exceptions.length) {
+                Assertions.assertThat((String) invocationOnMock.getArgument(1))
+                        .isEqualTo(abbreviationsExpected[count[0] - 1]);
+            }
+            count[0]++;
+            return null;
+        }).when(tracingContext).constructHeader(Mockito.any(), Mockito.any());
+
+        abfsRestOperation.execute(tracingContext);
+        Assertions.assertThat(count[0]).isEqualTo(exceptions.length + 1);
+    }
+
+    private String[] getAbbreviations(Exception[] exceptions) {
+        String[] abbreviations = new String[exceptions.length];
+        for (int i = 0; i < exceptions.length; i++) {
+            abbreviations[i] = getAbbreviation(exceptions[i]);
+        }
+        return abbreviations;
+    }
+
+    private String getAbbreviation(Exception exception) {
+        if (exception instanceof SocketTimeoutException) {
+            return CONNECTION_TIMEOUT_ABBREVIATION;
+        } else if (exception instanceof UnknownHostException) {
+            return UNKNOWN_HOST_EXCEPTION_ABBREVIATION;
+        } else if (exception instanceof SocketException) {
+            return SOCKET_EXCEPTION_ABBREVIATION;
+        } else if (exception instanceof InterruptedIOException) {
+            return IO_EXCEPTION_ABBREVIATION;
+        }
+        return "";
+    }
+
+    // Helper method for testing status code retries
+    private void testClientRequestIdForStatusRetry(int status,
+                                                   String serverErrorMessage,
+                                                   String keyExpected) throws Exception {
+        AbfsClient abfsClient = Mockito.mock(AbfsClient.class);
+        ExponentialRetryPolicy retryPolicy = Mockito.mock(ExponentialRetryPolicy.class);
+        addGeneralMockBehaviourToAbfsClient(abfsClient, retryPolicy);
+
+        AbfsRestOperation abfsRestOperation = Mockito.spy(new AbfsRestOperation(
+                AbfsRestOperationType.ReadFile,
+                abfsClient,
+                "PUT",
+                null,
+                new ArrayList<>()
+        ));
+
+        AbfsHttpOperation httpOperation = Mockito.mock(AbfsHttpOperation.class);
+        addGeneralMockBehaviourToRestOpAndHttpOp(abfsRestOperation, httpOperation);
+
+        Mockito.doNothing()
+                .doNothing()
+                .when(httpOperation)
+                .processResponse(Mockito.nullable(byte[].class), Mockito.nullable(int.class), Mockito.nullable(int.class));
+
+        int[] statusCount = new int[1];
+        statusCount[0] = 0;
+        Mockito.doAnswer(answer -> {
+            if (statusCount[0] <= 5) {
+                statusCount[0]++;
+                return status;
+            }
+            return HTTP_OK;
+        }).when(httpOperation).getStatusCode();
+
+        Mockito.doReturn(serverErrorMessage)
+                .when(httpOperation)
+                .getStorageErrorMessage();
+
+        TracingContext tracingContext = Mockito.mock(TracingContext.class);
+        Mockito.doNothing().when(tracingContext).setRetryCount(Mockito.nullable(int.class));
+        Mockito.doReturn(tracingContext)
+                .when(abfsRestOperation).createNewTracingContext(Mockito.any());
+
+        int[] count = new int[1];
+        count[0] = 0;
+        Mockito.doAnswer(invocationOnMock -> {
+            if (count[0] == 1) {
+                Assertions.assertThat((String) invocationOnMock.getArgument(1))
+                        .isEqualTo(keyExpected);
+            }
+            count[0]++;
+            return null;
+        }).when(tracingContext).constructHeader(Mockito.any
+
+(), Mockito.any());
+
+        abfsRestOperation.execute(tracingContext);
+        Assertions.assertThat(count[0]).isEqualTo(1);
+    }
+}
+```
+
+### Summary:
+- Introduced helper methods to reduce code duplication.
+- Improved clarity by centralizing exception handling and retry logic.
+- The refactoring should make future changes easier by isolating mock behaviors and repetitive logic into separate methods.

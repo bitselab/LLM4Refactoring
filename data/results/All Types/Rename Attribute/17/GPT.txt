@@ -1,0 +1,160 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - Move `TextLvh` and `PlainTextFile` into separate classes for better modularity and readability.
+
+2. **Extract Method:**  
+   - Extract the logic in the `PlainTextLanguage` constructor for better clarity.
+
+3. **Rename Method/Variable:**  
+   - `TERSE_NAME` → `LANGUAGE_ID` for better clarity.  
+   - `TextLvh` → `PlainTextVersionHandler` for a more descriptive name.
+
+4. **Inline Variable:**  
+   - Inline the `INSTANCE` getter for brevity.
+
+---
+
+### **Refactored Code**
+
+```java
+package net.sourceforge.pmd.lang;
+
+import net.sourceforge.pmd.annotation.Experimental;
+import net.sourceforge.pmd.cpd.AnyTokenizer;
+import net.sourceforge.pmd.cpd.CpdCapableLanguage;
+import net.sourceforge.pmd.cpd.Tokenizer;
+import net.sourceforge.pmd.lang.ast.AstInfo;
+import net.sourceforge.pmd.lang.ast.Parser;
+import net.sourceforge.pmd.lang.ast.Parser.ParserTask;
+import net.sourceforge.pmd.lang.ast.RootNode;
+import net.sourceforge.pmd.lang.ast.impl.AbstractNode;
+import net.sourceforge.pmd.lang.document.TextRegion;
+import net.sourceforge.pmd.lang.impl.SimpleLanguageModuleBase;
+
+/**
+ * A dummy language implementation whose parser produces a single node.
+ * This is useful for scenarios where a non-null language is required,
+ * but parsing is unnecessary.
+ */
+@Experimental
+public final class PlainTextLanguage extends SimpleLanguageModuleBase implements CpdCapableLanguage {
+
+    private static final String LANGUAGE_ID = "text";
+    private static final PlainTextLanguage INSTANCE = new PlainTextLanguage();
+
+    private PlainTextLanguage() {
+        super(buildMetadata(), new PlainTextVersionHandler());
+    }
+
+    public static PlainTextLanguage getInstance() {
+        return INSTANCE;
+    }
+
+    private static LanguageMetadata buildMetadata() {
+        return LanguageMetadata.withId(LANGUAGE_ID)
+                .name("Plain text")
+                .extensions("plain-text-file-goo-extension")
+                .addDefaultVersion("default");
+    }
+
+    @Override
+    public Tokenizer createCpdTokenizer(LanguagePropertyBundle bundle) {
+        return new AnyTokenizer();
+    }
+}
+```
+
+---
+
+### **Extracted Class: PlainTextVersionHandler**
+
+```java
+package net.sourceforge.pmd.lang;
+
+import net.sourceforge.pmd.lang.ast.Parser;
+
+public final class PlainTextVersionHandler implements LanguageVersionHandler {
+    
+    @Override
+    public Parser getParser() {
+        return PlainTextFile::new;
+    }
+}
+```
+
+---
+
+### **Extracted Class: PlainTextFile**
+
+```java
+package net.sourceforge.pmd.lang;
+
+import net.sourceforge.pmd.lang.ast.AstInfo;
+import net.sourceforge.pmd.lang.ast.Parser.ParserTask;
+import net.sourceforge.pmd.lang.ast.RootNode;
+import net.sourceforge.pmd.lang.ast.impl.AbstractNode;
+import net.sourceforge.pmd.lang.document.TextRegion;
+
+/**
+ * Represents the root node for plain text files in the PlainTextLanguage.
+ */
+public final class PlainTextFile extends AbstractNode<PlainTextFile, PlainTextFile> implements RootNode {
+
+    private final AstInfo<PlainTextFile> astInfo;
+
+    PlainTextFile(ParserTask task) {
+        this.astInfo = new AstInfo<>(task, this);
+    }
+
+    @Override
+    public TextRegion getTextRegion() {
+        return getTextDocument().getEntireRegion();
+    }
+
+    @Override
+    public String getXPathNodeName() {
+        return "TextFile";
+    }
+
+    @Override
+    public String getImage() {
+        return null;
+    }
+
+    @Override
+    public String toString() {
+        return "Plain text file (" + getEndLine() + " lines)";
+    }
+
+    @Override
+    public AstInfo<? extends RootNode> getAstInfo() {
+        return astInfo;
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - `TextLvh` → `PlainTextVersionHandler` as a separate, descriptive class.  
+   - `PlainTextFile` extracted for modularity.
+
+2. **Extract Method:**  
+   - `buildMetadata()` extracted for clarity in the constructor.
+
+3. **Rename Variable:**  
+   - `TERSE_NAME` → `LANGUAGE_ID`.
+
+4. **Code Simplification:**  
+   - More modular and maintainable structure.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Modularity:** Clear separation of concerns between the language, version handler, and AST node.  
+- **Readability:** Easier to navigate and understand.  
+- **Maintainability:** Easier to modify and extend in the future.

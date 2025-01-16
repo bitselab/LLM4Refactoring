@@ -1,0 +1,65 @@
+## Refactoring Opportunities
+
+There are a few opportunities for rename variable refactoring in the provided code:
+
+1. **`size`**: This variable appears in multiple constructors and methods and represents the size of the internal buffer. A more descriptive name could be `bufferSize`.
+
+2. **`markSupported`**: This variable indicates whether the stream supports mark/reset functionality. A clearer name could be `supportsMarkAndReset`.
+
+3. **`throwEofException`**: This variable defines whether an `EOFException` is thrown when reading past the end of the buffer. A more descriptive name could be `throwsEofExceptionOnRead`.
+
+Here's the refactored code with the suggested changes:
+
+```java
+/*
+ * ... (License block omitted for brevity) ...
+ */
+
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests {@link NullInputStream}.
+ */
+public class NullInputStreamTest {
+
+    private static final class TestNullInputStream extends NullInputStream {
+        public TestNullInputStream(final int bufferSize) {
+            super(bufferSize);
+        }
+
+        public TestNullInputStream(final int bufferSize, final boolean supportsMarkAndReset, final boolean throwsEofExceptionOnRead) {
+            super(bufferSize, supportsMarkAndReset, throwsEofExceptionOnRead);
+        }
+
+        // ... (processByte and processBytes methods omitted for brevity) ...
+
+    }
+
+    // ... (MARK_RESET_NOT_SUPPORTED constant omitted for brevity) ...
+
+    @Test
+    public void testEOFException() throws Exception {
+        try (InputStream input = new TestNullInputStream(2, false, true)) {
+            assertEquals(0, input.read(), "Read 1");
+            assertEquals(1, input.read(), "Read 2");
+            assertThrows(EOFException.class, () -> input.read());
+        }
+    }
+
+    // ... (testMarkAndReset, testMarkNotSupported, testRead, testReadByteArray and testSkip methods omitted for brevity) ...
+
+}
+```
+
+These changes improve code readability by using more descriptive variable names that better reflect their purpose. 

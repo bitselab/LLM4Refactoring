@@ -1,0 +1,79 @@
+## Refactoring with Extracted Class: `PackReverseIndexEntry`
+
+This code snippet presents an opportunity for Extract Class refactoring. The inner class `IndexPositionsByOffsetComparator` has a single responsibility: comparing two positions based on the corresponding object offsets in another list. 
+
+Here's the refactored code:
+
+```java
+package org.eclipse.jgit.internal.storage.file;
+
+import static org.eclipse.jgit.internal.storage.file.PackReverseIndex.MAGIC;
+import static org.eclipse.jgit.internal.storage.file.PackReverseIndex.VERSION_1;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.List;
+
+import org.eclipse.jgit.transport.PackedObjectInfo;
+import org.eclipse.jgit.util.IntList;
+
+/**
+ * Writes reverse index files following the version 1 format.
+ * <p>
+ * The file format is specified at
+ * https://git-scm.com/docs/pack-format#_pack_rev_files_have_the_format.
+ */
+final class PackReverseIndexWriterV1 extends PackReverseIndexWriter {
+  private static final int OID_VERSION_SHA1 = 1;
+  private static final int DEFAULT_OID_VERSION = OID_VERSION_SHA1;
+
+  PackReverseIndexWriterV1(final OutputStream dst) {
+    super(dst);
+  }
+
+  @Override
+  protected void writeHeader() throws IOException {
+    out.write(MAGIC);
+    dataOutput.writeInt(VERSION_1);
+    dataOutput.writeInt(DEFAULT_OID_VERSION);
+  }
+
+  @Override
+  protected void writeBody(List<? extends PackedObjectInfo> objectsByIndexPos)
+      throws IOException {
+    IntList positionsByOffset = IntList.filledWithRange(0, objectsByIndexPos.size());
+    positionsByOffset.sort(new PackReverseIndexEntry(objectsByIndexPos));
+
+    for (int i = 0; i < positionsByOffset.size(); i++) {
+      int indexPosition = positionsByOffset.get(i);
+      dataOutput.writeInt(indexPosition);
+    }
+  }
+
+  private static class PackReverseIndexEntry implements IntComparator {
+    private final List<? extends PackedObjectInfo> objectsByIndexPos;
+
+    private PackReverseIndexEntry(List<? extends PackedObjectInfo> objectsByIndexPos) {
+      this.objectsByIndexPos = objectsByIndexPos;
+    }
+
+    @Override
+    public int compare(int firstIndexPosition, int secondIndexPosition) {
+      return Long.compare(getOffset(firstIndexPosition), getOffset(secondIndexPosition));
+    }
+
+    private long getOffset(int indexPosition) {
+      return objectsByIndexPos.get(indexPosition).getOffset();
+    }
+  }
+}
+```
+
+Changes made:
+
+1. A new class `PackReverseIndexEntry` is created inside `PackReverseIndexWriterV1`.
+2. The constructor and `compare` method from `IndexPositionsByOffsetComparator` are moved to `PackReverseIndexEntry`.
+3. The reference to `objectsByIndexPos` is passed as a constructor argument to `PackReverseIndexEntry`.
+4. `IndexPositionsByOffsetComparator` is removed.
+
+This refactoring improves code readability and maintainability by separating the logic of comparing positions based on offsets into its own class. 

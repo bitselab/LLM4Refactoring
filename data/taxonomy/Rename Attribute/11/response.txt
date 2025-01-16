@@ -1,15 +1,138 @@
-To identify potential rename attribute refactoring opportunities in the given Java code, let's analyze the attribute names in the `WebSocketCoreClient` class for consistency, clarity, and alignment with common Java naming conventions.
+In the provided `WebSocketCoreClient` class, we can assess the naming of attributes to ensure they align with each other and convey clear meanings. Let's review the attribute names and determine if any should be renamed to improve consistency:
 
-### Existing Attribute Names:
-1. `WEBSOCKET_CORECLIENT_ATTRIBUTE` - This constant might be considered verbose or unclear since it includes the class name. However, this naming pattern is common for static constants to indicate their association with a class.
-2. `LOG` - This is a common and widely accepted short name for a logger in Java applications.
-3. `httpClient` - Clearly named, indicating it is an instance of `HttpClient`.
-4. `components` - A simple, yet somewhat vague name. It might be more descriptive to include what kind of components, but within the context of this class, it is acceptable.
-5. `classLoader` - Standard name for a `ClassLoader` attribute.
+1. `LOG` - This is a standard name for a logger object and is consistently used across Java applications.
+2. `httpClient` - This name clearly states its purpose.
+3. `components` - While clear, for consistency with the pattern of explicit names like `httpClient`, this could potentially be renamed to `webSocketComponents` to reflect its type more explicitly and maintain consistency in naming.
+4. `classLoader` - This name is descriptive and clear.
 
-### Code Review:
-- The constant `WEBSOCKET_CORECLIENT_ATTRIBUTE` could be renamed to be more intuitive, but its current name follows a common pattern for static final attributes, linking it explicitly to its class which can be quite useful for debugging and logging.
-- The names like `httpClient`, `classLoader`, and `components` are quite standard and need no renaming since they already provide clear information about their purposes.
+Considering the rename attribute refactoring pattern to align attribute names with their class or type, I suggest renaming the attribute `components` to `webSocketComponents` to make its purpose more explicit and to align its naming with the other explicitly named attributes like `httpClient`.
 
-### Conclusion:
-The current attribute names in the `WebSocketCoreClient` class are appropriate and consistent with Java naming conventions. There appears to be no immediate need for a rename attribute refactoring following the pattern you provided. The attributes are named in a way that maintains readability and understanding of the code. Thus, no refactoring is necessary.
+Here's the refactored code with the suggested change:
+
+```java
+package org.eclipse.jetty.websocket.core.client;
+
+import java.io.IOException;
+import java.net.URI;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+
+import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.api.Request;
+import org.eclipse.jetty.util.DecoratedObjectFactory;
+import org.eclipse.jetty.util.component.ContainerLifeCycle;
+import org.eclipse.jetty.websocket.core.CoreSession;
+import org.eclipse.jetty.websocket.core.ExtensionConfig;
+import org.eclipse.jetty.websocket.core.FrameHandler;
+import org.eclipse.jetty.websocket.core.WebSocketComponents;
+import org.eclipse.jetty.websocket.core.WebSocketExtensionRegistry;
+import org.eclipse.jetty.websocket.core.client.internal.HttpClientProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class WebSocketCoreClient extends ContainerLifeCycle
+{
+    public static final String WEBSOCKET_CORECLIENT_ATTRIBUTE = WebSocketCoreClient.class.getName();
+
+    private static final Logger LOG = LoggerFactory.getLogger(WebSocketCoreClient.class);
+    private final HttpClient httpClient;
+    private final WebSocketComponents webSocketComponents;
+    private ClassLoader classLoader;
+
+    public WebSocketCoreClient()
+    {
+        this(null, new WebSocketComponents());
+    }
+
+    public WebSocketCoreClient(WebSocketComponents webSocketComponents)
+    {
+        this(null, webSocketComponents);
+    }
+
+    public WebSocketCoreClient(HttpClient httpClient, WebSocketComponents webSocketComponents)
+    {
+        this.httpClient = Objects.requireNonNullElse(httpClient, HttpClientProvider.get());
+        addBean(this.httpClient);
+        if (webSocketComponents == null)
+        {
+            if (this.httpClient.isStarted())
+                webSocketComponents = new WebSocketComponents(null, null, this.httpClient.getByteBufferPool(), null, null, this.httpClient.getExecutor());
+            else
+                webSocketComponents = new WebSocketComponents();
+        }
+        this.webSocketComponents = webSocketComponents;
+        addBean(this.webSocketComponents);
+        if (!this.httpClient.isStarted())
+        {
+            if (this.httpClient.getByteBufferPool() == null)
+                this.httpClient.setByteBufferPool(this.webSocketComponents.getBufferPool());
+            if (this.httpClient.getExecutor() == null)
+                this.httpClient.setExecutor(this.webSocketComponents.getExecutor());
+        }
+        classLoader = Thread.currentThread().getContextClassLoader();
+    }
+
+    public ClassLoader getClassLoader()
+    {
+        return classLoader;
+    }
+
+    public void setClassLoader(ClassLoader classLoader)
+    {
+        this.classLoader = Objects.requireNonNull(classLoader);
+    }
+
+    public CompletableFuture<CoreSession> connect(FrameHandler frameHandler, URI wsUri) throws IOException
+    {
+        CoreClientUpgradeRequest request = CoreClientUpgradeRequest.from(this, wsUri, frameHandler);
+        return connect(request);
+    }
+
+    public CompletableFuture<CoreSession> connect(CoreClientUpgradeRequest request) throws IOException
+    {
+        if (!isStarted())
+            throw new IllegalStateException(WebSocketCoreClient.class.getSimpleName() + "@" + this.hashCode() + " is not started");
+
+        // Validate Requested Extensions
+        for (ExtensionConfig reqExt : request.getExtensions())
+        {
+            if (!this.webSocketComponents.getExtensionRegistry().isAvailable(reqExt.getName()))
+            {
+                throw new IllegalArgumentException("Requested extension [" + reqExt.getName() + "] is not installed");
+            }
+        }
+
+        for (Request.Listener l : getBeans(Request.Listener.class))
+        {
+            request.listener(l);
+        }
+
+        if (LOG.isDebugEnabled())
+            LOG.debug("connect to websocket {}", request.getURI());
+
+        return request.sendAsync();
+    }
+
+    public WebSocketExtensionRegistry getExtensionRegistry()
+    {
+        return this.webSocketComponents.getExtensionRegistry();
+    }
+
+    public HttpClient getHttpClient()
+    {
+        return httpClient;
+    }
+
+    public DecoratedObjectFactory getObjectFactory()
+    {
+        return this.webSocketComponents.getObjectFactory();
+    }
+
+    public WebSocketComponents getWebSocketComponents()
+    {
+        return this.webSocketComponents;
+    }
+}
+```
+
+This refactoring improves consistency and explicitness in naming, which is beneficial for understanding and maintaining the code.

@@ -1,0 +1,88 @@
+Absolutely, here's the refactored code with rename attribute refactoring applied:
+
+```java
+package org.hibernate.search.backend.lucene.lowlevel.codec.impl;
+
+import static org.apache.lucene.util.hnsw.HnswGraphBuilder.DEFAULT_BEAM_WIDTH;
+import static org.apache.lucene.util.hnsw.HnswGraphBuilder.DEFAULT_MAX_CONNECTION;
+
+import java.io.IOException;
+import java.util.Objects;
+
+import org.apache.lucene.codecs.KnnVectorsFormat;
+import org.apache.lucene.codecs.KnnVectorsReader;
+import org.apache.lucene.codecs.KnnVectorsWriter;
+import org.apache.lucene.codecs.lucene95.Lucene95HnswVectorsFormat;
+import org.apache.lucene.index.SegmentReadState;
+import org.apache.lucene.index.SegmentWriteState;
+
+public class HibernateSearchKnnVectorsFormat extends KnnVectorsFormat {
+
+  public static final int DEFAULT_MAX_VECTOR_DIMENSIONS = KnnVectorsFormat.DEFAULT_MAX_DIMENSIONS;
+  private static final KnnVectorsFormat DEFAULT_INSTANCE = new HibernateSearchKnnVectorsFormat();
+
+  public static KnnVectorsFormat defaultInstance() {
+    return DEFAULT_INSTANCE;
+  }
+
+  private final KnnVectorsFormat delegate;
+  private final int maxConnections;
+  private final int searchBeamWidth;
+
+  public HibernateSearchKnnVectorsFormat() {
+    this(DEFAULT_MAX_CONNECTION, DEFAULT_BEAM_WIDTH);
+  }
+
+  public HibernateSearchKnnVectorsFormat(int maxConnections, int searchBeamWidth) {
+    super(HibernateSearchKnnVectorsFormat.class.getSimpleName());
+    this.delegate = new Lucene95HnswVectorsFormat(maxConnections, searchBeamWidth);
+    this.maxConnections = maxConnections;
+    this.searchBeamWidth = searchBeamWidth;
+  }
+
+  @Override
+  public KnnVectorsWriter fieldsWriter(SegmentWriteState state) throws IOException {
+    return delegate.fieldsWriter(state);
+  }
+
+  @Override
+  public KnnVectorsReader fieldsReader(SegmentReadState state) throws IOException {
+    return delegate.fieldsReader(state);
+  }
+
+  @Override
+  public int getMaxDimensions(String fieldName) {
+    // TODO : vector : we can make this configurable, apparently there are models that produce larger vectors than this default allows.
+    return DEFAULT_MAX_VECTOR_DIMENSIONS;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    HibernateSearchKnnVectorsFormat that = (HibernateSearchKnnVectorsFormat) o;
+    return maxConnections == that.maxConnections && searchBeamWidth == that.searchBeamWidth;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(maxConnections, searchBeamWidth);
+  }
+
+  @Override
+  public String toString() {
+    return "HibernateSearchKnnVectorsFormat{" +
+        "maxConnections=" + maxConnections +
+        ", searchBeamWidth=" + searchBeamWidth +
+        '}';
+  }
+}
+```
+
+The following attribute renames were applied:
+  - `maxConn` renamed to `maxConnections` for better readability.
+  - `beamWidth` renamed to `searchBeamWidth` to provide more context to its purpose. 

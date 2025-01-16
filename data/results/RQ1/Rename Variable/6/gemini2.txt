@@ -1,0 +1,98 @@
+Absolutely, there are several opportunities for refactoring the provided code snippet to improve readability. Here's the refactored code with explanations for the changes made:
+
+```java
+package org.apache.hadoop.fs.azurebfs.services;
+
+import java.io.IOException;
+import java.util.Map;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FutureDataInputStreamBuilder;
+import org.apache.hadoop.fs.azurebfs.AzureBlobFileSystemStore;
+import org.assertj.core.api.Assertions;
+import org.junit.Test;
+
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azurebfs.AbfsConfiguration;
+import org.apache.hadoop.fs.azurebfs.AzureBlobFileSystem;
+import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
+
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+
+import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_FOOTER_READ_BUFFER_SIZE;
+import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.DEFAULT_FOOTER_READ_BUFFER_SIZE;
+import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.ONE_KB;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
+
+import static org.apache.hadoop.fs.azurebfs.AbfsStatistic.CONNECTIONS_MADE;
+
+public class ITestAbfsInputStreamReadFooter extends ITestAbfsInputStream {
+
+  private static final int TEN = 10;
+  private static final int TWENTY = 20;
+
+  public ITestAbfsInputStreamReadFooter() throws Exception {
+  }
+
+  @Test
+  public void testSingleServerCallWhenConfIsTrue() throws Exception {
+    testNumBackendCalls(true);
+  }
+
+  @Test
+  public void testMultipleServerCallsWhenConfIsFalse() throws Exception {
+    testNumBackendCalls(false);
+  }
+
+  private void testNumBackendCalls(boolean optimizeFooterRead) throws Exception {
+    int fileIdx = 0;
+    for (int i = 0; i <= 4; i++) {
+      for (int j = 0; j <= 2; j++) {
+        int fileSize = (int) Math.pow(2, i) * 256 * ONE_KB;
+        int footerReadBufferSize = (int) Math.pow(2, j) * 256 * ONE_KB;
+        final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+        Path testFilePath = createPathAndFileWithContent(fs, fileIdx++, fileSize);
+        int length = AbfsInputStream.FOOTER_SIZE;
+        FutureDataInputStreamBuilder builder = getParameterizedBuilder(testFilePath, fs, footerReadBufferSize);
+        try (FSDataInputStream iStream = builder.build().get()) {
+          verifyConfigValueInStream(iStream, footerReadBufferSize);
+          byte[] buffer = new byte[length];
+
+          Map<String, Long> metricMap = getInstrumentationMap(fs);
+          long requestsMadeBeforeTest = metricMap.get(CONNECTIONS_MADE.getStatName());
+
+          iStream.seek(fileSize - 8);
+          iStream.read(buffer, 0, length);
+
+          iStream.seek(fileSize - (TEN * ONE_KB));
+          iStream.read(buffer, 0, length);
+
+          iStream.seek(fileSize - (TWENTY * ONE_KB));
+          iStream.read(buffer, 0, length);
+
+          metricMap = getInstrumentationMap(fs);
+          long requestsMadeAfterTest = metricMap.get(CONNECTIONS_MADE.getStatName());
+
+          if (optimizeFooterRead) {
+            assertEquals(1, requestsMadeAfterTest - requestsMadeBeforeTest);
+          } else {
+            assertEquals(3, requestsMadeAfterTest - requestsMadeBeforeTest);
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  public void testSeekToBeginAndReadWithConfTrue() throws Exception {
+    testSeekAndReadWithConf(true, SeekTo.BEGIN);
+  }
+
+  // ... other

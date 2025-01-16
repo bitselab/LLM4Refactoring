@@ -1,0 +1,223 @@
+The `WebServerSslBundle` class in its current state handles multiple responsibilities related to SSL configuration, such as creating different types of SSL store bundles and managing SSL bundle instances. This class can be improved with the following refactoring strategies:
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Class:**  
+   - Move PEM and JKS store bundle creation logic into dedicated classes.  
+   - Create a factory class for selecting the correct store bundle.  
+
+2. **Extract Method:**  
+   - Break down the overloaded `get()` methods into smaller, more focused methods.
+
+3. **Extract Variable:**  
+   - Replace magic strings like `"PKCS11"` with constants.  
+
+4. **Rename Method:**  
+   - `createCertificateFileSslStoreProviderDelegate` → `createPemSslBundleDelegate` for clarity.
+
+---
+
+### **Refactored Code**
+
+#### **1. Extracted Class: `SslStoreBundleFactory`**
+
+```java
+package org.springframework.boot.web.server;
+
+import org.springframework.boot.ssl.Ssl;
+import org.springframework.boot.ssl.SslStoreBundle;
+
+public final class SslStoreBundleFactory {
+
+    private static final String PKCS11 = "PKCS11";
+
+    private SslStoreBundleFactory() {
+    }
+
+    public static SslStoreBundle createStoreBundle(Ssl ssl) {
+        if (hasCertificateProperties(ssl)) {
+            return PemSslStoreBundleFactory.create(ssl);
+        }
+        if (hasJavaKeyStoreProperties(ssl)) {
+            return JksSslStoreBundleFactory.create(ssl);
+        }
+        throw new IllegalStateException("SSL is enabled but no trust material is configured");
+    }
+
+    private static boolean hasCertificateProperties(Ssl ssl) {
+        return Ssl.isEnabled(ssl) && ssl.getCertificate() != null && ssl.getCertificatePrivateKey() != null;
+    }
+
+    private static boolean hasJavaKeyStoreProperties(Ssl ssl) {
+        return Ssl.isEnabled(ssl) && ssl.getKeyStore() != null ||
+               PKCS11.equals(ssl.getKeyStoreType());
+    }
+}
+```
+
+---
+
+#### **2. Extracted Class: `PemSslStoreBundleFactory`**
+
+```java
+package org.springframework.boot.web.server;
+
+import org.springframework.boot.ssl.pem.PemSslStoreBundle;
+import org.springframework.boot.ssl.pem.PemSslStoreDetails;
+import org.springframework.boot.ssl.Ssl;
+import org.springframework.boot.ssl.SslStoreBundle;
+
+public final class PemSslStoreBundleFactory {
+
+    private PemSslStoreBundleFactory() {
+    }
+
+    public static SslStoreBundle create(Ssl ssl) {
+        PemSslStoreDetails keyStoreDetails = new PemSslStoreDetails(ssl.getKeyStoreType(),
+                ssl.getCertificate(), ssl.getCertificatePrivateKey()).withAlias(ssl.getKeyAlias());
+        PemSslStoreDetails trustStoreDetails = new PemSslStoreDetails(ssl.getTrustStoreType(),
+                ssl.getTrustCertificate(), ssl.getTrustCertificatePrivateKey());
+        return new PemSslStoreBundle(keyStoreDetails, trustStoreDetails);
+    }
+}
+```
+
+---
+
+#### **3. Extracted Class: `JksSslStoreBundleFactory`**
+
+```java
+package org.springframework.boot.web.server;
+
+import org.springframework.boot.ssl.jks.JksSslStoreBundle;
+import org.springframework.boot.ssl.jks.JksSslStoreDetails;
+import org.springframework.boot.ssl.Ssl;
+import org.springframework.boot.ssl.SslStoreBundle;
+
+public final class JksSslStoreBundleFactory {
+
+    private JksSslStoreBundleFactory() {
+    }
+
+    public static SslStoreBundle create(Ssl ssl) {
+        JksSslStoreDetails keyStoreDetails = new JksSslStoreDetails(ssl.getKeyStoreType(),
+                ssl.getKeyStoreProvider(), ssl.getKeyStore(), ssl.getKeyStorePassword());
+        JksSslStoreDetails trustStoreDetails = new JksSslStoreDetails(ssl.getTrustStoreType(),
+                ssl.getTrustStoreProvider(), ssl.getTrustStore(), ssl.getTrustStorePassword());
+        return new JksSslStoreBundle(keyStoreDetails, trustStoreDetails);
+    }
+}
+```
+
+---
+
+#### **4. Updated `WebServerSslBundle` Class**
+
+```java
+package org.springframework.boot.web.server;
+
+import org.springframework.boot.ssl.NoSuchSslBundleException;
+import org.springframework.boot.ssl.Ssl;
+import org.springframework.boot.ssl.SslBundle;
+import org.springframework.boot.ssl.SslBundleKey;
+import org.springframework.boot.ssl.SslBundles;
+import org.springframework.boot.ssl.SslManagerBundle;
+import org.springframework.boot.ssl.SslOptions;
+import org.springframework.boot.ssl.SslStoreBundle;
+import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
+
+public final class WebServerSslBundle implements SslBundle {
+
+    private final SslStoreBundle stores;
+    private final SslBundleKey key;
+    private final SslOptions options;
+    private final String protocol;
+    private final SslManagerBundle managers;
+
+    private WebServerSslBundle(SslStoreBundle stores, String keyPassword, Ssl ssl) {
+        this.stores = stores;
+        this.key = SslBundleKey.of(keyPassword, ssl.getKeyAlias());
+        this.protocol = ssl.getProtocol();
+        this.options = SslOptions.of(ssl.getCiphers(), ssl.getEnabledProtocols());
+        this.managers = SslManagerBundle.from(this.stores, this.key);
+    }
+
+    @Override
+    public SslStoreBundle getStores() {
+        return this.stores;
+    }
+
+    @Override
+    public SslBundleKey getKey() {
+        return this.key;
+    }
+
+    @Override
+    public SslOptions getOptions() {
+        return this.options;
+    }
+
+    @Override
+    public String getProtocol() {
+        return this.protocol;
+    }
+
+    @Override
+    public SslManagerBundle getManagers() {
+        return this.managers;
+    }
+
+    public static SslBundle get(Ssl ssl) throws NoSuchSslBundleException {
+        return get(ssl, null);
+    }
+
+    public static SslBundle get(Ssl ssl, SslBundles sslBundles) throws NoSuchSslBundleException {
+        Assert.state(Ssl.isEnabled(ssl), "SSL is not enabled");
+        String bundleName = ssl.getBundle();
+        if (StringUtils.hasText(bundleName)) {
+            Assert.state(sslBundles != null, 
+                () -> "SSL bundle '%s' was requested but no SslBundles instance was provided".formatted(bundleName));
+            return sslBundles.getBundle(bundleName);
+        }
+        SslStoreBundle stores = SslStoreBundleFactory.createStoreBundle(ssl);
+        return new WebServerSslBundle(stores, ssl.getKeyPassword(), ssl);
+    }
+
+    public static SslBundle createPemSslBundleDelegate(Ssl ssl) {
+        if (!SslStoreBundleFactory.hasCertificateProperties(ssl)) {
+            return null;
+        }
+        SslStoreBundle stores = PemSslStoreBundleFactory.create(ssl);
+        return new WebServerSslBundle(stores, ssl.getKeyPassword(), ssl);
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - Moved store bundle creation logic into `SslStoreBundleFactory`, `PemSslStoreBundleFactory`, and `JksSslStoreBundleFactory`.
+
+2. **Extract Method:**  
+   - Simplified `get()` methods by offloading bundle creation.
+
+3. **Extract Variable:**  
+   - `"PKCS11"` replaced with a constant.
+
+4. **Rename Method:**  
+   - `createCertificateFileSslStoreProviderDelegate` → `createPemSslBundleDelegate`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Improved Readability:** Each component now has a single responsibility.  
+- **Maintainability:** Easier to extend SSL support in the future.  
+- **Reusability:** Dedicated factories can be reused elsewhere if needed.  
+
+Let me know if you'd like further improvements!

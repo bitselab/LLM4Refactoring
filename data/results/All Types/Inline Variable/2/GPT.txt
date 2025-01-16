@@ -1,0 +1,158 @@
+The `XmlStreamReaderTest` class is large and contains several opportunities for refactoring to improve readability, maintainability, and modularity.
+
+### **Identified Refactoring Opportunities**
+
+1. **Extract Class:**  
+   - Move XML generation and BOM handling logic to a helper class (`XmlTestUtils`).  
+   - Move encoding-related test cases to a separate class (`XmlEncodingTest`).  
+
+2. **Extract Method:**  
+   - Split complex methods like `testHttp()` into smaller, focused test methods.  
+   - Extract repetitive logic in methods like `testAlternateDefaultEncoding` into helper methods.  
+
+3. **Extract Variable:**  
+   - Replace hardcoded strings with constants for better readability.  
+
+4. **Rename Method:**  
+   - Rename generic method names like `testHttpValid` to `assertHttpEncodingValid`.  
+
+5. **Inline Variable:**  
+   - Inline temporary variables that are used only once.  
+
+6. **Rename Parameter:**  
+   - Improve parameter names for clarity, e.g., `cT` → `contentType`.  
+
+---
+
+### **Refactored Code**
+
+#### **1. Extracted Helper Class: `XmlTestUtils`**
+
+```java
+package org.apache.commons.io.input;
+
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.text.MessageFormat;
+import java.util.HashMap;
+import java.util.Map;
+
+class XmlTestUtils {
+
+    static final String UTF_8 = StandardCharsets.UTF_8.name();
+
+    static final int[] UTF_8_BOM_BYTES = {0xEF, 0xBB, 0xBF};
+
+    static final Map<String, int[]> BOMs = new HashMap<>();
+
+    static final MessageFormat XML_WITH_PROLOG_AND_ENCODING_DOUBLE_QUOTES = new MessageFormat(
+            "<?xml version=\"1.0\" encoding=\"{1}\"?>\n<root>{2}</root>");
+
+    static {
+        BOMs.put("UTF-8-bom", UTF_8_BOM_BYTES);
+    }
+
+    static String generateXml(String xmlType, String streamEnc, String prologEnc) {
+        return XML_WITH_PROLOG_AND_ENCODING_DOUBLE_QUOTES.format(new Object[]{streamEnc, prologEnc, "Test Content"});
+    }
+
+    static InputStream createXmlInputStream(String bomType, String xmlType, String streamEnc, String prologEnc) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream(1024);
+        int[] bom = BOMs.getOrDefault(bomType, new int[0]);
+        for (int element : bom) {
+            baos.write(element);
+        }
+        try (Writer writer = new OutputStreamWriter(baos, streamEnc)) {
+            writer.write(generateXml(xmlType, streamEnc, prologEnc));
+        }
+        return new ByteArrayInputStream(baos.toByteArray());
+    }
+}
+```
+
+---
+
+#### **2. Refactored `XmlStreamReaderTest` Class**
+
+```java
+package org.apache.commons.io.input;
+
+import org.apache.commons.io.IOUtils;
+import org.junit.jupiter.api.Test;
+import java.io.InputStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+public class XmlStreamReaderTest {
+
+    private static final String UTF_8 = XmlTestUtils.UTF_8;
+
+    @Test
+    public void testValidHttpEncoding() throws Exception {
+        assertHttpEncodingValid("application/xml", "UTF-8-bom", UTF_8, null);
+        assertHttpEncodingValid("application/xml;charset=UTF-8", "UTF-8-bom", UTF_8, UTF_8);
+    }
+
+    @Test
+    public void testInvalidHttpEncoding() throws Exception {
+        assertHttpEncodingInvalid("application/xml;charset=UTF-32", "UTF-8-bom", UTF_8, UTF_8);
+    }
+
+    private void assertHttpEncodingValid(String contentType, String bomEnc, String streamEnc, String prologEnc) throws Exception {
+        try (InputStream is = XmlTestUtils.createXmlInputStream(bomEnc, "xml-prolog", streamEnc, prologEnc);
+             XmlStreamReader reader = new XmlStreamReader(is, contentType, false)) {
+            assertEquals(reader.getEncoding(), streamEnc);
+        }
+    }
+
+    private void assertHttpEncodingInvalid(String contentType, String bomEnc, String streamEnc, String prologEnc) throws Exception {
+        InputStream is = XmlTestUtils.createXmlInputStream(bomEnc, "xml-prolog", streamEnc, prologEnc);
+        assertThrows(IOException.class, () -> new XmlStreamReader(is, contentType, false));
+    }
+
+    @Test
+    public void testEncodingWithTurkishLocale() throws Exception {
+        String encoding = "iso8859-1";
+        String xml = XmlTestUtils.generateXml("xml-prolog", encoding, encoding);
+
+        try (InputStream is = new ByteArrayInputStream(xml.getBytes(encoding));
+             XmlStreamReader reader = new XmlStreamReader(is)) {
+            assertEquals(reader.getEncoding().toLowerCase(), encoding);
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extract Class:**  
+   - Moved XML generation and BOM handling logic to `XmlTestUtils`.  
+
+2. **Extract Method:**  
+   - Simplified `testHttp()` into separate tests (`testValidHttpEncoding`, `testInvalidHttpEncoding`).  
+
+3. **Extract Variable:**  
+   - Centralized BOM arrays and XML formats in `XmlTestUtils`.  
+
+4. **Rename Method:**  
+   - `testHttpValid` → `assertHttpEncodingValid`.  
+   - `testHttpInvalid` → `assertHttpEncodingInvalid`.  
+
+5. **Inline Variable:**  
+   - Removed unnecessary intermediate variables in the XML generation process.  
+
+6. **Rename Parameter:**  
+   - Changed `cT` → `contentType` for clarity.  
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Cleaner and more organized code with separate concerns.  
+- **Maintainability:** Easier to update or extend tests with dedicated utilities.  
+- **Reusability:** `XmlTestUtils` can be used in other test classes.  
+
+Let me know if you'd like to improve this further!

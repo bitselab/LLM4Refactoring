@@ -1,0 +1,29 @@
+## Refactoring Opportunities in the CustomImportOrderCheck Class
+
+The provided code snippet for the `CustomImportOrderCheck` class offers several potential areas for refactoring:
+
+**1. Use of Regular Expressions:**
+
+* The code uses multiple regular expressions (`Pattern`) for matching import paths. Consider creating a dedicated class or utility method to encapsulate this logic and improve readability.
+
+**2. Code Duplication:**
+
+* The `findBetterPatternMatch` method checks if a new pattern is a better match than the current one. This logic is repeated in the `getImportGroup` method. Consider refactoring to eliminate the duplication. 
+
+**3. Early Return:**
+
+* In the `finishImportList` method, you can potentially improve efficiency by using early return statements. For example, if the first import doesn't belong to any group (has `NON_GROUP_RULE_GROUP`), you can directly log an error and exit the loop.
+
+**4. Naming Conventions:**
+
+* While the variable and method names are generally descriptive, some could be improved for better readability. Consider renaming `samePackageDomainsRegExp` to `samePackageMatchingPattern` and `customOrderRules` to `configuredImportOrder`.
+
+**5. Encapsulation:**
+
+* The class currently has several private helper methods like `createSamePackageRegexp` and `getFirstDomainsFromIdent`. These methods could be made static within a dedicated utility class if they are not specific to this class's functionality.
+
+**6. Comments:**
+
+* While some comments are present, adding more comments explaining complex logic sections like `finishImportList` and `findBetterPatternMatch` can improve code maintainability.
+
+**Overall, refactoring this code can improve readability, maintainability, and potentially performance.**

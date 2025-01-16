@@ -1,0 +1,122 @@
+## Refactoring Opportunities in InternalSinkWriterMetricGroup
+
+After reviewing the provided code, I identified the following potential refactoring opportunities:
+
+**1. Extract Method:**
+
+* The code block responsible for initializing the counters `numRecordsOutErrors`, `numRecordsSendErrors`, `numRecordsWritten`, and `numBytesWritten` can be extracted into a separate method named `initializeCounters`. This would improve code readability and maintainability.
+
+**2. Extract Variable:**
+
+* The string literals `MetricNames.NUM_RECORDS_OUT_ERRORS`, `MetricNames.NUM_RECORDS_SEND_ERRORS`, `MetricNames.NUM_RECORDS_SEND`, and `MetricNames.NUM_BYTES_SEND` can be extracted into variables for better clarity and easier modification.
+
+**3. Inline Method:**
+
+* The `getNumRecordsOutCounter` and `getNumBytesOutCounter` methods in the `OperatorIOMetricGroup` interface can be inlined as they are only used once within the `InternalSinkWriterMetricGroup` class.
+
+**4. Rename Attribute:**
+
+* The attribute `operatorIOMetricGroup` can be renamed to `ioMetricGroup` for better consistency with other metric group names.
+
+**5. Rename Method:**
+
+* The method `mockWriterMetricGroup(MetricGroup, OperatorIOMetricGroup)` can be renamed to `mockWriterMetricGroup(MetricGroup, IOMetricGroup)` to reflect the change in attribute name.
+
+## Refactored Code
+
+```java
+package org.apache.flink.runtime.metrics.groups;
+
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.OperatorIOMetricGroup;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
+import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
+import org.apache.flink.runtime.metrics.MetricNames;
+
+/** Special {@link org.apache.flink.metrics.MetricGroup} representing an Operator. */
+@Internal
+public class InternalSinkWriterMetricGroup extends ProxyMetricGroup<MetricGroup>
+        implements SinkWriterMetricGroup {
+
+    private static final String NUM_RECORDS_OUT_ERRORS = MetricNames.NUM_RECORDS_OUT_ERRORS;
+    private static final String NUM_RECORDS_SEND_ERRORS = MetricNames.NUM_RECORDS_SEND_ERRORS;
+    private static final String NUM_RECORDS_SEND = MetricNames.NUM_RECORDS_SEND;
+    private static final String NUM_BYTES_SEND = MetricNames.NUM_BYTES_SEND;
+
+    private final Counter numRecordsOutErrors;
+    private final Counter numRecordsSendErrors;
+    private final Counter numRecordsWritten;
+    private final Counter numBytesWritten;
+    private final IOMetricGroup ioMetricGroup;
+
+    @VisibleForTesting
+    InternalSinkWriterMetricGroup(
+            MetricGroup parentMetricGroup, IOMetricGroup ioMetricGroup) {
+        super(parentMetricGroup);
+        initializeCounters(parentMetricGroup, ioMetricGroup);
+        this.ioMetricGroup = ioMetricGroup;
+    }
+
+    private void initializeCounters(MetricGroup parentMetricGroup, IOMetricGroup ioMetricGroup) {
+        numRecordsOutErrors = parentMetricGroup.counter(NUM_RECORDS_OUT_ERRORS);
+        numRecordsSendErrors =
+                parentMetricGroup.counter(NUM_RECORDS_SEND_ERRORS, numRecordsOutErrors);
+        numRecordsWritten =
+                parentMetricGroup.counter(
+                        NUM_RECORDS_SEND, ioMetricGroup.getNumRecordsOutCounter());
+        numBytesWritten =
+                parentMetricGroup.counter(NUM_BYTES_SEND, ioMetricGroup.getNumBytesOutCounter());
+    }
+
+    public static InternalSinkWriterMetricGroup wrap(OperatorMetricGroup operatorMetricGroup) {
+        return new InternalSinkWriterMetricGroup(
+                operatorMetricGroup, operatorMetricGroup.getIOMetricGroup());
+    }
+    
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup mockWriterMetricGroup(MetricGroup metricGroup) {
+        return new InternalSinkWriterMetricGroup(
+                metricGroup, UnregisteredMetricsGroup.createOperatorIOMetricGroup());
+    }
+
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup mockWriterMetricGroup(
+            MetricGroup metricGroup, IOMetricGroup ioMetricGroup) {
+        return new InternalSinkWriterMetricGroup(metricGroup, ioMetricGroup);
+    }
+
+    @Override
+    public IOMetricGroup getIOMetricGroup() {
+        return ioMetricGroup;
+    }
+
+    @Override
+    public Counter getNumRecordsOutErrorsCounter() {
+        return numRecordsOutErrors;
+    }
+
+    @Override
+    public Counter getNumRecordsSendErrorsCounter() {
+        return numRecordsSendErrors;
+    }
+
+    @Override
+    public Counter getNumRecordsSendCounter() {
+        return numRecordsWritten;
+    }
+
+    @Override
+    public Counter getNumBytesSendCounter() {
+        return numBytesWritten;
+    }
+
+    @Override
+    public void setCurrentSendTimeGauge(Gauge<Long> currentSendTimeGauge) {
+        parentMetricGroup.gauge(MetricNames.CURRENT_SEND_TIME, currentSendTimeGauge);
+    }
+}
+```

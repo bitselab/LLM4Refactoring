@@ -1,0 +1,111 @@
+Upon reviewing the code, here are a few potential refactoring opportunities:
+
+1. **Extract Method**: The constructor `InternalSinkWriterMetricGroup` has several lines of code that create `Counter` objects, which could be extracted into a separate method for clarity and reusability.
+
+2. **Extract Variable**: The `parentMetricGroup.counter()` calls repeat similar logic, which could be extracted into a method that simplifies the creation of counters.
+
+3. **Inline Method**: The methods `mockWriterMetricGroup(MetricGroup)` and `mockWriterMetricGroup(MetricGroup, OperatorIOMetricGroup)` could be refactored, since both are simply creating instances of `InternalSinkWriterMetricGroup`.
+
+4. **Rename Attribute**: The names of the `Counter` attributes like `numRecordsOutErrors` might be more descriptive if they better reflect the purpose (e.g., `outgoingRecordsErrorCount`).
+
+Here’s the refactored version of the code:
+
+```java
+package org.apache.flink.runtime.metrics.groups;
+
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.MetricGroup;
+import org.apache.flink.metrics.groups.OperatorIOMetricGroup;
+import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
+import org.apache.flink.runtime.metrics.MetricNames;
+
+/** Special {@link org.apache.flink.metrics.MetricGroup} representing an Operator. */
+@Internal
+public class InternalSinkWriterMetricGroup extends ProxyMetricGroup<MetricGroup>
+        implements SinkWriterMetricGroup {
+
+    private final Counter outgoingRecordsErrorCount;
+    private final Counter sendRecordsErrorCount;
+    private final Counter recordsWrittenCount;
+    private final Counter bytesWrittenCount;
+    private final OperatorIOMetricGroup operatorIOMetricGroup;
+
+    @VisibleForTesting
+    InternalSinkWriterMetricGroup(
+            MetricGroup parentMetricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        super(parentMetricGroup);
+        this.operatorIOMetricGroup = operatorIOMetricGroup;
+        this.outgoingRecordsErrorCount = createCounter(parentMetricGroup, MetricNames.NUM_RECORDS_OUT_ERRORS);
+        this.sendRecordsErrorCount = createCounter(parentMetricGroup, MetricNames.NUM_RECORDS_SEND_ERRORS, outgoingRecordsErrorCount);
+        this.recordsWrittenCount = createCounter(parentMetricGroup, MetricNames.NUM_RECORDS_SEND, operatorIOMetricGroup.getNumRecordsOutCounter());
+        this.bytesWrittenCount = createCounter(parentMetricGroup, MetricNames.NUM_BYTES_SEND, operatorIOMetricGroup.getNumBytesOutCounter());
+    }
+
+    private Counter createCounter(MetricGroup parentMetricGroup, String name) {
+        return parentMetricGroup.counter(name);
+    }
+
+    private Counter createCounter(MetricGroup parentMetricGroup, String name, Counter relatedCounter) {
+        return parentMetricGroup.counter(name, relatedCounter);
+    }
+
+    public static InternalSinkWriterMetricGroup wrap(OperatorMetricGroup operatorMetricGroup) {
+        return new InternalSinkWriterMetricGroup(
+                operatorMetricGroup, operatorMetricGroup.getIOMetricGroup());
+    }
+    
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup mockWriterMetricGroup(MetricGroup metricGroup) {
+        return new InternalSinkWriterMetricGroup(
+                metricGroup, UnregisteredMetricsGroup.createOperatorIOMetricGroup());
+    }
+
+    @VisibleForTesting
+    public static InternalSinkWriterMetricGroup mockWriterMetricGroup(
+            MetricGroup metricGroup, OperatorIOMetricGroup operatorIOMetricGroup) {
+        return new InternalSinkWriterMetricGroup(metricGroup, operatorIOMetricGroup);
+    }
+
+    @Override
+    public OperatorIOMetricGroup getIOMetricGroup() {
+        return operatorIOMetricGroup;
+    }
+
+    @Override
+    public Counter getNumRecordsOutErrorsCounter() {
+        return outgoingRecordsErrorCount;
+    }
+
+    @Override
+    public Counter getNumRecordsSendErrorsCounter() {
+        return sendRecordsErrorCount;
+    }
+
+    @Override
+    public Counter getNumRecordsSendCounter() {
+        return recordsWrittenCount;
+    }
+
+    @Override
+    public Counter getNumBytesSendCounter() {
+        return bytesWrittenCount;
+    }
+
+    @Override
+    public void setCurrentSendTimeGauge(Gauge<Long> currentSendTimeGauge) {
+        parentMetricGroup.gauge(MetricNames.CURRENT_SEND_TIME, currentSendTimeGauge);
+    }
+}
+```
+
+### Refactoring Summary:
+
+- **Extracted Methods**: The logic for creating `Counter` objects has been moved into the `createCounter` helper methods to reduce code duplication.
+- **Renamed Variables**: Renamed the counters to be more descriptive (`outgoingRecordsErrorCount`, `sendRecordsErrorCount`, etc.).
+- **Inline Method**: The static `mockWriterMetricGroup` methods were left as they are because they serve specific testing purposes and their simplicity doesn't warrant inlining.
+
+### Conclusion:
+This refactored code is more readable, modular, and eliminates repetitive code, making it easier to maintain in the future.

@@ -1,0 +1,148 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The setup of the `DocumentBuilder` in `setupDocumentBuilder` can be extracted for clarity.  
+   - `getDocument` and `assertXMLEquals` could be simplified and reused across the tests.  
+
+2. **Extract Class:**  
+   - The XML comparison logic can be extracted into a utility/helper class to promote reusability.  
+
+3. **Extract Variable:**  
+   - Repeated XML strings in assertions can be assigned to variables for readability.  
+
+4. **Rename Method:**  
+   - Rename `getDocument` → `parseXmlToDocument` for better clarity.  
+
+5. **Inline Variable:**  
+   - Inline `InputStream inputStream` in `getDocument` as it's used only once.
+
+---
+
+### **Refactored Code**
+
+```java
+package com.github.javaparser.printer;
+
+import com.github.javaparser.ast.expr.Expression;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.w3c.dom.Document;
+import org.xml.sax.SAXException;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+import static com.github.javaparser.StaticJavaParser.parseExpression;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class XmlPrinterTest {
+
+    private static XmlTestUtils xmlUtils;
+
+    @BeforeAll
+    public static void setup() {
+        xmlUtils = new XmlTestUtils();
+    }
+
+    @Test
+    void testWithType() throws SAXException, IOException {
+        Expression expression = parseExpression("1+1");
+        XmlPrinter xmlOutput = new XmlPrinter(true);
+
+        String expectedXml = "<root type='BinaryExpr' operator='PLUS'><left type='IntegerLiteralExpr' value='1'></left><right type='IntegerLiteralExpr' value='1'></right></root>";
+        String actualXml = xmlOutput.output(expression);
+
+        xmlUtils.assertXMLEquals(expectedXml, actualXml);
+    }
+
+    @Test
+    void testWithoutType() throws SAXException, IOException {
+        Expression expression = parseExpression("1+1");
+        XmlPrinter xmlOutput = new XmlPrinter(false);
+
+        String expectedXml = "<root operator='PLUS'><left value='1'></left><right value='1'></right></root>";
+        String actualXml = xmlOutput.output(expression);
+
+        xmlUtils.assertXMLEquals(expectedXml, actualXml);
+    }
+
+    @Test
+    void testList() throws SAXException, IOException {
+        Expression expression = parseExpression("a(1,2)");
+        XmlPrinter xmlOutput = new XmlPrinter(true);
+
+        String expectedXml = "<root type='MethodCallExpr'><name type='SimpleName' identifier='a'></name><arguments><argument type='IntegerLiteralExpr' value='1'></argument><argument type='IntegerLiteralExpr' value='2'></argument></arguments></root>";
+        String actualXml = xmlOutput.output(expression);
+
+        xmlUtils.assertXMLEquals(expectedXml, actualXml);
+    }
+}
+
+/**
+ * Utility class for XML comparison operations.
+ */
+class XmlTestUtils {
+
+    private final DocumentBuilder documentBuilder;
+
+    public XmlTestUtils() {
+        this.documentBuilder = createDocumentBuilder();
+    }
+
+    private DocumentBuilder createDocumentBuilder() {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            factory.setCoalescing(true);
+            factory.setIgnoringElementContentWhitespace(true);
+            factory.setIgnoringComments(true);
+            return factory.newDocumentBuilder();
+        } catch (ParserConfigurationException ex) {
+            throw new RuntimeException("Failed to initialize DocumentBuilder", ex);
+        }
+    }
+
+    public Document parseXmlToDocument(String xml) throws SAXException, IOException {
+        try (InputStream inputStream = new ByteArrayInputStream(xml.getBytes())) {
+            Document document = documentBuilder.parse(inputStream);
+            document.normalizeDocument();
+            return document;
+        }
+    }
+
+    public void assertXMLEquals(String expectedXml, String actualXml) throws SAXException, IOException {
+        assertTrue(parseXmlToDocument(expectedXml).isEqualNode(parseXmlToDocument(actualXml)), "XML documents are not equal.");
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring Changes**
+
+1. **Extracted Class (`XmlTestUtils`):**  
+   - Moved XML parsing and comparison logic to `XmlTestUtils` for reusability.
+
+2. **Extracted Method:**  
+   - Separated `createDocumentBuilder()` for better clarity and reuse.
+
+3. **Renamed Method:**  
+   - Renamed `getDocument` to `parseXmlToDocument` for better readability.
+
+4. **Extracted Variables:**  
+   - Moved XML strings in tests to clearly named variables (`expectedXml`, `actualXml`).
+
+5. **Inlined Variable:**  
+   - Inlined `InputStream` using try-with-resources to ensure proper resource management.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** The tests are clearer and more focused on verifying behavior.  
+- **Reusability:** XML parsing and comparison logic can now be reused across different tests.  
+- **Maintainability:** Centralizing XML-related logic makes future changes easier.

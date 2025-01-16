@@ -1,0 +1,145 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - Extract sealed interfaces (`S`, `I`) and their implementations into separate classes for clarity.  
+
+2. **Extract Method:**  
+   - Separate the `main` method test cases into dedicated methods for readability.  
+   - Extract the `System.out.println` statements inside switch cases to dedicated methods.  
+
+3. **Extract Variable:**  
+   - Store repetitive `System.out.println` statements in variables to avoid redundancy.
+
+4. **Rename Method:**  
+   - Rename ambiguous method names for better clarity (`coverage` → `switchTypeCoverage`, `testSealedExhaustive` → `handleSealedSwitch`).  
+
+---
+
+### **Refactored Code**
+
+```java
+/**
+ * @see <a href="https://openjdk.org/jeps/441">JEP 441: Pattern Matching for switch</a>
+ */
+public class ExhaustiveSwitch {
+
+    // Refactored: Type coverage
+    static int switchTypeCoverage(Object o) {
+        return switch (o) {
+            case String s  -> s.length();
+            case Integer i -> i;
+            default -> 0;
+        };
+    }
+
+    static void printTypeCoverage(Object o) {
+        switch (o) {
+            case String s -> printString(s);
+            case Integer i -> printInteger();
+            default -> printDefault();
+        }
+    }
+
+    private static void printString(String s) {
+        System.out.println(s);
+    }
+
+    private static void printInteger() {
+        System.out.println("Integer");
+    }
+
+    private static void printDefault() {
+        System.out.println("Unknown type");
+    }
+
+    // Sealed interface and its implementations extracted for clarity
+    sealed interface S permits A, B, C {}
+    static final class A implements S {}
+    static final class B implements S {}
+    record C(int i) implements S {}
+
+    static int handleSealedSwitch(S s) {
+        return switch (s) {
+            case A a -> 1;
+            case B b -> 2;
+            case C c -> 3;
+        };
+    }
+
+    static void handleSealedSwitchStatement(S s) {
+        switch (s) {
+            case A a -> System.out.println("A");
+            case C c -> System.out.println("C");
+            default -> System.out.println("Default case, should be B");
+        }
+    }
+
+    // Sealed interface with generics extracted
+    sealed interface I<T> permits E, F {}
+    static final class E<X> implements I<String> {}
+    static final class F<Y> implements I<Y> {}
+
+    static int handleGenericSealedSwitch(I<Integer> i) {
+        return switch (i) {
+            case F<Integer> bi -> 42;
+        };
+    }
+
+    // Refactored main method into individual test cases
+    public static void main(String[] args) {
+        testTypeCoverage();
+        testSealedSwitch();
+        testGenericSealedSwitch();
+    }
+
+    private static void testTypeCoverage() {
+        System.out.println(switchTypeCoverage("a string"));
+        System.out.println(switchTypeCoverage(42));
+        System.out.println(switchTypeCoverage(new Object()));
+
+        printTypeCoverage("a string");
+        printTypeCoverage(21);
+        printTypeCoverage(new Object());
+    }
+
+    private static void testSealedSwitch() {
+        System.out.println("A: " + handleSealedSwitch(new A()));
+        System.out.println("B: " + handleSealedSwitch(new B()));
+        System.out.println("C: " + handleSealedSwitch(new C(1)));
+
+        handleSealedSwitchStatement(new A());
+        handleSealedSwitchStatement(new B());
+        handleSealedSwitchStatement(new C(2));
+    }
+
+    private static void testGenericSealedSwitch() {
+        System.out.println("F: " + handleGenericSealedSwitch(new F<>()));
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extract Class:**  
+   - Sealed interfaces `S` and `I` are logically grouped with their implementations for better structure.
+
+2. **Extract Method:**  
+   - Moved test cases from `main` to `testTypeCoverage()`, `testSealedSwitch()`, and `testGenericSealedSwitch()`.  
+   - Extracted printing logic (`printString()`, `printInteger()`, `printDefault()`).
+
+3. **Extract Variable:**  
+   - Not needed after method extraction.
+
+4. **Rename Method:**  
+   - `coverage` → `switchTypeCoverage`.  
+   - `testSealedExhaustive` → `handleSealedSwitch`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Cleaner `main` method with logical separation of tests.  
+- **Maintainability:** Easier to manage individual test cases and switch handling.  
+- **Scalability:** Adding new types or test scenarios is straightforward.

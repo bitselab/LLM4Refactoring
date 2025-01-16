@@ -1,0 +1,222 @@
+The `JavaParserFacade` class is quite large and handles multiple responsibilities, leading to complexity and reduced maintainability. Below are the refactoring opportunities and their implementations:
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem**: Symbol solving, argument handling, and type resolution are all mixed together.  
+   - **Solution**:  
+     - Extract `ArgumentSolver` for argument-solving logic.  
+     - Extract `TypeResolver` for type resolution.  
+     - Extract `ConstructorSolver` for constructor solving.  
+
+2. **Extract Method**  
+   - **Problem**: Methods like `solveArguments()` and `solve()` are too long and complex.  
+   - **Solution**: Break them into smaller, more focused methods.  
+
+3. **Extract Variable**  
+   - **Problem**: Complex expressions hinder readability.  
+   - **Solution**: Extract meaningful variables.  
+
+4. **Rename Method/Variable/Parameter**  
+   - **Problem**: Generic names like `node`, `expr`, and `res` reduce readability.  
+   - **Solution**: Use descriptive names (e.g., `expressionNode`, `resolvedConstructor`).  
+
+---
+
+### **Refactored Code**
+
+#### **JavaParserFacade.java**
+
+```java
+package com.github.javaparser.symbolsolver.javaparsermodel;
+
+import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.resolution.model.SymbolReference;
+import com.github.javaparser.resolution.declarations.*;
+import com.github.javaparser.resolution.types.ResolvedType;
+
+public class JavaParserFacade {
+
+    private final TypeSolver typeSolver;
+    private final ArgumentSolver argumentSolver;
+    private final TypeResolver typeResolver;
+    private final ConstructorSolver constructorSolver;
+
+    public JavaParserFacade(TypeSolver typeSolver) {
+        this.typeSolver = typeSolver;
+        this.argumentSolver = new ArgumentSolver(this);
+        this.typeResolver = new TypeResolver(this);
+        this.constructorSolver = new ConstructorSolver(this);
+    }
+
+    public SymbolReference<ResolvedMethodDeclaration> solve(MethodCallExpr methodCallExpr) {
+        return argumentSolver.solveMethodCall(methodCallExpr);
+    }
+
+    public SymbolReference<ResolvedConstructorDeclaration> solve(ObjectCreationExpr objectCreationExpr) {
+        return constructorSolver.solveConstructor(objectCreationExpr);
+    }
+
+    public ResolvedType resolveType(Expression expression) {
+        return typeResolver.resolveExpressionType(expression);
+    }
+
+    public TypeSolver getTypeSolver() {
+        return typeSolver;
+    }
+}
+```
+
+---
+
+#### **ArgumentSolver.java**
+
+```java
+package com.github.javaparser.symbolsolver.javaparsermodel;
+
+import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.resolution.model.LambdaArgumentTypePlaceholder;
+import com.github.javaparser.resolution.model.SymbolReference;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
+import com.github.javaparser.resolution.types.ResolvedType;
+
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+
+public class ArgumentSolver {
+
+    private final JavaParserFacade javaParserFacade;
+
+    public ArgumentSolver(JavaParserFacade javaParserFacade) {
+        this.javaParserFacade = javaParserFacade;
+    }
+
+    public SymbolReference<ResolvedMethodDeclaration> solveMethodCall(MethodCallExpr methodCallExpr) {
+        List<ResolvedType> argumentTypes = new LinkedList<>();
+        List<LambdaArgumentTypePlaceholder> placeholders = new LinkedList<>();
+
+        extractArgumentTypes(methodCallExpr, argumentTypes, placeholders);
+
+        SymbolReference<ResolvedMethodDeclaration> result = MethodResolutionLogic.findMostApplicableUsage(
+                JavaParserFactory.getContext(methodCallExpr, javaParserFacade.getTypeSolver())
+                        .solveMethod(methodCallExpr.getName().getId(), argumentTypes, false)
+        );
+
+        placeholders.forEach(placeholder -> placeholder.setMethod(result));
+
+        return result;
+    }
+
+    private void extractArgumentTypes(MethodCallExpr methodCallExpr, List<ResolvedType> argumentTypes, List<LambdaArgumentTypePlaceholder> placeholders) {
+        int index = 0;
+        for (Expression argument : methodCallExpr.getArguments()) {
+            if (argument.isLambdaExpr() || argument.isMethodReferenceExpr()) {
+                LambdaArgumentTypePlaceholder placeholder = new LambdaArgumentTypePlaceholder(index++);
+                argumentTypes.add(placeholder);
+                placeholders.add(placeholder);
+            } else {
+                argumentTypes.add(javaParserFacade.resolveType(argument));
+            }
+        }
+    }
+}
+```
+
+---
+
+#### **ConstructorSolver.java**
+
+```java
+package com.github.javaparser.symbolsolver.javaparsermodel;
+
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.resolution.model.LambdaArgumentTypePlaceholder;
+import com.github.javaparser.resolution.model.SymbolReference;
+import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclaration;
+import com.github.javaparser.resolution.logic.ConstructorResolutionLogic;
+import com.github.javaparser.resolution.types.ResolvedType;
+
+import java.util.LinkedList;
+import java.util.List;
+
+public class ConstructorSolver {
+
+    private final JavaParserFacade javaParserFacade;
+
+    public ConstructorSolver(JavaParserFacade javaParserFacade) {
+        this.javaParserFacade = javaParserFacade;
+    }
+
+    public SymbolReference<ResolvedConstructorDeclaration> solveConstructor(ObjectCreationExpr objectCreationExpr) {
+        List<ResolvedType> argumentTypes = new LinkedList<>();
+        List<LambdaArgumentTypePlaceholder> placeholders = new LinkedList<>();
+
+        javaParserFacade.argumentSolver.extractArgumentTypes(objectCreationExpr, argumentTypes, placeholders);
+
+        ResolvedReferenceTypeDeclaration typeDeclaration = resolveTypeDeclaration(objectCreationExpr);
+
+        SymbolReference<ResolvedConstructorDeclaration> result = ConstructorResolutionLogic.findMostApplicable(
+                typeDeclaration.getConstructors(), argumentTypes, javaParserFacade.getTypeSolver()
+        );
+
+        placeholders.forEach(placeholder -> placeholder.setMethod(result));
+
+        return result;
+    }
+
+    private ResolvedReferenceTypeDeclaration resolveTypeDeclaration(ObjectCreationExpr objectCreationExpr) {
+        return JavaParserFactory.getContext(objectCreationExpr, javaParserFacade.getTypeSolver())
+                .solveType(objectCreationExpr.getType().asString()).getCorrespondingDeclaration().asReferenceType();
+    }
+}
+```
+
+---
+
+#### **TypeResolver.java**
+
+```java
+package com.github.javaparser.symbolsolver.javaparsermodel;
+
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.resolution.types.ResolvedType;
+
+public class TypeResolver {
+
+    private final JavaParserFacade javaParserFacade;
+
+    public TypeResolver(JavaParserFacade javaParserFacade) {
+        this.javaParserFacade = javaParserFacade;
+    }
+
+    public ResolvedType resolveExpressionType(Expression expression) {
+        return JavaParserFactory.getContext(expression, javaParserFacade.getTypeSolver()).solveType(expression.toString()).getCorrespondingDeclaration();
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+| **Refactoring Type**   | **Implementation**                                                         |
+|------------------------|-----------------------------------------------------------------------------|
+| **Extract Class**       | `ArgumentSolver`, `ConstructorSolver`, `TypeResolver` for separation.       |
+| **Extract Method**      | Split argument extraction into a dedicated method.                         |
+| **Extract Variable**    | Introduced `argumentTypes` and `placeholders` variables for clarity.        |
+| **Rename Attribute**    | Clarified `res` → `result`, `expr` → `expression`.                         |
+| **Rename Method**       | Simplified `solveArguments()` to `extractArgumentTypes()`.                 |
+
+---
+
+### **Benefits**
+
+1. **Better Readability:** Responsibilities are now clearly defined.  
+2. **Easier Maintenance:** New functionality can be added to specific classes without affecting others.  
+3. **Improved Testability:** Smaller, isolated classes are easier to test.  
+
+This refactoring simplifies the `JavaParserFacade` class, enhances clarity, and improves scalability.

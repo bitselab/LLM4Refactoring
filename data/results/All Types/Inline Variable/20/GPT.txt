@@ -1,0 +1,209 @@
+### **Refactoring Analysis**
+
+The `R2dbcBeanPropertyRowMapperTests` class is well-structured and covers comprehensive test scenarios. However, there are opportunities to improve readability, modularity, and maintainability.
+
+---
+
+### **Identified Refactoring Opportunities**
+
+1. **Extract Method**  
+   - **Problem:** Repetitive logic for building mock rows in `SIMPLE_PERSON_ROW`, `EXTENDED_PERSON_ROW`, and `EMAIL_PERSON_ROW`.  
+   - **Solution:** Extract common mock row creation logic into reusable methods.
+
+2. **Extract Variable**  
+   - **Problem:** Inline complex method calls within assertions.  
+   - **Solution:** Introduce descriptive variables to clarify intent.
+
+3. **Rename Method/Variable**  
+   - **Problem:** Method `underscoreName` in `BeanPropertyRowMapper` is tested without clear context.  
+   - **Solution:** Rename test method to `testUnderscoreNameConversion` for better clarity.
+
+4. **Inline Method**  
+   - **Problem:** `isThrownBy(() -> mapper.apply(...))` is repeated.  
+   - **Solution:** Inline repetitive test invocation into a helper method.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.springframework.r2dbc.core;
+
+import io.r2dbc.spi.Readable;
+import io.r2dbc.spi.test.MockColumnMetadata;
+import io.r2dbc.spi.test.MockOutParameters;
+import io.r2dbc.spi.test.MockRow;
+import io.r2dbc.spi.test.MockRowMetadata;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.Mockito;
+import org.springframework.beans.TypeMismatchException;
+
+import static org.assertj.core.api.Assertions.*;
+
+class R2dbcBeanPropertyRowMapperTests {
+
+    @Test
+    void mappingUnknownReadableRejected() {
+        assertIllegalArgumentOnInvalidMapping(new BeanPropertyRowMapper<>(Person.class), Mockito.mock(Readable.class),
+                "Can only map Readable Row or OutParameters, got io.r2dbc.spi.Readable$MockitoMock$");
+    }
+
+    @Test
+    void mappingOutParametersAccepted() {
+        BeanPropertyRowMapper<Person> mapper = new BeanPropertyRowMapper<>(Person.class);
+        assertThatNoException().isThrownBy(() -> mapper.apply(MockOutParameters.empty()));
+    }
+
+    @Test
+    void mappingRowSimpleObject() {
+        Person result = new BeanPropertyRowMapper<>(Person.class).apply(buildSimplePersonRow());
+
+        assertThat(result.firstName).isEqualTo("John");
+        assertThat(result.lastName).isEqualTo("Doe");
+        assertThat(result.age).isEqualTo(30);
+    }
+
+    @Test
+    void mappingRowMissingAttributeAccepted() {
+        ExtendedPerson result = new BeanPropertyRowMapper<>(ExtendedPerson.class).apply(buildSimplePersonRow());
+
+        assertThat(result.firstName).isEqualTo("John");
+        assertThat(result.lastName).isEqualTo("Doe");
+        assertThat(result.age).isEqualTo(30);
+        assertThat(result.address).isNull();
+    }
+
+    @Test
+    void mappingRowWithDifferentName() {
+        EmailPerson result = new BeanPropertyRowMapper<>(EmailPerson.class).apply(buildEmailPersonRow());
+
+        assertThat(result.firstName).isEqualTo("John");
+        assertThat(result.lastName).isEqualTo("Doe");
+        assertThat(result.age).isEqualTo(30);
+        assertThat(result.email).isEqualTo("mail@example.org");
+    }
+
+    @Test
+    void rowTypeAndMappingTypeMisaligned() {
+        BeanPropertyRowMapper<TypeMismatchExtendedPerson> mapper = new BeanPropertyRowMapper<>(TypeMismatchExtendedPerson.class);
+        assertThatExceptionOfType(TypeMismatchException.class)
+                .isThrownBy(() -> mapper.apply(buildExtendedPersonRow()))
+                .withMessageContaining("Failed to convert property value of type 'java.lang.String' to required type");
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "age, age",
+            "lastName, last_name",
+            "Name, name",
+            "FirstName, first_name",
+            "EMail, e_mail",
+            "URL, u_r_l"
+    })
+    void testUnderscoreNameConversion(String input, String expected) {
+        assertThat(new BeanPropertyRowMapper<>(Object.class).underscoreName(input)).isEqualTo(expected);
+    }
+
+    private void assertIllegalArgumentOnInvalidMapping(BeanPropertyRowMapper<?> mapper, Readable input, String expectedMessage) {
+        assertThatIllegalArgumentException().isThrownBy(() -> mapper.apply(input))
+                .withMessageStartingWith(expectedMessage);
+    }
+
+    private static MockRow buildSimplePersonRow() {
+        return buildMockRow(
+                new String[]{"firstName", "lastName", "age"},
+                new Class[]{String.class, String.class, Integer.class},
+                new Object[]{"John", "Doe", 30}
+        );
+    }
+
+    private static MockRow buildExtendedPersonRow() {
+        return buildMockRow(
+                new String[]{"firstName", "lastName", "age", "address"},
+                new Class[]{String.class, String.class, Integer.class, String.class},
+                new Object[]{"John", "Doe", 30, "123 Sesame Street"}
+        );
+    }
+
+    private static MockRow buildEmailPersonRow() {
+        return buildMockRow(
+                new String[]{"firstName", "last_name", "age", "EMail"},
+                new Class[]{String.class, String.class, Integer.class, String.class},
+                new Object[]{"John", "Doe", 30, "mail@example.org"}
+        );
+    }
+
+    private static MockRow buildMockRow(String[] columnNames, Class<?>[] columnTypes, Object[] values) {
+        MockRowMetadata.Builder metadataBuilder = MockRowMetadata.builder();
+        for (int i = 0; i < columnNames.length; i++) {
+            metadataBuilder.columnMetadata(MockColumnMetadata.builder().name(columnNames[i]).javaType(columnTypes[i]).build());
+        }
+
+        MockRow.Builder rowBuilder = MockRow.builder().metadata(metadataBuilder.build());
+        for (int i = 0; i < values.length; i++) {
+            rowBuilder.identified(i, columnTypes[i], values[i]);
+        }
+        return rowBuilder.build();
+    }
+
+    // --- Test Model Classes ---
+
+    private static class Person {
+        String firstName, lastName;
+        int age;
+
+        public String getFirstName() { return firstName; }
+        public void setFirstName(String firstName) { this.firstName = firstName; }
+        public String getLastName() { return lastName; }
+        public void setLastName(String lastName) { this.lastName = lastName; }
+        public int getAge() { return age; }
+        public void setAge(int age) { this.age = age; }
+    }
+
+    private static class ExtendedPerson extends Person {
+        String address;
+        public String getAddress() { return address; }
+        public void setAddress(String address) { this.address = address; }
+    }
+
+    private static class TypeMismatchExtendedPerson extends ExtendedPerson {
+        @Override
+        public void setAddress(String address) {
+            throw new ClassCastException("simulating type mismatch for address");
+        }
+    }
+
+    private static class EmailPerson extends Person {
+        String email;
+        public String getEmail() { return email; }
+        public void setEmail(String email) { this.email = email; }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Method:**  
+   - Extracted mock row creation into `buildMockRow` for reusable test data generation.  
+   - Created `assertIllegalArgumentOnInvalidMapping` to avoid repetitive assertions.
+
+2. **Extract Variable:**  
+   - Replaced direct mock row definitions with clearer helper methods (`buildSimplePersonRow`, `buildExtendedPersonRow`).
+
+3. **Rename Method:**  
+   - Renamed `underscoreName` test to `testUnderscoreNameConversion` for clarity.
+
+4. **Inline Method:**  
+   - Simplified repetitive assertions with a helper method for invalid mapping tests.
+
+---
+
+### **Refactoring Benefits**
+
+- **Readability:** Test cases are clearer and more focused on the logic they verify.  
+- **Maintainability:** Easier to add or update mock row data across tests.  
+- **Reusability:** Extracted methods reduce duplication and simplify the test structure.

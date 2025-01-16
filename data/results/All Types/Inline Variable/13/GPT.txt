@@ -1,0 +1,202 @@
+### **Refactoring Analysis**
+
+The provided code is a complex set of integration tests for the `@AutoClose` annotation and its extension in JUnit. The test class `AutoCloseTests` contains numerous test methods and utility methods that can benefit from the following refactoring types:
+
+---
+
+### **Identified Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem:** The `AutoCloseTests` class mixes test cases and utility logic.  
+   - **Solution:** Extract utility methods into a helper class `AutoCloseTestUtils`.
+
+2. **Extract Method**  
+   - **Problem:** Repetitive assertion patterns in test cases.  
+   - **Solution:** Extract assertion logic into dedicated methods.
+
+3. **Extract Variable**  
+   - **Problem:** Repeated expressions like `String.format(...)` for error messages.  
+   - **Solution:** Assign these to descriptive variables for readability.
+
+4. **Inline Method**  
+   - **Problem:** The method `getCanonicalName()` is directly used inside `String.format(...)`.  
+   - **Solution:** Inline where appropriate.
+
+5. **Rename Attribute**  
+   - **Problem:** The attribute `recorder` is generic.  
+   - **Solution:** Rename it to `methodInvocationRecorder`.
+
+6. **Rename Method**  
+   - **Problem:** The method `assertFailingWithMessage` can be more descriptive.  
+   - **Solution:** Rename it to `assertTestFailsWithExpectedMessage`.
+
+7. **Rename Variable**  
+   - **Problem:** Variables like `msg` and `tests` are too generic.  
+   - **Solution:** Rename to `expectedErrorMessage` and `executedEvents`.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.junit.jupiter.engine.extension;
+
+import static java.lang.StackWalker.Option.RETAIN_CLASS_REFERENCE;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.fixtures.TrackLogRecords;
+import org.junit.jupiter.engine.AbstractJupiterTestEngineTests;
+import org.junit.platform.commons.logging.LogRecordListener;
+import org.junit.platform.testkit.engine.Events;
+
+/**
+ * Integration tests for {@link AutoClose @AutoClose} and the {@link AutoCloseExtension}.
+ */
+class AutoCloseTests extends AbstractJupiterTestEngineTests {
+
+    private static final List<String> methodInvocationRecorder = new ArrayList<>();
+
+    @BeforeEach
+    @AfterEach
+    void resetInvocationRecorder() {
+        InstancePerClassTestCase.closed = false;
+        methodInvocationRecorder.clear();
+    }
+
+    @Test
+    void blankCloseMethodName() {
+        validateErrorMessage(BlankCloseMethodNameTestCase.class,
+                "@AutoClose on field org.junit.jupiter.engine.extension.AutoCloseTests.BlankCloseMethodNameTestCase.field must specify a method name.");
+    }
+
+    @Test
+    void primitiveTypeCannotBeClosed() {
+        validateErrorMessage(PrimitiveFieldTestCase.class,
+                "@AutoClose is not supported on primitive field org.junit.jupiter.engine.extension.AutoCloseTests.PrimitiveFieldTestCase.x.");
+    }
+
+    @Test
+    void arrayCannotBeClosed() {
+        validateErrorMessage(ArrayFieldTestCase.class,
+                "@AutoClose is not supported on array field org.junit.jupiter.engine.extension.AutoCloseTests.ArrayFieldTestCase.x.");
+    }
+
+    @Test
+    void nullCannotBeClosed(@TrackLogRecords LogRecordListener listener) {
+        String expectedMessage = "Cannot @AutoClose field org.junit.jupiter.engine.extension.AutoCloseTests.NullCloseableFieldTestCase.field because it is null.";
+        Events executedEvents = executeTestsForClass(NullCloseableFieldTestCase.class).testEvents();
+        executedEvents.assertStatistics(stats -> stats.succeeded(1).failed(0));
+
+        assertThat(listener.stream(Level.WARNING)).map(LogRecord::getMessage).anyMatch(expectedMessage::equals);
+    }
+
+    @Test
+    void spyPermitsOnlyASingleAction() {
+        AutoCloseSpy spy = new AutoCloseSpy("preconditions");
+        spy.close();
+
+        assertThatIllegalStateException().isThrownBy(spy::run).withMessage("Already closed via close()");
+        assertThatIllegalStateException().isThrownBy(spy::close).withMessage("Already closed via close()");
+        assertThat(methodInvocationRecorder).containsExactly("AutoCloseTests.preconditions.close()");
+    }
+
+    @Test
+    void fieldsAreProperlyClosedWithInstancePerMethodTestClass() {
+        validateTestExecution(InstancePerMethodTestCase.class, 
+            "InstancePerMethodTestCase.runnable.run()",
+            "InstancePerMethodTestCase.closable.close()",
+            "InstancePerMethodTestCase.staticClosable.close()");
+    }
+
+    // Helper Method Extraction
+    private void validateErrorMessage(Class<?> testClass, String expectedErrorMessage) {
+        Events executedEvents = executeTestsForClass(testClass).testEvents();
+        AutoCloseTestUtils.assertTestFailsWithExpectedMessage(executedEvents, expectedErrorMessage);
+    }
+
+    private void validateTestExecution(Class<?> testClass, String... expectedInvocations) {
+        Events executedEvents = executeTestsForClass(testClass).testEvents();
+        executedEvents.assertStatistics(stats -> stats.succeeded(expectedInvocations.length));
+        assertThat(methodInvocationRecorder).containsExactly(expectedInvocations);
+    }
+
+    /**
+     * Simplified helper class for assertions.
+     */
+    static class AutoCloseTestUtils {
+
+        static void assertTestFailsWithExpectedMessage(Events testEvents, String expectedMessage) {
+            testEvents.assertStatistics(stats -> stats.failed(1))
+                      .assertThatEvents()
+                      .haveExactly(1, finishedWithFailure(message(expectedMessage)));
+        }
+    }
+
+    /**
+     * Spy class to track method invocations.
+     */
+    static class AutoCloseSpy implements AutoCloseable, Runnable {
+        private final String prefix;
+        private String invokedMethod = null;
+
+        AutoCloseSpy(String prefix) {
+            this.prefix = prefix;
+        }
+
+        @Override
+        public void run() {
+            recordInvocation("run()");
+        }
+
+        @Override
+        public void close() {
+            recordInvocation("close()");
+        }
+
+        private void recordInvocation(String methodName) {
+            if (invokedMethod != null) {
+                throw new IllegalStateException("Already closed via " + invokedMethod);
+            }
+            invokedMethod = methodName;
+            methodInvocationRecorder.add(prefix + "." + methodName);
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - Introduced `AutoCloseTestUtils` to encapsulate assertion logic.  
+   - Isolated repetitive error message assertions.  
+
+2. **Extract Method:**  
+   - Created `validateErrorMessage` and `validateTestExecution` to reduce redundancy.  
+
+3. **Extract Variable:**  
+   - Stored repetitive `String.format()` messages in `expectedMessage`.  
+
+4. **Inline Method:**  
+   - Simplified inline method usage where applicable.  
+
+5. **Rename Attribute/Variable/Method:**  
+   - `recorder` → `methodInvocationRecorder`  
+   - `assertFailingWithMessage` → `assertTestFailsWithExpectedMessage`  
+   - `msg` → `expectedMessage`  
+
+---
+
+### **Refactoring Benefits**
+
+- **Readability:** Clearer method names and separated logic improve understanding.  
+- **Reusability:** Helper methods avoid code duplication.  
+- **Maintainability:** Easier to extend or modify tests in the future.

@@ -1,0 +1,91 @@
+## Refactoring Opportunity: Extract Class StringToCommonJavaTypesConverter
+
+The `DefaultArgumentConverter` class has a good candidate for Extract Class refactoring. The inner class `StringToCommonJavaTypesConverter` specifically handles conversions for common Java types like `File`, `BigDecimal`, etc. Here's the refactored code:
+
+```java
+package org.junit.jupiter.params.converter;
+
+import static org.apiguardian.api.API.Status.INTERNAL;
+
+import java.io.File;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.URI;
+import java.net.URL;
+import java.util.Currency;
+import java.util.Locale;
+import java.util.UUID;
+
+import org.apiguardian.api.API;
+import org.junit.jupiter.api.extension.ParameterContext;
+import org.junit.platform.commons.support.conversion.ConversionException;
+import org.junit.platform.commons.util.ClassLoaderUtils;
+import org.junit.platform.commons.util.ReflectionUtils;
+
+/**
+ * {@code DefaultArgumentConverter} is the default implementation of the
+ * {@link ArgumentConverter} API.
+ *
+ * <p>The {@code DefaultArgumentConverter} is able to convert from strings to a
+ * number of primitive types and their corresponding wrapper types (Byte, Short,
+ * Integer, Long, Float, and Double), date and time types from the
+ * {@code java.time} package, and some additional common Java types such as
+ * {@link File}, {@link BigDecimal}, {@link BigInteger}, {@link Currency},
+ * {@link Locale}, {@link URI}, {@link URL}, {@link UUID}, etc.
+ *
+ * <p>If the source and target types are identical the source object will not
+ * be modified.
+ *
+ * @since 5.0
+ * @see org.junit.jupiter.params.converter.ArgumentConverter
+ * @see org.junit.platform.commons.support.conversion.StringConversionSupport
+ */
+@API(status = INTERNAL, since = "5.0")
+public class DefaultArgumentConverter implements ArgumentConverter {
+
+  public static final DefaultArgumentConverter INSTANCE = new DefaultArgumentConverter();
+
+  private static final List<StringToObjectConverter> stringToObjectConverters = unmodifiableList(asList(
+      // ... (exclude StringToCommonJavaTypesConverter)
+  ));
+
+  private DefaultArgumentConverter() {
+    // nothing to initialize
+  }
+
+  @Override
+  public final Object convert(Object source, ParameterContext context) {
+    Class<?> targetType = context.getParameter().getType();
+    return convert(source, targetType, context);
+  }
+
+  public final Object convert(Object source, Class<?> targetType, ParameterContext context) {
+    // ... (rest of the logic remains the same)
+  }
+
+  // Extracted class for StringToCommonJavaTypesConverter functionality
+  private static class StringToCommonJavaTypesConverter implements StringToObjectConverter {
+
+    @Override
+    public boolean canConvert(Class<?> targetType) {
+      // Logic to check if targetType is a supported common Java type
+      return targetType.equals(File.class) || targetType.equals(BigDecimal.class) 
+          // ... (add checks for other supported types)
+    }
+
+    @Override
+    public Object convert(String source, Class<?> targetType, ClassLoader classLoader) throws Exception {
+      // Implement conversion logic for supported common Java types
+      if (targetType.equals(File.class)) {
+        return new File(source);
+      } else if (targetType.equals(BigDecimal.class)) {
+        return new BigDecimal(source);
+      } 
+      // ... (add conversion logic for other supported types)
+      throw new UnsupportedOperationException("Unsupported conversion for type: " + targetType);
+    }
+  }
+}
+```
+
+This refactoring improves code readability and maintainability by separating conversion logic specific to common Java types into a dedicated class. You can further enhance this by adding more specific converter methods for each supported type within the `StringToCommonJavaTypesConverter` class.

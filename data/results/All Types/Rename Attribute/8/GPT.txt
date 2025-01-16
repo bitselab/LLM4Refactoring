@@ -1,0 +1,126 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Variable:**  
+   - Extract repeated usage of `HibernateSearchKnnVectorsFormat.class.getSimpleName()` to a constant for readability.
+
+2. **Extract Method:**  
+   - Move the creation of the delegate (`Lucene95HnswVectorsFormat`) into a dedicated method for clarity.
+
+3. **Rename Parameter:**  
+   - Rename constructor parameters `maxConnection` → `maxConn` for consistency with the field name.
+
+4. **Inline Variable:**  
+   - Inline the `DEFAULT_KNN_VECTORS_FORMAT` getter method since it's a simple return.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.hibernate.search.backend.lucene.lowlevel.codec.impl;
+
+import static org.apache.lucene.util.hnsw.HnswGraphBuilder.DEFAULT_BEAM_WIDTH;
+import static org.apache.lucene.util.hnsw.HnswGraphBuilder.DEFAULT_MAX_CONN;
+
+import java.io.IOException;
+import java.util.Objects;
+
+import org.apache.lucene.codecs.KnnVectorsFormat;
+import org.apache.lucene.codecs.KnnVectorsReader;
+import org.apache.lucene.codecs.KnnVectorsWriter;
+import org.apache.lucene.codecs.lucene95.Lucene95HnswVectorsFormat;
+import org.apache.lucene.index.SegmentReadState;
+import org.apache.lucene.index.SegmentWriteState;
+
+public class HibernateSearchKnnVectorsFormat extends KnnVectorsFormat {
+
+    public static final int DEFAULT_MAX_DIMENSIONS = KnnVectorsFormat.DEFAULT_MAX_DIMENSIONS;
+
+    private static final String FORMAT_NAME = HibernateSearchKnnVectorsFormat.class.getSimpleName();
+    private static final KnnVectorsFormat DEFAULT_INSTANCE = new HibernateSearchKnnVectorsFormat();
+
+    public static KnnVectorsFormat defaultFormat() {
+        return DEFAULT_INSTANCE;
+    }
+
+    private final KnnVectorsFormat delegate;
+    private final int maxConn;
+    private final int beamWidth;
+
+    public HibernateSearchKnnVectorsFormat() {
+        this(DEFAULT_MAX_CONN, DEFAULT_BEAM_WIDTH);
+    }
+
+    public HibernateSearchKnnVectorsFormat(int maxConn, int beamWidth) {
+        super(FORMAT_NAME);
+        this.delegate = createDelegate(maxConn, beamWidth);
+        this.maxConn = maxConn;
+        this.beamWidth = beamWidth;
+    }
+
+    private KnnVectorsFormat createDelegate(int maxConn, int beamWidth) {
+        return new Lucene95HnswVectorsFormat(maxConn, beamWidth);
+    }
+
+    @Override
+    public KnnVectorsWriter fieldsWriter(SegmentWriteState state) throws IOException {
+        return delegate.fieldsWriter(state);
+    }
+
+    @Override
+    public KnnVectorsReader fieldsReader(SegmentReadState state) throws IOException {
+        return delegate.fieldsReader(state);
+    }
+
+    @Override
+    public int getMaxDimensions(String fieldName) {
+        // TODO: Make configurable for models with larger vectors.
+        return DEFAULT_MAX_DIMENSIONS;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        HibernateSearchKnnVectorsFormat that = (HibernateSearchKnnVectorsFormat) o;
+        return maxConn == that.maxConn && beamWidth == that.beamWidth;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(maxConn, beamWidth);
+    }
+
+    @Override
+    public String toString() {
+        return "HibernateSearchKnnVectorsFormat{" +
+                "maxConn=" + maxConn +
+                ", beamWidth=" + beamWidth +
+                '}';
+    }
+}
+```
+
+---
+
+### **Changes Made**
+
+1. **Extract Variable:**  
+   - Added `FORMAT_NAME` for `HibernateSearchKnnVectorsFormat.class.getSimpleName()`.
+
+2. **Extract Method:**  
+   - Created `createDelegate(int maxConn, int beamWidth)` to handle the initialization of the `delegate`.
+
+3. **Rename Parameter:**  
+   - Changed constructor parameter `maxConnection` → `maxConn` for consistency.
+
+4. **Inline Variable:**  
+   - Simplified `defaultFormat()` by directly returning `DEFAULT_INSTANCE`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Extracted variables and methods improve the readability and maintainability of the code.  
+- **Consistency:** Naming conventions are now consistent across fields and parameters.  
+- **Extensibility:** Delegate creation is now isolated, simplifying future modifications.

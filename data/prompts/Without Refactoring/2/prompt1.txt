@@ -1,0 +1,46 @@
+As a developer, imagine your team leader requests you to review a piece of code to identify potential refactoring opportunities. The original code snippet is as follows:
+```
+package org.apache.commons.io.comparator;
+
+import java.io.File;
+import java.io.Serializable;
+import java.util.Comparator;
+
+public class DirectoryFileComparator extends AbstractFileComparator implements Serializable {
+
+    private static final int TYPE_FILE = 2;
+
+    private static final int TYPE_DIRECTORY = 1;
+
+    private static final long serialVersionUID = 296132640160964395L;
+
+    /** Singleton default comparator instance */
+    public static final Comparator<File> DIRECTORY_COMPARATOR = new DirectoryFileComparator();
+
+    /** Singleton reverse default comparator instance */
+    public static final Comparator<File> DIRECTORY_REVERSE = new ReverseFileComparator(DIRECTORY_COMPARATOR);
+
+    /**
+     * Compares the two files using the {@link File#isDirectory()} method.
+     *
+     * @param file1 The first file to compare.
+     * @param file2 The second file to compare.
+     * @return the result of calling file1's {@link File#compareTo(File)} with file2 as the parameter.
+     */
+    @Override
+    public int compare(final File file1, final File file2) {
+        return getType(file1) - getType(file2);
+    }
+
+    /**
+     * Converts type to numeric value.
+     *
+     * @param file The file.
+     * @return 1 for directories and 2 for files.
+     */
+    private int getType(final File file) {
+        return file.isDirectory() ? TYPE_DIRECTORY : TYPE_FILE;
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

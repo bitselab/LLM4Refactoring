@@ -1,0 +1,220 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method**:  
+   - Repeated logic for checking if the `maxCount` is reached (`isMaxCount()`) appears in multiple methods (`read()`, `available()`, `read(byte[], int, int)`).  
+   - **Solution**: Extract this repeated logic into a new method `checkMaxCount()`.
+
+2. **Extract Variable**:  
+   - Complex expressions like `Math.min(len, maxCount - getCount())` can be simplified.  
+   - **Solution**: Assign to a descriptive variable (`remainingBytes`).
+
+3. **Inline Method**:  
+   - The method `getCountingInputStream()` is used only once and adds little value.  
+   - **Solution**: Inline it into `getCount()`.
+
+4. **Rename Method/Variable**:  
+   - `maxCount` is more intuitive as `maxBytes`.  
+   - `propagateClose` can be renamed to `shouldPropagateClose` for clarity.  
+   - `onMaxLength()` can be renamed to `handleMaxBytesReached()`.
+
+5. **Simplify Deprecated Methods**:  
+   - Deprecated constructors and methods can be moved to the bottom and clearly marked to avoid confusion.  
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.commons.io.input;
+
+import static org.apache.commons.io.IOUtils.EOF;
+
+import java.io.IOException;
+import java.io.InputStream;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.build.AbstractStreamBuilder;
+
+/**
+ * Reads bytes up to a maximum length, if its count goes above that, it stops.
+ */
+public class BoundedInputStream extends ProxyInputStream {
+
+    private final long maxBytes;
+    private boolean shouldPropagateClose = true;
+
+    /**
+     * Builder for {@link BoundedInputStream}.
+     */
+    public static class Builder extends AbstractStreamBuilder<BoundedInputStream, Builder> {
+
+        private long maxBytes = EOF;
+        private boolean shouldPropagateClose = true;
+
+        @Override
+        public BoundedInputStream get() throws IOException {
+            return new BoundedInputStream(getInputStream(), maxBytes, shouldPropagateClose);
+        }
+
+        public Builder setMaxBytes(final long maxBytes) {
+            this.maxBytes = maxBytes;
+            return this;
+        }
+
+        public Builder setShouldPropagateClose(final boolean shouldPropagateClose) {
+            this.shouldPropagateClose = shouldPropagateClose;
+            return this;
+        }
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    private BoundedInputStream(final InputStream inputStream, final long maxBytes, final boolean shouldPropagateClose) {
+        super(new CountingInputStream(inputStream));
+        this.maxBytes = maxBytes;
+        this.shouldPropagateClose = shouldPropagateClose;
+    }
+
+    @Override
+    public int available() throws IOException {
+        if (checkMaxCount()) {
+            return 0;
+        }
+        return in.available();
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (shouldPropagateClose) {
+            in.close();
+        }
+    }
+
+    public long getCount() {
+        return ((CountingInputStream) in).getByteCount();
+    }
+
+    public long getMaxBytes() {
+        return maxBytes;
+    }
+
+    public long getRemaining() {
+        return maxBytes - getCount();
+    }
+
+    public boolean shouldPropagateClose() {
+        return shouldPropagateClose;
+    }
+
+    @Override
+    public int read() throws IOException {
+        if (checkMaxCount()) {
+            return EOF;
+        }
+        return super.read();
+    }
+
+    @Override
+    public int read(final byte[] b) throws IOException {
+        return read(b, 0, b.length);
+    }
+
+    @Override
+    public int read(final byte[] b, final int off, final int len) throws IOException {
+        if (checkMaxCount()) {
+            return EOF;
+        }
+        return super.read(b, off, (int) getSafeReadLength(len));
+    }
+
+    @Override
+    public long skip(final long n) throws IOException {
+        return super.skip(getSafeReadLength(n));
+    }
+
+    private long getSafeReadLength(final long requestedLength) {
+        return maxBytes >= 0 ? Math.min(requestedLength, maxBytes - getCount()) : requestedLength;
+    }
+
+    private boolean checkMaxCount() throws IOException {
+        if (maxBytes >= 0 && getCount() >= maxBytes) {
+            handleMaxBytesReached(maxBytes, getCount());
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Handles when the max byte limit is reached.
+     */
+    protected void handleMaxBytesReached(final long maxBytes, final long currentCount) throws IOException {
+        // For subclasses to override
+    }
+
+    // ---- Deprecated Methods ---- //
+
+    /**
+     * @deprecated Use {@link Builder#get()}.
+     */
+    @Deprecated
+    public BoundedInputStream(final InputStream in) {
+        this(in, EOF);
+    }
+
+    /**
+     * @deprecated Use {@link Builder#get()}.
+     */
+    @Deprecated
+    public BoundedInputStream(final InputStream inputStream, final long maxBytes) {
+        this(inputStream, maxBytes, true);
+    }
+
+    /**
+     * @deprecated Use {@link Builder#setShouldPropagateClose(boolean)}.
+     */
+    @Deprecated
+    public void setShouldPropagateClose(final boolean shouldPropagateClose) {
+        this.shouldPropagateClose = shouldPropagateClose;
+    }
+
+    /**
+     * @deprecated Use {@link #getMaxBytes()}.
+     */
+    @Deprecated
+    public long getMaxLength() {
+        return maxBytes;
+    }
+}
+```
+
+---
+
+### **Summary of Refactorings**
+
+1. **Extract Method:**  
+   - Introduced `checkMaxCount()` to centralize limit checking logic.  
+   - Extracted `getSafeReadLength()` for consistent calculation of safe read length.
+
+2. **Extract Variable:**  
+   - Simplified `Math.min(len, maxBytes - getCount())` with `getSafeReadLength()`.
+
+3. **Inline Method:**  
+   - Removed `getCountingInputStream()` by directly casting in `getCount()`.
+
+4. **Rename Attribute & Method:**  
+   - Renamed `maxCount` → `maxBytes`.  
+   - Renamed `propagateClose` → `shouldPropagateClose`.  
+   - Renamed `onMaxLength()` → `handleMaxBytesReached()`.
+
+5. **Organized Deprecated Methods:**  
+   - Moved deprecated constructors and setters to the bottom for clarity.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Cleaner method names and extracted logic improve understanding.  
+- **Maintainability:** Centralized limit checking makes updates easier.  
+- **Extensibility:** Subclasses can now override `handleMaxBytesReached()` more intuitively.

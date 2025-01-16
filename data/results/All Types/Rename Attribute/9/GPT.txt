@@ -1,0 +1,167 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Several long methods like `doIndexChanges` and `collectIteratorBuildersOnChange` have multiple responsibilities. Splitting them improves readability.  
+
+2. **Extract Variable:**  
+   - Repeated strings like `"Reindex requested by project root model changes"` and `"Project roots have changed"` can be extracted into constants.  
+
+3. **Rename Method/Parameter:**  
+   - Method names like `getBuildersOnWorkspaceChange` could be more descriptive, e.g., `buildIteratorsFromWorkspaceChanges`.
+
+4. **Inline Variable:**  
+   - The `mapEntry` in `waitForCompletion` could be directly used instead of assigning it first.
+
+---
+
+### **Refactored Code**
+
+```java
+final class EntityIndexingServiceImpl implements EntityIndexingServiceEx {
+
+    private static final Logger LOG = Logger.getInstance(EntityIndexingServiceImpl.class);
+    private static final RootChangesLogger ROOT_CHANGES_LOGGER = new RootChangesLogger();
+    private static final String FULL_RESCAN_REASON = "Reindex requested by project root model changes";
+    private static final String PARTIAL_RESCAN_REASON = "Project roots have changed";
+
+    @NotNull
+    private final CustomEntitiesCausingReindexTracker tracker = new CustomEntitiesCausingReindexTracker();
+
+    @Override
+    public void indexChanges(@NotNull Project project, @NotNull List<? extends RootsChangeRescanningInfo> changes) {
+        if (!isEligibleForIndexing(project, changes)) return;
+
+        if (DumbServiceImpl.isSynchronousTaskExecution()) {
+            processIndexChanges(project, changes);
+        } else {
+            ApplicationManager.getApplication().executeOnPooledThread(() -> processIndexChanges(project, changes));
+        }
+    }
+
+    private boolean isEligibleForIndexing(@NotNull Project project, @NotNull List<? extends RootsChangeRescanningInfo> changes) {
+        return FileBasedIndex.getInstance() instanceof FileBasedIndexImpl
+                && !LightEdit.owns(project)
+                && UnindexedFilesScanner.isFirstProjectScanningRequested(project)
+                && !changes.isEmpty();
+    }
+
+    private static void processIndexChanges(@NotNull Project project, @NotNull List<? extends RootsChangeRescanningInfo> changes) {
+        if (shouldRunFullRescan(changes)) {
+            triggerFullRescan(project, FULL_RESCAN_REASON);
+            return;
+        }
+
+        List<IndexableIteratorBuilder> builders = collectIndexableBuilders(project, changes);
+        if (!builders.isEmpty()) {
+            enqueueIndexingTask(project, builders);
+        }
+    }
+
+    private static boolean shouldRunFullRescan(@NotNull List<? extends RootsChangeRescanningInfo> changes) {
+        return changes.contains(RootsChangeRescanningInfo.TOTAL_RESCAN);
+    }
+
+    private static void triggerFullRescan(@NotNull Project project, @NotNull String reason) {
+        logRootChanges(project, true);
+        new UnindexedFilesScanner(project, reason).queue();
+    }
+
+    private static List<IndexableIteratorBuilder> collectIndexableBuilders(@NotNull Project project, @NotNull List<? extends RootsChangeRescanningInfo> changes) {
+        List<IndexableIteratorBuilder> builders = new SmartList<>();
+        EntityStorage entityStorage = WorkspaceModel.getInstance(project).getCurrentSnapshot();
+
+        for (RootsChangeRescanningInfo change : changes) {
+            if (change instanceof WorkspaceEventRescanningInfo eventInfo) {
+                builders.addAll(buildIteratorsFromWorkspaceChanges(project, eventInfo.events, entityStorage));
+            } else if (change instanceof WorkspaceEntitiesRootsChangedRescanningInfo rootsChangeInfo) {
+                builders.addAll(buildIteratorsFromWorkspaceEntitiesRootsChange(project, rootsChangeInfo.references, entityStorage));
+            } else {
+                LOG.warn("Unexpected change detected. Triggering full rescan.");
+                triggerFullRescan(project, PARTIAL_RESCAN_REASON);
+                return Collections.emptyList();
+            }
+        }
+        return builders;
+    }
+
+    private static List<IndexableIteratorBuilder> buildIteratorsFromWorkspaceChanges(@NotNull Project project, @NotNull Collection<? extends EntityChange<?>> events, @NotNull EntityStorage entityStorage) {
+        List<IndexableIteratorBuilder> builders = new SmartList<>();
+        WorkspaceIndexingRootsBuilder rootsBuilder = new WorkspaceIndexingRootsBuilder(false);
+
+        for (EntityChange<? extends WorkspaceEntity> change : events) {
+            collectBuildersFromEntityChange(change, project, builders, rootsBuilder, entityStorage);
+        }
+        builders.addAll(rootsBuilder.createBuilders(project));
+        return builders;
+    }
+
+    private static void collectBuildersFromEntityChange(@NotNull EntityChange<?> change, @NotNull Project project, @NotNull List<IndexableIteratorBuilder> builders, @NotNull WorkspaceIndexingRootsBuilder rootsBuilder, @NotNull EntityStorage entityStorage) {
+        Change changeType = Change.fromEntityChange(change);
+        WorkspaceEntity oldEntity = change.getOldEntity();
+        WorkspaceEntity newEntity = change.getNewEntity();
+
+        if (newEntity == null && changeType != Change.Removed) {
+            LOG.warn("Unexpected null newEntity for change: " + changeType);
+            return;
+        }
+        if (oldEntity == null && changeType != Change.Added) {
+            LOG.warn("Unexpected null oldEntity for change: " + changeType);
+            return;
+        }
+
+        collectWFICIteratorsOnChange(changeType, oldEntity, newEntity, project, builders, rootsBuilder, entityStorage);
+    }
+
+    private static void enqueueIndexingTask(@NotNull Project project, @NotNull List<IndexableIteratorBuilder> builders) {
+        List<IndexableFilesIterator> iterators = IndexableIteratorBuilders.INSTANCE.instantiateBuilders(builders, project, WorkspaceModel.getInstance(project).getCurrentSnapshot());
+        if (!iterators.isEmpty()) {
+            LOG.debug("Indexing iterators queued: " + iterators.size());
+            new UnindexedFilesScanner(project, iterators, null, PARTIAL_RESCAN_REASON).queue();
+        }
+    }
+
+    private static void logRootChanges(@NotNull Project project, boolean isFullRescan) {
+        String message = isFullRescan ? "Full reindex for project: " : "Partial reindex for project: ";
+        LOG.debug(message + project.getName());
+    }
+
+    // Helper Enum to simplify entity change tracking
+    private enum Change {
+        Added, Replaced, Removed;
+
+        static Change fromEntityChange(EntityChange<?> change) {
+            if (change instanceof EntityChange.Added<?>) return Added;
+            if (change instanceof EntityChange.Replaced<?>) return Replaced;
+            if (change instanceof EntityChange.Removed<?>) return Removed;
+            throw new IllegalStateException("Unexpected change type: " + change);
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring Changes**
+
+1. **Extract Method:**  
+   - Broke down `doIndexChanges` into `processIndexChanges`, `collectIndexableBuilders`, and `enqueueIndexingTask` for clarity.  
+
+2. **Extract Variable:**  
+   - Moved repetitive strings like `"Reindex requested by project root model changes"` into constants for maintainability.  
+
+3. **Rename Method:**  
+   - Renamed `getBuildersOnWorkspaceChange` → `buildIteratorsFromWorkspaceChanges` for better clarity.
+
+4. **Inline Variable:**  
+   - Removed unnecessary variables by directly using expressions where possible.
+
+5. **Simplified Logic:**  
+   - Encapsulated change detection logic in the `Change` enum.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Smaller methods focused on single responsibilities improve understanding.  
+- **Maintainability:** Centralized constants and better naming make future changes easier.  
+- **Extensibility:** Modular methods simplify adding or modifying indexing behaviors.

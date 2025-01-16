@@ -1,0 +1,177 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The `parse` method is complex with nested logic. Split into smaller methods:
+     - Validation logic for stream ID.
+     - Fragment parsing.
+     - Frame creation and rate control.
+
+2. **Extract Variable:**  
+   - Use meaningful variable names for repeated conditions and magic numbers.
+
+3. **Rename Method:**  
+   - `onHeaders` → `processCompletedHeaders` for clarity.
+
+4. **Inline Variable:**  
+   - Inline simple boolean checks for readability.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.eclipse.jetty.http2.parser;
+
+import java.nio.ByteBuffer;
+
+import org.eclipse.jetty.http.MetaData;
+import org.eclipse.jetty.http2.ErrorCode;
+import org.eclipse.jetty.http2.Flags;
+import org.eclipse.jetty.http2.frames.ContinuationFrame;
+import org.eclipse.jetty.http2.frames.HeadersFrame;
+
+public class ContinuationBodyParser extends BodyParser {
+    private final HeaderBlockParser headerBlockParser;
+    private final HeaderBlockFragments headerBlockFragments;
+    private State state = State.PREPARE;
+    private int remainingLength;
+
+    public ContinuationBodyParser(HeaderParser headerParser, Parser.Listener listener, HeaderBlockParser headerBlockParser, HeaderBlockFragments headerBlockFragments) {
+        super(headerParser, listener);
+        this.headerBlockParser = headerBlockParser;
+        this.headerBlockFragments = headerBlockFragments;
+    }
+
+    @Override
+    protected void emptyBody(ByteBuffer buffer) {
+        if (hasFlag(Flags.END_HEADERS)) {
+            processCompletedHeaders(buffer);
+        } else {
+            handleContinuationFrame(buffer, false);
+        }
+    }
+
+    @Override
+    public boolean parse(ByteBuffer buffer) {
+        while (buffer.hasRemaining()) {
+            switch (state) {
+                case PREPARE:
+                    if (!validateStreamId(buffer)) return false;
+                    remainingLength = getBodyLength();
+                    state = State.FRAGMENT;
+                    break;
+
+                case FRAGMENT:
+                    if (!processFragment(buffer)) return false;
+                    break;
+
+                default:
+                    throw new IllegalStateException("Unknown state: " + state);
+            }
+        }
+        return false;
+    }
+
+    private boolean validateStreamId(ByteBuffer buffer) {
+        int streamId = getStreamId();
+
+        if (streamId == 0) {
+            return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_frame");
+        }
+
+        if (streamId != headerBlockFragments.getStreamId()) {
+            return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+        }
+
+        return true;
+    }
+
+    private boolean processFragment(ByteBuffer buffer) {
+        int bufferRemaining = buffer.remaining();
+        boolean isLastFragment = hasFlag(Flags.END_HEADERS);
+
+        if (bufferRemaining < remainingLength) {
+            if (!handleContinuationFrame(buffer, false)) return false;
+            remainingLength -= bufferRemaining;
+        } else {
+            if (!handleContinuationFrame(buffer, isLastFragment)) return false;
+            reset();
+            return isLastFragment ? processCompletedHeaders(buffer) : true;
+        }
+
+        return true;
+    }
+
+    private boolean handleContinuationFrame(ByteBuffer buffer, boolean isLast) {
+        ContinuationFrame frame = new ContinuationFrame(getStreamId(), isLast);
+        if (!rateControlOnEvent(frame)) {
+            return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_continuation_frame_rate");
+        }
+
+        if (!headerBlockFragments.storeFragment(buffer, isLast ? remainingLength : buffer.remaining(), isLast)) {
+            return connectionFailure(buffer, ErrorCode.PROTOCOL_ERROR.code, "invalid_continuation_stream");
+        }
+
+        return true;
+    }
+
+    private boolean processCompletedHeaders(ByteBuffer buffer) {
+        ByteBuffer headerBlock = headerBlockFragments.complete();
+        MetaData metaData = headerBlockParser.parse(headerBlock, headerBlock.remaining());
+        headerBlockFragments.getByteBufferPool().release(headerBlock);
+
+        HeadersFrame frame = new HeadersFrame(getStreamId(), metaData, headerBlockFragments.getPriorityFrame(), headerBlockFragments.isEndStream());
+        headerBlockFragments.reset();
+
+        if (metaData == HeaderBlockParser.SESSION_FAILURE) {
+            return false;
+        }
+
+        if (metaData != HeaderBlockParser.STREAM_FAILURE) {
+            notifyHeaders(frame);
+        } else if (!rateControlOnEvent(frame)) {
+            return connectionFailure(buffer, ErrorCode.ENHANCE_YOUR_CALM_ERROR.code, "invalid_headers_frame_rate");
+        }
+
+        return true;
+    }
+
+    private void reset() {
+        state = State.PREPARE;
+        remainingLength = 0;
+    }
+
+    private enum State {
+        PREPARE, FRAGMENT
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Method:**  
+   - `validateStreamId`: Validates stream ID consistency.  
+   - `processFragment`: Handles fragment processing logic.  
+   - `handleContinuationFrame`: Creates frames and applies rate control.  
+   - `processCompletedHeaders` (renamed from `onHeaders`): Processes headers after all fragments are collected.
+
+2. **Extract Variable:**  
+   - `remainingLength`: Clarifies the purpose of the `length` variable.
+
+3. **Rename Method:**  
+   - `onHeaders` → `processCompletedHeaders` for clearer intent.
+
+4. **Inline Variable:**  
+   - Simplified boolean checks and removed redundant logic.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Improved Readability:** Clearer method names and modular logic.  
+- **Better Maintainability:** Smaller, focused methods are easier to modify or extend.  
+- **Error Handling:** Explicit validation and consistent error reporting.
+
+No further refactoring is necessary.

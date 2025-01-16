@@ -1,0 +1,214 @@
+## Refactoring Opportunities in the Code
+
+This code snippet presents several opportunities for refactoring, which can improve its readability, maintainability, and overall quality. Here's a breakdown of potential refactorings:
+
+**1. Extract Class:**
+
+The `OnBatchDatasourceInitializationCondition` class could be extracted into a separate class to better represent its purpose and encapsulate its data members. This would improve modularity and make the code easier to understand.
+
+**2. Extract Method:**
+
+The `getDataSource` method in the `SpringBootBatchConfiguration` class is simply returning a member variable. This could be extracted into a getter method for consistency with other properties.
+
+```java
+public DataSource getDataSource() {
+    return this.dataSource;
+}
+```
+
+**3. Extract Variable:**
+
+The constant strings `spring.batch.jdbc.initialize-schema` and `spring.batch.initialize-schema` are used twice in the code. Extracting them into variables would improve readability and make it easier to modify if needed.
+
+```java
+private static final String BATCH_JDBC_INITIALIZE_SCHEMA = "spring.batch.jdbc.initialize-schema";
+private static final String BATCH_INITIALIZE_SCHEMA = "spring.batch.initialize-schema";
+
+// ...
+
+new OnBatchDatasourceInitializationCondition(BATCH_JDBC_INITIALIZE_SCHEMA, BATCH_INITIALIZE_SCHEMA)
+```
+
+**4. Inline Method:**
+
+The `getBatchDataSource` method in the `SpringBootBatchConfiguration` class is simply returning the result of the `getDataSource` method. This could be inlined directly into the constructor.
+
+```java
+public SpringBootBatchConfiguration(DataSource dataSource, PlatformTransactionManager transactionManager, BatchProperties properties,
+                                     ObjectProvider<BatchConversionServiceCustomizer> batchConversionServiceCustomizers) {
+    this.dataSource = dataSource;
+    this.transactionManager = transactionManager;
+    this.properties = properties;
+    this.batchConversionServiceCustomizers = batchConversionServiceCustomizers.orderedStream().toList();
+}
+```
+
+**5. Rename Parameter:**
+
+The parameter `batchDataSource` in the `SpringBootBatchConfiguration` constructor could be renamed to `dataSource` for consistency with other parameters.
+
+**6. Rename Variable:**
+
+The variable `batchConversionServiceCustomizers` could be renamed to `conversionServiceCustomizers` for better clarity.
+
+**7. Rename Method:**
+
+The method `batchDataSourceInitializer` in the `DataSourceInitializerConfiguration` class could be renamed to `batchDataSourceScriptDatabaseInitializer` to better reflect its purpose.
+
+**Refactored Code:**
+
+```java
+package org.springframework.boot.autoconfigure.batch;
+
+import java.util.List;
+
+import javax.sql.DataSource;
+
+import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.support.DefaultBatchConfiguration;
+import org.springframework.batch.core.explore.JobExplorer;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.ExitCodeGenerator;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
+import org.springframework.boot.autoconfigure.sql.init.OnDatabaseInitializationCondition;
+import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.sql.init.dependency.DatabaseInitializationDependencyConfigurer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.core.convert.support.ConfigurableConversionService;
+import org.springframework.jdbc.datasource.init.DatabasePopulator;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.util.StringUtils;
+
+/**
+ * {@link EnableAutoConfiguration Auto-configuration} for Spring Batch. If a single job is
+ * found in the context, it will be executed on startup.
+ * <p>
+ * Disable this behavior with {@literal spring.batch.job.enabled=false}).
+ * <p>
+ * If multiple jobs are found, a job name to execute on startup can be supplied by the
+ * User with : {@literal spring.batch.job.name=job1}. In this case the Runner will first
+ * find jobs registered as Beans, then those in the existing JobRegistry.
+ *
+ * @author Dave Syer
+ * @author Eddú Meléndez
+ * @author Kazuki Shimizu
+ * @author Mahmoud Ben Hassine
+ * @since 1.0.0
+ */
+@AutoConfiguration(after = { HibernateJpaAutoConfiguration.class, TransactionAutoConfiguration.class })
+@ConditionalOnClass({ JobLauncher.class, DataSource.class, DatabasePopulator.class })
+@ConditionalOnBean({ DataSource.class, PlatformTransactionManager.class })
+@ConditionalOnMissingBean(value = DefaultBatchConfiguration.class, annotation = EnableBatchProcessing.class)
+@EnableConfigurationProperties(BatchProperties.class)
+@Import(DatabaseInitializationDependencyConfigurer.class)
+public class BatchAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "spring.batch.job", name = "enabled", havingValue = "true", matchIfMissing = true)
+    public JobLauncherApplicationRunner jobLauncherApplicationRunner(JobLauncher jobLauncher, JobExplorer jobExplorer,
+                                                                     JobRepository jobRepository, BatchProperties properties) {
+        JobLauncherApplicationRunner runner = new JobLauncherApplicationRunner(jobLauncher, jobExplorer, jobRepository);
+        String jobNames = properties.getJob().getName();
+        if (StringUtils.hasText(jobNames)) {
+            runner.setJobName(jobNames);
+        }
+        return runner;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ExitCodeGenerator.class)
+    public JobExecutionExitCodeGenerator jobExecutionExitCodeGenerator() {
+        return new JobExecutionExitCodeGenerator();
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class SpringBootBatchConfiguration extends DefaultBatchConfiguration {
+
+        private final DataSource dataSource;
+
+        private final PlatformTransactionManager transactionManager;
+
+        private final BatchProperties properties;
+
+        private final List<BatchConversionServiceCustomizer> conversionServiceCustomizers;
+
+        SpringBootBatchConfiguration(DataSource dataSource, PlatformTransactionManager transactionManager, BatchProperties properties,
+                                     ObjectProvider<BatchConversionServiceCustomizer> conversionServiceCustomizers) {
+            this.dataSource = dataSource;
+            this.transactionManager = transactionManager;
+            this.properties = properties;
+            this.conversionServiceCustomizers = conversionServiceCustomizers.orderedStream().toList();
+        }
+
+        @Override
+        public DataSource getDataSource() {
+            return this.dataSource;
+        }
+
+        @Override
+        protected PlatformTransactionManager getTransactionManager() {
+            return this.transactionManager;
+        }
+
+        @Override
+        protected String getTablePrefix() {
+            String tablePrefix = this.properties.getJdbc().getTablePrefix();
+            return (tablePrefix != null) ? tablePrefix : super.getTablePrefix();
+        }
+
+        @Override
+        protected Isolation getIsolationLevelForCreate() {
+            Isolation isolation = this.properties.getJdbc().getIsolationLevelForCreate();
+            return (isolation != null) ? isolation : super.getIsolationLevelForCreate();
+        }
+
+        @Override
+        protected ConfigurableConversionService getConversionService() {
+            ConfigurableConversionService conversionService = super.getConversionService();
+            for (BatchConversionServiceCustomizer customizer : this.conversionServiceCustomizers) {
+                customizer.customize(conversionService);
+            }
+            return conversionService;
+        }
+
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @Conditional(OnBatchDatasourceInitializationCondition.class)
+    static class DataSourceInitializerConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean(BatchDataSourceScriptDatabaseInitializer.class)
+        BatchDataSourceScriptDatabaseInitializer batchDataSourceScriptDatabaseInitializer(DataSource dataSource, BatchProperties properties) {
+            return new BatchDataSourceScriptDatabaseInitializer(dataSource, properties.getJdbc());
+        }
+
+    }
+
+    static class OnBatchDatasourceInitializationCondition extends OnDatabaseInitializationCondition {
+
+        private static final String BATCH_JDBC_INITIALIZE_SCHEMA = "spring.batch.jdbc.initialize-schema";
+        private static final String BATCH_INITIALIZE_SCHEMA = "spring.batch.initialize-schema";
+
+        OnBatchDatasourceInitializationCondition() {
+            super(BATCH_JDBC_INITIALIZE_SCHEMA, BATCH_INITIALIZE_SCHEMA);
+        }
+
+    }
+
+}
+```

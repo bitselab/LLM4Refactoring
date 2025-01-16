@@ -1,0 +1,90 @@
+The code you provided is fairly clean, but there are a few opportunities for improvement, especially in terms of refactoring. Below are my thoughts on each of the suggested refactorings:
+
+### 1. **Extract Class**:  
+The class seems to have a single responsibility: managing a cache of `ApplicationHandler` instances. No parts of this class seem to represent distinct responsibilities that would warrant extracting them into separate classes. Therefore, this type of refactoring is **not necessary**.
+
+### 2. **Extract Method**:  
+The `computeIfAbsent` method has a small, clear responsibility. It calls the cache's `get` method with a lambda that produces an `ApplicationHandler`. There’s no obvious extraction point within this method itself because the logic is already minimal.
+
+However, it could be argued that the lambda logic inside the `computeIfAbsent` method can be extracted into a dedicated method for better readability.
+
+### 3. **Extract Variable**:  
+The method `computeIfAbsent` creates a lambda expression inline. Extracting the lambda into a variable could increase readability, especially if the lambda becomes more complex in the future. 
+
+**Refactoring Opportunity**: Extract the lambda into a named method.
+
+### 4. **Inline Method**:  
+The `size` method is just one line of code, which is concise. Inlining this method into wherever it's used might reduce readability. It's fine as is, so **inlining is not needed** here.
+
+### 5. **Inline Variable**:  
+The field `applicationByConfigSetId` is assigned inline, and there's no extra variable that needs to be inlined. It is perfectly fine as it is.
+
+### 6. **Rename Attribute**:  
+The attribute name `applicationByConfigSetId` is descriptive, but might be a bit long. It’s clear, so renaming is not necessary unless you want to abbreviate it or make it shorter. This is subjective and could be a matter of style preference.
+
+### 7. **Rename Method**:  
+The method names like `computeIfAbsent` and `size` are already expressive and conform to standard naming conventions. No renaming is needed.
+
+### 8. **Rename Parameter**:  
+The parameter names like `effectiveSolrConfigId` and `createApplicationHandler` are descriptive. However, you could slightly adjust the parameter name `effectiveSolrConfigId` to something like `configSetId` for clarity. This is again, optional but might improve readability.
+
+### 9. **Rename Variable**:  
+The variable name `k` in the lambda inside the `computeIfAbsent` method is not ideal. While it's common in lambda expressions, it could be more descriptive. Changing it to something like `configSetId` might make it more readable.
+
+---
+
+### Refactored Code:
+
+```java
+package org.apache.solr.jersey;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.util.function.Supplier;
+import org.apache.solr.core.SolrConfig;
+import org.glassfish.jersey.server.ApplicationHandler;
+
+/**
+ * Stores Jersey 'ApplicationHandler' instances by an ID or hash derived from their {@link
+ * ConfigSet}.
+ *
+ * <p>ApplicationHandler creation is expensive; caching these objects allows them to be shared by
+ * multiple cores with the same configuration.
+ */
+public class JerseyAppHandlerCache {
+
+  private final Cache<String, ApplicationHandler> applicationByConfigSetId =
+      Caffeine.newBuilder().weakValues().build();
+
+  /**
+   * Return the 'ApplicationHandler' associated with the provided ID, creating it first if
+   * necessary.
+   *
+   * <p>This method is thread-safe by virtue of its delegation to {@link Cache#get(Object,
+   * Function)} internally.
+   *
+   * @param configSetId an ID to associate the ApplicationHandler with. Usually created
+   *     via {@link SolrConfig#effectiveId()}.
+   * @param createApplicationHandler a Supplier producing an ApplicationHandler
+   */
+  public ApplicationHandler computeIfAbsent(
+      String configSetId, Supplier<ApplicationHandler> createApplicationHandler) {
+    return applicationByConfigSetId.get(configSetId, this::createHandler);
+  }
+
+  private ApplicationHandler createHandler(String configSetId) {
+    return createApplicationHandler.get();
+  }
+
+  public int size() {
+    return applicationByConfigSetId.asMap().size();
+  }
+}
+```
+
+### Summary of Changes:
+1. **Renamed `effectiveSolrConfigId` to `configSetId`**: Slightly more concise and clearer.
+2. **Renamed lambda parameter `k` to `configSetId`**: Improved readability.
+3. **Extracted the lambda expression in `computeIfAbsent` to a `createHandler` method**: This helps maintain readability and prepares the code for potential extension if the lambda becomes more complex.
+
+This refactor mainly improves clarity and readability, while maintaining the structure and functionality of the original code.

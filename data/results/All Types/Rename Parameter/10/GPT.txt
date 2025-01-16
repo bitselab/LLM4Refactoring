@@ -1,0 +1,211 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class**  
+   - Extract XML utility methods (`getDocument`, `getXML`, `assertXMLEquals`) into a separate utility class for better modularity and reusability.
+
+2. **Extract Method**  
+   - Combine repetitive setup logic into a single method for setting up XML-related configurations.
+
+3. **Rename Method**  
+   - `getDocument` → `parseXmlToDocument` for better clarity.  
+   - `getXML` → `convertDocumentToString` to reflect its functionality.
+
+4. **Extract Variable**  
+   - Extract the expected XML strings in test methods into constants for better readability and maintainability.
+
+---
+
+### **Refactored Code**
+
+```java
+package com.github.javaparser.printer;
+
+import com.github.javaparser.ast.expr.Expression;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.w3c.dom.Document;
+import org.xml.sax.SAXException;
+
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+
+import java.io.IOException;
+
+import static com.github.javaparser.StaticJavaParser.parseExpression;
+
+class XmlPrinterTest {
+
+    private static XmlTestUtils xmlUtils;
+
+    @BeforeAll
+    public static void setup() {
+        xmlUtils = new XmlTestUtils();
+        xmlUtils.initializeDocumentBuilder();
+        xmlUtils.initializeTransformer();
+    }
+
+    private static final String EXPRESSION_WITH_TYPE = 
+        "<root type='BinaryExpr' operator='PLUS'>" +
+        "<left type='IntegerLiteralExpr' value='1'></left>" +
+        "<right type='IntegerLiteralExpr' value='1'></right>" +
+        "</root>";
+
+    private static final String EXPRESSION_WITHOUT_TYPE = 
+        "<root operator='PLUS'>" +
+        "<left value='1'></left>" +
+        "<right value='1'></right>" +
+        "</root>";
+
+    private static final String METHOD_CALL_WITH_TYPE = 
+        "<root type='MethodCallExpr'>" +
+        "<name type='SimpleName' identifier='a'></name>" +
+        "<arguments>" +
+        "<argument type='IntegerLiteralExpr' value='1'></argument>" +
+        "<argument type='IntegerLiteralExpr' value='2'></argument>" +
+        "</arguments>" +
+        "</root>";
+
+    @Test
+    void testWithType() throws SAXException, IOException {
+        Expression expression = parseExpression("1+1");
+        XmlPrinter xmlOutput = new XmlPrinter(true);
+        String output = xmlOutput.output(expression);
+
+        xmlUtils.assertXMLEquals(EXPRESSION_WITH_TYPE, output);
+    }
+
+    @Test
+    void testWithoutType() throws SAXException, IOException {
+        Expression expression = parseExpression("1+1");
+        XmlPrinter xmlOutput = new XmlPrinter(false);
+        String output = xmlOutput.output(expression);
+
+        xmlUtils.assertXMLEquals(EXPRESSION_WITHOUT_TYPE, output);
+    }
+
+    @Test
+    void testList() throws SAXException, IOException {
+        Expression expression = parseExpression("a(1,2)");
+        XmlPrinter xmlOutput = new XmlPrinter(true);
+        String output = xmlOutput.output(expression);
+
+        xmlUtils.assertXMLEquals(METHOD_CALL_WITH_TYPE, output);
+    }
+}
+```
+
+---
+
+### **Extracted XML Utility Class**
+
+```java
+package com.github.javaparser.printer;
+
+import org.w3c.dom.Document;
+import org.xml.sax.SAXException;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringWriter;
+
+import static org.junit.jupiter.api.Assertions.fail;
+
+public class XmlTestUtils {
+
+    private DocumentBuilderFactory documentBuilderFactory;
+    private DocumentBuilder documentBuilder;
+    private TransformerFactory transformerFactory;
+    private Transformer transformer;
+
+    public void initializeDocumentBuilder() {
+        try {
+            documentBuilderFactory = DocumentBuilderFactory.newInstance();
+            documentBuilderFactory.setNamespaceAware(true);
+            documentBuilderFactory.setCoalescing(true);
+            documentBuilderFactory.setIgnoringElementContentWhitespace(true);
+            documentBuilderFactory.setIgnoringComments(true);
+            documentBuilder = documentBuilderFactory.newDocumentBuilder();
+        } catch (ParserConfigurationException ex) {
+            throw new RuntimeException("Failed to initialize DocumentBuilder", ex);
+        }
+    }
+
+    public void initializeTransformer() {
+        try {
+            transformerFactory = TransformerFactory.newInstance();
+            transformer = transformerFactory.newTransformer();
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        } catch (TransformerConfigurationException ex) {
+            throw new RuntimeException("Failed to initialize Transformer", ex);
+        }
+    }
+
+    public Document parseXmlToDocument(String xml) throws SAXException, IOException {
+        try (InputStream inputStream = new ByteArrayInputStream(xml.getBytes())) {
+            Document document = documentBuilder.parse(inputStream);
+            document.normalizeDocument();
+            return document;
+        }
+    }
+
+    public String convertDocumentToString(Document document) throws TransformerException {
+        StringWriter result = new StringWriter();
+        transformer.transform(new DOMSource(document), new StreamResult(result));
+        return result.toString();
+    }
+
+    public void assertXMLEquals(String expectedXml, String actualXml) throws SAXException, IOException {
+        Document expectedDocument = parseXmlToDocument(expectedXml);
+        Document actualDocument = parseXmlToDocument(actualXml);
+
+        if (!expectedDocument.isEqualNode(actualDocument)) {
+            try {
+                fail(String.format("-- expected:\n%s-- actual:\n%s",
+                        convertDocumentToString(expectedDocument),
+                        convertDocumentToString(actualDocument)));
+            } catch (TransformerException ex) {
+                fail(String.format("Expected: <%s>, but was <%s>. Error reporting failed.", expectedXml, actualXml), ex);
+            }
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring Changes**
+
+1. **Extract Class:**  
+   - Created `XmlTestUtils` to encapsulate XML parsing, transformation, and assertion logic.
+
+2. **Extract Method:**  
+   - Consolidated the setup methods for the `DocumentBuilder` and `Transformer` into dedicated initialization methods.
+
+3. **Rename Methods:**  
+   - `getDocument` → `parseXmlToDocument`  
+   - `getXML` → `convertDocumentToString`
+
+4. **Extract Variable:**  
+   - Moved hardcoded XML strings in tests to constants for better readability.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Separation of Concerns:** XML handling logic is cleanly separated from test logic.  
+- **Readability:** The test methods are more concise and focused on testing behavior.  
+- **Reusability:** `XmlTestUtils` can now be reused across other test classes if needed.  
+- **Maintainability:** Changes to XML handling only need to be made in one place.

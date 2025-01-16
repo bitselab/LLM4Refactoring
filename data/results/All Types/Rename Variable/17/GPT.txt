@@ -1,0 +1,106 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Extract logic for collecting file paths and creating `TextFile` objects to improve readability.  
+   - Extract error handling into a dedicated method for better clarity.
+
+2. **Extract Variable:**  
+   - Use meaningful variable names for collections (`matchesList`, `paths`) to make the code more self-explanatory.
+
+3. **Rename Variable:**  
+   - Correct the typo in `sourcManager` to `sourceManager`.
+
+---
+
+### **Refactored Code**
+
+```java
+package net.sourceforge.pmd.cpd;
+
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+
+import net.sourceforge.pmd.cpd.renderer.CPDRenderer;
+import net.sourceforge.pmd.lang.document.TextFile;
+import net.sourceforge.pmd.lang.java.JavaLanguageModule;
+
+final class RendererHelper {
+
+    private RendererHelper() {
+        // Utility class
+    }
+
+    static void render(Iterator<Match> matchesIterator, Writer writer, CPDReportRenderer renderer) throws IOException {
+        List<Match> matches = collectMatches(matchesIterator);
+        List<TextFile> textFiles = createTextFiles(matches);
+
+        try (SourceManager sourceManager = new SourceManager(textFiles)) {
+            CPDReport report = new CPDReport(sourceManager, matches, Collections.emptyMap());
+            renderer.render(report, writer);
+        } catch (Exception e) {
+            handleRenderingException(e);
+        }
+    }
+
+    /** Extracted method to collect all matches into a list. */
+    private static List<Match> collectMatches(Iterator<Match> matchesIterator) {
+        List<Match> matchList = new ArrayList<>();
+        matchesIterator.forEachRemaining(matchList::add);
+        return matchList;
+    }
+
+    /** Extracted method to create TextFile objects from Match marks. */
+    private static List<TextFile> createTextFiles(List<Match> matches) {
+        Set<String> uniquePaths = new HashSet<>();
+        for (Match match : matches) {
+            for (Mark mark : match.getMarkSet()) {
+                uniquePaths.add(mark.getFilename());
+            }
+        }
+
+        List<TextFile> textFiles = new ArrayList<>();
+        for (String path : uniquePaths) {
+            textFiles.add(TextFile.forPath(Paths.get(path), StandardCharsets.UTF_8, JavaLanguageModule.getInstance().getDefaultVersion()));
+        }
+        return textFiles;
+    }
+
+    /** Extracted method for handling exceptions. */
+    private static void handleRenderingException(Exception e) {
+        throw new RuntimeException("Error occurred while rendering the report", e);
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Method:**  
+   - `collectMatches(Iterator<Match>)` collects all matches into a list.  
+   - `createTextFiles(List<Match>)` creates `TextFile` objects from match marks.  
+   - `handleRenderingException(Exception)` centralizes error handling.
+
+2. **Extract Variable:**  
+   - Renamed variables for clarity (`matchesList` → `matches`, `paths` → `uniquePaths`).
+
+3. **Rename Variable:**  
+   - Corrected `sourcManager` → `sourceManager`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Clear separation of concerns for collecting matches, processing files, and error handling.  
+- **Maintainability:** Easier to modify or extend individual parts of the rendering logic.  
+- **Error Handling:** Centralized and clearer error management.
+
+No further refactoring is necessary.

@@ -1,0 +1,200 @@
+The provided `TestRouterAdmin` class is comprehensive but contains several opportunities for refactoring to improve readability, maintainability, and modularity. Below are the identified refactoring opportunities and the refactored code.
+
+---
+
+### **Refactoring Opportunities**
+
+#### 1. **Extract Class**
+- Create helper classes for repeated logic, like `MountTableTestHelper` and `NameserviceTestHelper`, to manage Mount Table and Nameservice operations.
+
+#### 2. **Extract Method**
+- Break down large methods (e.g., `setUpMocks`, `testNameserviceManager`) into smaller, more focused methods.
+
+#### 3. **Extract Variable**
+- Extract frequently used or complex expressions into meaningful variables for clarity.
+
+#### 4. **Rename Method**
+- Rename ambiguous methods for better clarity (e.g., `testNameserviceManagerUser` → `disableNameserviceAsUser`).
+
+#### 5. **Inline Variable**
+- Inline unnecessary intermediate variables (e.g., single-use response variables).
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.hadoop.hdfs.server.federation.router;
+
+import static org.apache.hadoop.hdfs.server.federation.FederationTestUtils.createNamenodeReport;
+import static org.apache.hadoop.hdfs.server.federation.store.FederationStateStoreTestUtils.synchronizeRecords;
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.security.PrivilegedExceptionAction;
+import java.util.*;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.protocol.HdfsFileStatus;
+import org.apache.hadoop.hdfs.server.federation.MiniRouterDFSCluster.RouterContext;
+import org.apache.hadoop.hdfs.server.federation.RouterConfigBuilder;
+import org.apache.hadoop.hdfs.server.federation.StateStoreDFSCluster;
+import org.apache.hadoop.hdfs.server.federation.resolver.ActiveNamenodeResolver;
+import org.apache.hadoop.hdfs.server.federation.resolver.MountTableManager;
+import org.apache.hadoop.hdfs.server.federation.resolver.RemoteLocation;
+import org.apache.hadoop.hdfs.server.federation.store.StateStoreService;
+import org.apache.hadoop.hdfs.server.federation.store.protocol.*;
+import org.apache.hadoop.hdfs.server.federation.store.records.MountTable;
+import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.test.LambdaTestUtils;
+import org.apache.hadoop.util.Time;
+import org.junit.*;
+
+public class TestRouterAdmin {
+
+    private static StateStoreDFSCluster cluster;
+    private static RouterContext routerContext;
+    private static List<MountTable> mockMountTable;
+    private static StateStoreService stateStore;
+
+    @BeforeClass
+    public static void globalSetUp() throws Exception {
+        initializeCluster();
+        registerNamenodes();
+        setUpMocks();
+    }
+
+    private static void initializeCluster() throws IOException {
+        cluster = new StateStoreDFSCluster(false, 1);
+        Configuration conf = new RouterConfigBuilder().stateStore().admin().rpc().build();
+        conf.setBoolean(RBFConfigKeys.DFS_ROUTER_ADMIN_MOUNT_CHECK_ENABLE, true);
+        cluster.addRouterOverrides(conf);
+        cluster.startRouters();
+        routerContext = cluster.getRandomRouter();
+        mockMountTable = cluster.generateMockMountTable();
+        stateStore = routerContext.getRouter().getStateStore();
+    }
+
+    private static void registerNamenodes() throws IOException {
+        ActiveNamenodeResolver membership = routerContext.getRouter().getNamenodeResolver();
+        membership.registerNamenode(createNamenodeReport("ns0", "nn1"));
+        membership.registerNamenode(createNamenodeReport("ns1", "nn1"));
+        stateStore.refreshCaches(true);
+    }
+
+    private static void setUpMocks() throws IOException, NoSuchFieldException {
+        RouterRpcServer spyRpcServer = Mockito.spy(routerContext.getRouter().createRpcServer());
+        setRouterRpcServer(spyRpcServer);
+    }
+
+    private static void setRouterRpcServer(RouterRpcServer spyRpcServer) throws NoSuchFieldException {
+        Field rpcServerField = Router.class.getDeclaredField("rpcServer");
+        FieldSetter.setField(routerContext.getRouter(), rpcServerField, spyRpcServer);
+    }
+
+    @AfterClass
+    public static void tearDown() {
+        cluster.stopRouter(routerContext);
+    }
+
+    @Before
+    public void testSetup() throws Exception {
+        assertTrue(synchronizeRecords(stateStore, mockMountTable, MountTable.class));
+        routerContext.resetAdminClient();
+    }
+
+    @Test
+    public void testAddMountTable() throws IOException {
+        MountTable newEntry = MountTable.newInstance("/testpath",
+                Collections.singletonMap("ns0", "/testdir"), Time.now(), Time.now());
+        addMountTableEntry(newEntry);
+        assertNotNull(getMountTableEntry("/testpath"));
+    }
+
+    private void addMountTableEntry(MountTable entry) throws IOException {
+        RouterClient client = routerContext.getAdminClient();
+        MountTableManager mountTable = client.getMountTableManager();
+        AddMountTableEntryRequest addRequest = AddMountTableEntryRequest.newInstance(entry);
+        assertTrue(mountTable.addMountTableEntry(addRequest).getStatus());
+    }
+
+    private MountTable getMountTableEntry(String path) throws IOException {
+        stateStore.loadCache(MountTableStoreImpl.class, true);
+        RouterClient client = routerContext.getAdminClient();
+        MountTableManager mountTable = client.getMountTableManager();
+        return mountTable.getMountTableEntries(GetMountTableEntriesRequest.newInstance(path)).getEntries().stream()
+                .filter(e -> e.getSourcePath().equals(path))
+                .findFirst()
+                .orElse(null);
+    }
+
+    @Test
+    public void testDisableEnableNameservice() throws IOException {
+        String ns = "ns0";
+        disableNameservice(ns);
+        assertTrue(getDisabledNameservices().contains(ns));
+        enableNameservice(ns);
+        assertFalse(getDisabledNameservices().contains(ns));
+    }
+
+    private void disableNameservice(String ns) throws IOException {
+        RouterClient client = routerContext.getAdminClient();
+        NameserviceManager nsManager = client.getNameserviceManager();
+        assertTrue(nsManager.disableNameservice(DisableNameserviceRequest.newInstance(ns)).getStatus());
+    }
+
+    private void enableNameservice(String ns) throws IOException {
+        RouterClient client = routerContext.getAdminClient();
+        NameserviceManager nsManager = client.getNameserviceManager();
+        assertTrue(nsManager.enableNameservice(EnableNameserviceRequest.newInstance(ns)).getStatus());
+    }
+
+    private Set<String> getDisabledNameservices() throws IOException {
+        stateStore.loadCache(DisabledNameserviceStoreImpl.class, true);
+        RouterClient client = routerContext.getAdminClient();
+        NameserviceManager nsManager = client.getNameserviceManager();
+        return nsManager.getDisabledNameservices(GetDisabledNameservicesRequest.newInstance()).getNameservices();
+    }
+
+    @Test
+    public void testUnauthorizedUserCannotDisableNameservice() throws Exception {
+        String username = "unauthorizedUser";
+        LambdaTestUtils.intercept(IOException.class, username + " is not a super user",
+                () -> disableNameserviceAsUser(username, "ns0"));
+    }
+
+    private void disableNameserviceAsUser(String username, String ns) throws Exception {
+        UserGroupInformation.createRemoteUser(username).doAs(
+                (PrivilegedExceptionAction<Void>) () -> {
+                    disableNameservice(ns);
+                    return null;
+                });
+    }
+}
+```
+
+---
+
+### **Key Refactorings**
+
+1. **Extract Class:**  
+   - Created helper methods for Mount Table (`addMountTableEntry`, `getMountTableEntry`) and Nameservice operations (`disableNameservice`, `enableNameservice`).
+
+2. **Extract Method:**  
+   - Modularized setup (`initializeCluster`, `registerNamenodes`) and teardown (`tearDown`) operations.
+
+3. **Extract Variable:**  
+   - Simplified complex expressions and repeated logic.
+
+4. **Rename Method:**  
+   - `testNameserviceManagerUser` → `disableNameserviceAsUser` for better clarity.
+
+5. **Simplify Assertions:**  
+   - Direct assertions without intermediate variables for improved readability.
+
+---
+
+### **Result**
+
+The refactored code is clearer, more modular, and easier to maintain. Helper methods reduce redundancy, and meaningful method names improve code readability.

@@ -1,0 +1,48 @@
+## Refactoring Opportunity: Extract variable for vector dimension check
+
+There's an opportunity to extract a variable to improve readability within the `Builder` class. We can extract the logic for checking the vector dimension into a separate variable. Here's the refactored code:
+
+```java
+public static class Builder<F> extends AbstractBuilder implements KnnPredicateBuilder {
+  // ... other fields and methods
+
+  private final int indexedVectorsDimension;
+
+  private Builder(LuceneSearchIndexScope<?> scope, LuceneSearchIndexValueFieldContext<F> field) {
+    super(scope, field);
+
+    LuceneFieldCodec<F> codec = field.type().codec();
+    if (codec instanceof LuceneVectorFieldCodec) {
+      vectorElementsType = ((LuceneVectorFieldCodec<F>) codec).vectorElementsType();
+      indexedVectorsDimension = ((LuceneVectorFieldCodec<F>) codec).getConfiguredDimensions();
+    } else {
+      // shouldn't really happen as if someone tries this it should fail on `queryElementFactory` lookup.
+      throw new AssertionFailure("Attempting to use a knn predicate on a non-vector field.");
+    }
+  }
+
+  private void validateVectorDimension(Object vector) {
+    if (Array.getLength(vector) != indexedVectorsDimension) {
+      throw log.vectorKnnMatchVectorDimensionDiffersFromField(absoluteFieldPath, indexedVectorsDimension,
+          Array.getLength(vector));
+    }
+  }
+
+  @Override
+  public void vector(Object vector) {
+    if (!vector.getClass().isArray()) {
+      throw new IllegalArgumentException("Vector can only be either a float or a byte array (float[], byte[]).");
+    }
+    if (!vectorElementsType.equals(vector.getClass().getComponentType())) {
+      throw log.vectorKnnMatchVectorTypeDiffersFromField(absoluteFieldPath, vectorElementsType,
+          vector.getClass().getComponentType());
+    }
+    validateVectorDimension(vector);
+    this.vector = vector;
+  }
+
+  // ... other methods
+}
+```
+
+We've extracted the dimension check logic into a new private method `validateVectorDimension` which is called within the `vector` setter method. This improves readability by separating the logic and reduces code duplication.

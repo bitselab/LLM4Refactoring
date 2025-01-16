@@ -1,0 +1,115 @@
+## Refactoring Opportunities
+
+There are a few opportunities for rename attribute refactorings in the provided code:
+
+1. **`delimiter` and `replacement`:** These variable names are clear, but they could be more specific to the context of the tokenizer. Consider renaming them to `pathSeparator` and `replacementChar` respectively.
+
+2. **`skip`:** This name is a bit generic. A more descriptive name could be `initialSkip` since it represents the number of initial path separators to skip.
+
+3. **`resultToken`:** This name doesn't clearly indicate its purpose. Renaming it to `currentToken` would better reflect its usage in building the final token.
+
+## Refactored Code
+
+```java
+package org.apache.lucene.analysis.path;
+
+import java.io.IOException;
+import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
+import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
+import org.apache.lucene.util.AttributeFactory;
+import org.apache.lucene.util.IgnoreRandomChains;
+
+/**
+ * Tokenizer for path-like hierarchies.
+ *
+ * <p>Take something like:
+ *
+ * <pre>
+ *    /something/something/else
+ * </pre>
+ *
+ * and make:
+ *
+ * <pre>
+ *    /something
+ *    /something/something
+ *    /something/something/else
+ * </pre>
+ */
+@IgnoreRandomChains(reason = "broken offsets")
+public class PathHierarchyTokenizer extends Tokenizer {
+
+  public PathHierarchyTokenizer() {
+    this(DEFAULT_BUFFER_SIZE, DEFAULT_PATH_SEPARATOR, DEFAULT_REPLACEMENT_CHAR, DEFAULT_INITIAL_SKIP);
+  }
+
+  public PathHierarchyTokenizer(int skip) {
+    this(DEFAULT_BUFFER_SIZE, DEFAULT_PATH_SEPARATOR, DEFAULT_REPLACEMENT_CHAR, skip);
+  }
+
+  public PathHierarchyTokenizer(int bufferSize, char pathSeparator) {
+    this(bufferSize, pathSeparator, pathSeparator, DEFAULT_INITIAL_SKIP);
+  }
+
+  public PathHierarchyTokenizer(char pathSeparator, char replacementChar) {
+    this(DEFAULT_BUFFER_SIZE, pathSeparator, replacementChar, DEFAULT_INITIAL_SKIP);
+  }
+
+  public PathHierarchyTokenizer(char pathSeparator, char replacementChar, int skip) {
+    this(DEFAULT_BUFFER_SIZE, pathSeparator, replacementChar, skip);
+  }
+
+  public PathHierarchyTokenizer(
+      AttributeFactory factory, char pathSeparator, char replacementChar, int skip) {
+    this(factory, DEFAULT_BUFFER_SIZE, pathSeparator, replacementChar, skip);
+  }
+
+  public PathHierarchyTokenizer(int bufferSize, char pathSeparator, char replacementChar, int skip) {
+    this(DEFAULT_TOKEN_ATTRIBUTE_FACTORY, bufferSize, pathSeparator, replacementChar, skip);
+  }
+
+  public PathHierarchyTokenizer(
+      AttributeFactory factory, int bufferSize, char pathSeparator, char replacementChar, int skip) {
+    super(factory);
+    if (bufferSize < 0) {
+      throw new IllegalArgumentException("bufferSize cannot be negative");
+    }
+    if (skip < 0) {
+      throw new IllegalArgumentException("skip cannot be negative");
+    }
+    termAtt.resizeBuffer(bufferSize);
+
+    this.pathSeparator = pathSeparator;
+    this.replacementChar = replacementChar;
+    this.initialSkip = skip;
+    currentToken = new StringBuilder(bufferSize);
+  }
+
+  private static final int DEFAULT_BUFFER_SIZE = 1024;
+  public static final char DEFAULT_PATH_SEPARATOR = '/';
+  public static final int DEFAULT_INITIAL_SKIP = 0;
+
+  private final char pathSeparator;
+  private final char replacementChar;
+  private final int initialSkip;
+
+  private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
+  private final OffsetAttribute offsetAtt = addAttribute(OffsetAttribute.class);
+  private final PositionIncrementAttribute posAtt =
+      addAttribute(PositionIncrementAttribute.class);
+  private int startPosition = 0;
+  private int skipped = 0;
+  private boolean endDelimiter = false;
+  private StringBuilder currentToken;
+
+  private int charsRead = 0;
+
+  @Override
+  public final boolean incrementToken() throws IOException {
+    clearAttributes();
+    termAtt.append(currentToken);
+    posAtt.setPositionIncrement(1);
+    int length = 0;
+    

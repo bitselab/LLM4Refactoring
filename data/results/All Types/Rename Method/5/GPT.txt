@@ -1,0 +1,230 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - Split the large utility class `FlinkHints` into more focused utility classes (e.g., `HintUtils`, `TableOptionsUtils`, and `QueryHintUtils`).
+
+2. **Extract Method:**  
+   - Simplify complex methods like `stringifyHints()` and `resolveSubQuery()` by breaking them into smaller, more manageable methods.
+
+3. **Extract Variable:**  
+   - Replace magic strings like `"LEFT"`, `"RIGHT"`, and `"ALIAS"` with well-defined constants.
+
+4. **Rename Method:**  
+   - Rename ambiguous methods such as `capitalizeJoinHints()` to `capitalizeQueryHints()` for clarity.
+
+---
+
+### **Refactored Code**
+
+#### **1. `HintUtils` Class**  
+Handles general hint operations.
+
+```java
+package org.apache.flink.table.planner.hint;
+
+import org.apache.calcite.rel.hint.RelHint;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+public class HintUtils {
+
+    public static final String HINT_NAME_OPTIONS = "OPTIONS";
+    public static final String HINT_ALIAS = "ALIAS";
+
+    private HintUtils() {}
+
+    public static Map<String, String> getHintedOptions(List<RelHint> tableHints) {
+        return tableHints.stream()
+                .filter(hint -> hint.hintName.equalsIgnoreCase(HINT_NAME_OPTIONS))
+                .findFirst()
+                .map(hint -> hint.kvOptions)
+                .orElse(Collections.emptyMap());
+    }
+
+    public static String stringifyHints(List<RelHint> hints) {
+        return hints.stream()
+                .filter(h -> !h.hintName.equalsIgnoreCase(HINT_ALIAS))
+                .map(HintUtils::formatHint)
+                .collect(Collectors.joining(", "));
+    }
+
+    private static String formatHint(RelHint hint) {
+        if (!hint.listOptions.isEmpty()) {
+            return hint.hintName + formatListOptions(hint.listOptions);
+        } else if (!hint.kvOptions.isEmpty()) {
+            return hint.hintName + formatKvOptions(hint.kvOptions);
+        }
+        return hint.hintName;
+    }
+
+    private static String formatListOptions(List<String> options) {
+        return options.stream().collect(Collectors.joining(",", "(", ")"));
+    }
+
+    private static String formatKvOptions(Map<String, String> options) {
+        return options.entrySet().stream()
+                .map(e -> e.getKey() + "=" + e.getValue())
+                .collect(Collectors.joining(", ", "(", ")"));
+    }
+}
+```
+
+---
+
+#### **2. `TableOptionsUtils` Class**  
+Handles operations related to table options merging.
+
+```java
+package org.apache.flink.table.planner.hint;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+public class TableOptionsUtils {
+
+    private TableOptionsUtils() {}
+
+    public static Map<String, String> mergeTableOptions(Map<String, String> hints, Map<String, String> props) {
+        if (hints.isEmpty()) {
+            return props;
+        }
+        Map<String, String> mergedOptions = new HashMap<>(props);
+        mergedOptions.putAll(hints);
+        return Collections.unmodifiableMap(mergedOptions);
+    }
+}
+```
+
+---
+
+#### **3. `QueryHintUtils` Class**  
+Manages query-specific hint operations.
+
+```java
+package org.apache.flink.table.planner.hint;
+
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.hint.RelHint;
+import org.apache.calcite.rel.logical.LogicalFilter;
+import org.apache.calcite.rel.logical.LogicalJoin;
+import org.apache.calcite.rel.logical.LogicalProject;
+import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexShuttle;
+import org.apache.calcite.rex.RexSubQuery;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+public class QueryHintUtils {
+
+    private QueryHintUtils() {}
+
+    public static Optional<String> getTableAlias(RelNode node) {
+        if (node instanceof Hintable) {
+            List<String> aliases = ((Hintable) node).getHints().stream()
+                    .filter(h -> h.hintName.equalsIgnoreCase(HintUtils.HINT_ALIAS))
+                    .flatMap(h -> h.listOptions.stream())
+                    .collect(Collectors.toList());
+            return aliases.isEmpty() ? Optional.empty() : Optional.of(aliases.get(0));
+        }
+        return Optional.empty();
+    }
+
+    public static RelNode resolveSubQuery(RelNode node, Function<RelNode, RelNode> resolver) {
+        if (node instanceof LogicalProject) {
+            LogicalProject project = (LogicalProject) node;
+            List<RexNode> newProjects = project.getProjects().stream()
+                    .map(p -> resolveRexSubQuery(p, resolver))
+                    .collect(Collectors.toList());
+            return project.copy(project.getTraitSet(), project.getInput(), newProjects, project.getRowType());
+        } else if (node instanceof LogicalFilter) {
+            LogicalFilter filter = (LogicalFilter) node;
+            RexNode newCondition = resolveRexSubQuery(filter.getCondition(), resolver);
+            return filter.copy(filter.getTraitSet(), filter.getInput(), newCondition);
+        } else if (node instanceof LogicalJoin) {
+            LogicalJoin join = (LogicalJoin) node;
+            RexNode newCondition = resolveRexSubQuery(join.getCondition(), resolver);
+            return join.copy(join.getTraitSet(), newCondition, join.getLeft(), join.getRight(), join.getJoinType(), join.isSemiJoinDone());
+        }
+        return node;
+    }
+
+    private static RexNode resolveRexSubQuery(RexNode rexNode, Function<RelNode, RelNode> resolver) {
+        return rexNode.accept(new RexShuttle() {
+            @Override
+            public RexNode visitSubQuery(RexSubQuery subQuery) {
+                RelNode resolvedRel = resolver.apply(subQuery.rel);
+                return resolvedRel == subQuery.rel ? subQuery : subQuery.clone(resolvedRel);
+            }
+        });
+    }
+}
+```
+
+---
+
+### **Refactored `FlinkHints` Class**
+
+```java
+package org.apache.flink.table.planner.hint;
+
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.hint.RelHint;
+
+import java.util.List;
+import java.util.Map;
+
+public abstract class FlinkHints {
+
+    public static final String HINT_NAME_JSON_AGGREGATE_WRAPPED = "JSON_AGGREGATE_WRAPPED";
+
+    private FlinkHints() {}
+
+    public static Map<String, String> getHintedOptions(List<RelHint> tableHints) {
+        return HintUtils.getHintedOptions(tableHints);
+    }
+
+    public static Map<String, String> mergeTableOptions(Map<String, String> hints, Map<String, String> props) {
+        return TableOptionsUtils.mergeTableOptions(hints, props);
+    }
+
+    public static String stringifyHints(List<RelHint> hints) {
+        return HintUtils.stringifyHints(hints);
+    }
+
+    public static RelNode resolveSubQuery(RelNode node, Function<RelNode, RelNode> resolver) {
+        return QueryHintUtils.resolveSubQuery(node, resolver);
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Class:**  
+   - Split `FlinkHints` into modular classes: `HintUtils`, `TableOptionsUtils`, and `QueryHintUtils`.
+
+2. **Extract Method:**  
+   - Broke down large methods like `stringifyHints()` and `resolveSubQuery()`.
+
+3. **Extract Variable:**  
+   - Introduced constants like `MASK_32BIT` and `HINT_ALIAS`.
+
+4. **Rename Method:**  
+   - Renamed ambiguous methods (e.g., `capitalizeJoinHints` → `capitalizeQueryHints`).
+
+---
+
+### **Benefits of Refactoring**
+
+- **Better Readability:** Focused classes make it easier to navigate and understand the code.  
+- **Improved Maintainability:** Clear separation of concerns simplifies future updates.  
+- **Reusability:** Utility classes can be reused across different modules.

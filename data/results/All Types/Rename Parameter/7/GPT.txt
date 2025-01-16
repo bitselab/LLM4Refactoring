@@ -1,0 +1,208 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - `getNumberOfActiveStatements()` contains logic that can be extracted for readability.  
+   - Logic inside `createStatementDetailsMap()` can be broken down into smaller methods for clarity.  
+
+2. **Extract Class:**  
+   - The logic in `createPreparedStatementDetails()` and `locateTableMapping()` can be extracted into a helper class for better separation of concerns.  
+
+3. **Extract Variable:**  
+   - Repeated expressions like `jdbcMutation.getTableDetails()` should be stored in variables.  
+
+4. **Rename Method:**  
+   - `locateTableMapping()` → `findTableMapping()` for better clarity.  
+   - `createStatementDetailsMap()` → `buildStatementDetailsMap()` to indicate map construction.  
+
+---
+
+### **Refactored Code**
+
+```java
+package org.hibernate.engine.jdbc.mutation.internal;
+
+import java.sql.PreparedStatement;
+import java.util.*;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+
+import org.hibernate.engine.jdbc.mutation.group.PreparedStatementDetails;
+import org.hibernate.engine.jdbc.mutation.group.PreparedStatementGroup;
+import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
+import org.hibernate.engine.jdbc.spi.MutationStatementPreparer;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.values.GeneratedValuesMutationDelegate;
+import org.hibernate.sql.model.MutationTarget;
+import org.hibernate.sql.model.MutationType;
+import org.hibernate.sql.model.PreparableMutationOperation;
+import org.hibernate.sql.model.TableMapping;
+
+/**
+ * A group of {@link PreparedStatementDetails} references related to multi-table entity mappings.
+ * The statements are keyed by each table-name.
+ */
+public class PreparedStatementGroupStandard implements PreparedStatementGroup {
+
+    private final MutationType mutationType;
+    private final MutationTarget<?> mutationTarget;
+    private final List<PreparableMutationOperation> jdbcMutations;
+    private final SharedSessionContractImplementor session;
+    private final SortedMap<String, PreparedStatementDetails> statementMap;
+
+    public PreparedStatementGroupStandard(
+            MutationType mutationType,
+            MutationTarget<?> mutationTarget,
+            GeneratedValuesMutationDelegate generatedValuesDelegate,
+            List<PreparableMutationOperation> jdbcMutations,
+            SharedSessionContractImplementor session) {
+
+        this.mutationType = mutationType;
+        this.mutationTarget = mutationTarget;
+        this.jdbcMutations = jdbcMutations;
+        this.session = session;
+
+        this.statementMap = buildStatementDetailsMap(jdbcMutations, mutationType, generatedValuesDelegate, session);
+    }
+
+    @Override
+    public int getNumberOfStatements() {
+        return jdbcMutations.size();
+    }
+
+    @Override
+    public int getNumberOfActiveStatements() {
+        return (int) statementMap.values().stream()
+                .filter(statement -> statement.getStatement() != null)
+                .count();
+    }
+
+    @Override
+    public PreparedStatementDetails getSingleStatementDetails() {
+        throw new IllegalStateException(String.format(Locale.ROOT,
+                "Statement group contained more than one statement - %s : %s",
+                mutationType.name(), mutationTarget.getNavigableRole().getFullPath()));
+    }
+
+    @Override
+    public void forEachStatement(BiConsumer<String, PreparedStatementDetails> action) {
+        statementMap.forEach(action);
+    }
+
+    @Override
+    public PreparedStatementDetails getPreparedStatementDetails(String tableName) {
+        return statementMap.get(tableName);
+    }
+
+    @Override
+    public PreparedStatementDetails resolvePreparedStatementDetails(String tableName) {
+        return statementMap.get(tableName);
+    }
+
+    @Override
+    public boolean hasMatching(Predicate<PreparedStatementDetails> filter) {
+        return statementMap.values().stream().anyMatch(filter);
+    }
+
+    @Override
+    public void release() {
+        statementMap.values().forEach(statement -> statement.releaseStatement(session));
+    }
+
+    // Helper method for creating statement details map
+    private static SortedMap<String, PreparedStatementDetails> buildStatementDetailsMap(
+            List<PreparableMutationOperation> jdbcMutations,
+            MutationType mutationType,
+            GeneratedValuesMutationDelegate generatedValuesDelegate,
+            SharedSessionContractImplementor session) {
+
+        Comparator<String> comparator = getTableNameComparator(jdbcMutations, mutationType);
+        TreeMap<String, PreparedStatementDetails> map = new TreeMap<>(comparator);
+
+        jdbcMutations.forEach(jdbcMutation -> {
+            String tableName = jdbcMutation.getTableDetails().getTableName();
+            map.put(tableName, StatementDetailsFactory.create(jdbcMutation, generatedValuesDelegate, session));
+        });
+
+        return map;
+    }
+
+    // Helper method for sorting logic
+    private static Comparator<String> getTableNameComparator(
+            List<PreparableMutationOperation> jdbcMutations,
+            MutationType mutationType) {
+
+        return Comparator.comparingInt(tableName -> {
+            TableMapping tableMapping = StatementDetailsFactory.findTableMapping(jdbcMutations, tableName);
+            return (mutationType == MutationType.DELETE)
+                    ? jdbcMutations.size() - tableMapping.getRelativePosition()
+                    : tableMapping.getRelativePosition();
+        });
+    }
+
+    // Extracted helper class for statement operations
+    private static class StatementDetailsFactory {
+
+        static PreparedStatementDetails create(
+                PreparableMutationOperation jdbcMutation,
+                GeneratedValuesMutationDelegate generatedValuesDelegate,
+                SharedSessionContractImplementor session) {
+
+            JdbcCoordinator jdbcCoordinator = session.getJdbcCoordinator();
+            MutationStatementPreparer statementPreparer = jdbcCoordinator.getMutationStatementPreparer();
+
+            TableMapping tableDetails = jdbcMutation.getTableDetails();
+            Supplier<PreparedStatement> statementSupplier;
+
+            if (tableDetails.isIdentifierTable() && generatedValuesDelegate != null) {
+                statementSupplier = () -> generatedValuesDelegate.prepareStatement(jdbcMutation.getSqlString(), session);
+            } else {
+                statementSupplier = () -> statementPreparer.prepareStatement(jdbcMutation.getSqlString(), jdbcMutation.isCallable());
+            }
+
+            return new PreparedStatementDetailsStandard(
+                    jdbcMutation,
+                    jdbcMutation.getSqlString(),
+                    statementSupplier,
+                    jdbcMutation.getExpectation(),
+                    session.getJdbcServices());
+        }
+
+        static TableMapping findTableMapping(List<PreparableMutationOperation> jdbcMutations, String tableName) {
+            return jdbcMutations.stream()
+                    .map(PreparableMutationOperation::getTableDetails)
+                    .filter(mapping -> mapping.getTableName().equals(tableName))
+                    .findFirst()
+                    .orElse(null);
+        }
+    }
+}
+```
+
+---
+
+### **Refactoring Changes Made**
+
+1. **Extract Method:**  
+   - Moved comparator logic into `getTableNameComparator()`.  
+   - Simplified `getNumberOfActiveStatements()` using stream API.
+
+2. **Extract Class:**  
+   - Created `StatementDetailsFactory` for creating and locating `PreparedStatementDetails`.
+
+3. **Extract Variable:**  
+   - Stored repeated calls like `jdbcMutation.getTableDetails()` in a variable for better readability.
+
+4. **Rename Method:**  
+   - `createStatementDetailsMap()` → `buildStatementDetailsMap()`.  
+   - `locateTableMapping()` → `findTableMapping()`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Smaller, more descriptive methods and classes improve understanding.  
+- **Maintainability:** Isolated logic in `StatementDetailsFactory` makes future modifications easier.  
+- **Performance:** Streamlined logic in counting and searching improves efficiency.  
+
+This refactored version is cleaner, easier to extend, and adheres to good coding practices.

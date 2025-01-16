@@ -1,0 +1,129 @@
+Upon reviewing the provided code snippet, here are some potential refactoring opportunities for the specified types of refactoring:
+
+### 1. **Extract Method**
+   - Some code in test methods like `assertFailingWithMessage()` and `assertMissingCloseMethod()` can be extracted into separate helper methods to improve readability and reduce duplication. For example, in multiple test methods, there's code to execute tests and assert their result, which could be refactored into a single method.
+
+#### Refactoring Example:
+```java
+private static void assertTestFailureWithMessage(Events testEvents, String msg) {
+    testEvents
+        .assertStatistics(stats -> stats.failed(1))
+        .assertThatEvents().haveExactly(1, finishedWithFailure(message(msg)));
+}
+```
+
+#### Refactored Code:
+```java
+@Test
+void blankCloseMethodName() {
+    Class<?> testClass = BlankCloseMethodNameTestCase.class;
+    String msg = String.format("@AutoClose on field %s.field must specify a method name.",
+            testClass.getCanonicalName());
+    Events tests = executeTestsForClass(testClass).testEvents();
+    assertTestFailureWithMessage(tests, msg);
+}
+
+@Test
+void primitiveTypeCannotBeClosed() {
+    Class<?> testClass = PrimitiveFieldTestCase.class;
+    String msg = String.format("@AutoClose is not supported on primitive field %s.x.",
+            testClass.getCanonicalName());
+    Events tests = executeTestsForClass(testClass).testEvents();
+    assertTestFailureWithMessage(tests, msg);
+}
+```
+
+### 2. **Extract Variable**
+   - The string formatting logic is repeated for various messages within test methods. This could be extracted into variables to improve maintainability.
+
+#### Refactored Code:
+```java
+String blankFieldMessage = "@AutoClose on field %s.field must specify a method name.";
+String primitiveFieldMessage = "@AutoClose is not supported on primitive field %s.x.";
+String arrayFieldMessage = "@AutoClose is not supported on array field %s.x.";
+
+@Test
+void blankCloseMethodName() {
+    Class<?> testClass = BlankCloseMethodNameTestCase.class;
+    String msg = String.format(blankFieldMessage, testClass.getCanonicalName());
+    Events tests = executeTestsForClass(testClass).testEvents();
+    assertTestFailureWithMessage(tests, msg);
+}
+
+@Test
+void primitiveTypeCannotBeClosed() {
+    Class<?> testClass = PrimitiveFieldTestCase.class;
+    String msg = String.format(primitiveFieldMessage, testClass.getCanonicalName());
+    Events tests = executeTestsForClass(testClass).testEvents();
+    assertTestFailureWithMessage(tests, msg);
+}
+```
+
+### 3. **Rename Method**
+   - The method `assertFailingWithMessage` could be renamed to `assertTestFailureWithMessage` for better clarity, as it deals with testing failures.
+
+#### Refactored Code:
+```java
+private static void assertTestFailureWithMessage(Events testEvents, String msg) {
+    testEvents
+        .assertStatistics(stats -> stats.failed(1))
+        .assertThatEvents().haveExactly(1, finishedWithFailure(message(msg)));
+}
+```
+
+### 4. **Rename Variable**
+   - Some variable names like `msg` could be renamed to be more descriptive, such as `errorMessage`.
+
+#### Refactored Code:
+```java
+String errorMessage = String.format("@AutoClose on field %s.field must specify a method name.",
+            testClass.getCanonicalName());
+```
+
+### 5. **Inline Variable**
+   - Variables such as `msg` in the `blankCloseMethodName` method could be inlined directly into the `assertTestFailureWithMessage` call.
+
+#### Refactored Code:
+```java
+@Test
+void blankCloseMethodName() {
+    Class<?> testClass = BlankCloseMethodNameTestCase.class;
+    assertTestFailureWithMessage(
+        executeTestsForClass(testClass).testEvents(),
+        String.format("@AutoClose on field %s.field must specify a method name.", testClass.getCanonicalName())
+    );
+}
+```
+
+### 6. **Extract Class**
+   - There might be an opportunity to extract the `AutoCloseSpy` class to a separate file if this class is shared across multiple places in the project. However, since it’s tightly coupled with the tests, it might be better to leave it as is within the test class.
+
+### 7. **Inline Method**
+   - The methods `assertTestFailureWithMessage` and `assertMissingCloseMethod` might be inlined if they're only used a few times, but keeping them can improve maintainability in the long run, especially if more test cases are added.
+
+### 8. **Rename Parameter**
+   - In the method `findExecution`, the parameter `displayName` could be renamed to `testName` to make its role clearer.
+
+#### Refactored Code:
+```java
+private static Execution findExecution(Events events, String testName) {
+    return events.executions()
+            .filter(execution -> execution.getTestDescriptor().getDisplayName().contains(testName))
+            .findFirst().get();
+}
+```
+
+### 9. **Rename Attribute**
+   - The attribute `closed` in `InstancePerClassTestCase` could be renamed to something more descriptive like `isTestClosed` for better clarity.
+
+#### Refactored Code:
+```java
+static boolean isTestClosed = false;
+```
+
+---
+
+### Summary:
+Several refactoring opportunities were identified, primarily involving **method extraction**, **variable extraction**, and **renaming** for clarity and maintainability. The changes should improve the readability of the code without altering its functionality. 
+
+You can apply the refactorings based on your team's style preferences.

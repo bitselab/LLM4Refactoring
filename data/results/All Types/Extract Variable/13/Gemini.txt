@@ -1,0 +1,162 @@
+## Refactoring Opportunities in `AutoCloseTests`
+
+After reviewing the provided code snippet, I identified several potential refactoring opportunities:
+
+**1. Extract Interface for `AutoCloseSpy`:**
+
+The `AutoCloseSpy` class implements both `AutoCloseable` and `Runnable`. This suggests that its functionality could be separated into two distinct interfaces, making the code more modular and reusable.
+
+Here's the refactored code with the extracted interfaces:
+
+```java
+interface AutoCloseableSpy extends AutoCloseable {
+
+    void close();
+}
+
+interface RunnableSpy extends Runnable {
+
+    void run();
+}
+
+static class AutoCloseSpy implements AutoCloseableSpy, RunnableSpy {
+
+    // ... (rest of the code remains the same)
+}
+```
+
+**2. Extract Method for `recordInvocation`:**
+
+The `recordInvocation` method is used in both `run` and `close` methods of `AutoCloseSpy`. Extracting it into a separate method would reduce code duplication and improve readability.
+
+Here's the refactored code with the extracted method:
+
+```java
+static class AutoCloseSpy implements AutoCloseableSpy, RunnableSpy {
+
+    // ... (rest of the code remains the same)
+
+    private void recordInvocation(String methodName) {
+        if (this.invokedMethod != null) {
+            throw new IllegalStateException("Already closed via " + this.invokedMethod);
+        }
+        this.invokedMethod = methodName;
+        recorder.add(this.prefix + this.invokedMethod);
+        if (this.fail) {
+            throw new RuntimeException(this.prefix + this.invokedMethod);
+        }
+    }
+}
+```
+
+**3. Inline `fail` Field:**
+
+The `fail` field is only used in the constructor and never modified afterwards. It can be inlined directly into the constructor to simplify the code.
+
+Here's the refactored code with the inlined field:
+
+```java
+static class AutoCloseSpy implements AutoCloseableSpy, RunnableSpy {
+
+    private final String prefix;
+    private final boolean fail;
+    private String invokedMethod = null;
+
+    AutoCloseSpy(String prefix) {
+        Class<?> callerClass = StackWalker.getInstance(RETAIN_CLASS_REFERENCE).getCallerClass();
+        this.fail = false;
+        this.prefix = callerClass.getSimpleName() + "." + prefix + ".";
+    }
+
+    AutoCloseSpy(String prefix, boolean fail) {
+        Class<?> callerClass = StackWalker.getInstance(RETAIN_CLASS_REFERENCE).getCallerClass();
+        this.prefix = callerClass.getSimpleName() + "." + prefix + ".";
+        this.fail = fail;
+    }
+
+    // ... (rest of the code remains the same)
+}
+```
+
+**4. Rename `recordInvocation` to `logInvocation`:**
+
+The name `recordInvocation` is not very descriptive. Renaming it to `logInvocation` would better reflect its purpose.
+
+Here's the refactored code with the renamed method:
+
+```java
+static class AutoCloseSpy implements AutoCloseableSpy, RunnableSpy {
+
+    // ... (rest of the code remains the same)
+
+    private void logInvocation(String methodName) {
+        if (this.invokedMethod != null) {
+            throw new IllegalStateException("Already closed via " + this.invokedMethod);
+        }
+        this.invokedMethod = methodName;
+        recorder.add(this.prefix + this.invokedMethod);
+        if (this.fail) {
+            throw new RuntimeException(this.prefix + this.invokedMethod);
+        }
+    }
+}
+```
+
+**5. Use `static import` for `assertThat`:**
+
+The code uses `assertThat` from `org.assertj.core.api.Assertions` multiple times. Using a static import for `assertThat` would reduce the verbosity of the code.
+
+Here's the refactored code with the static import:
+
+```java
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+// ... (rest of the imports remain the same)
+
+// ... (rest of the code remains the same)
+```
+
+**6. Use `String.format` for Error Messages:**
+
+The code uses string concatenation to create error messages. Using `String.format` would improve readability and maintainability.
+
+Here's the refactored code with `String.format`:
+
+```java
+// ... (rest of the code remains the same)
+
+    @Test
+    void blankCloseMethodName() {
+        Class<?> testClass = BlankCloseMethodNameTestCase.class;
+        String msg = String.format("@AutoClose on field %s.field must specify a method name.",
+                testClass.getCanonicalName());
+        Events tests = executeTestsForClass(testClass).testEvents();
+        assertFailingWithMessage(tests, msg);
+    }
+
+// ... (rest of the code remains the same)
+```
+
+**7. Use `assertThrows` for Exception Assertions:**
+
+The code uses `assertThat` to assert exceptions. Using `assertThrows` would be more concise and idiomatic.
+
+Here's the refactored code with `assertThrows`:
+
+```java
+// ... (rest of the code remains the same)
+
+    // Test-level failures
+    Throwable throwable = findExecution(tests, "test()")//
+            .getTerminationInfo().getExecutionResult().getThrowable().orElseThrow();
+    assertThrows(RuntimeException.class, () -> {
+        throw throwable;
+    })
+            .hasMessage("FailingFieldsTestCase.field1.close()")//
+            .hasNoCause()//
+            .hasSuppressedException(new RuntimeException("FailingFieldsTestCase.field2.close()"));
+
+// ... (rest of the code remains the same)
+```
+
+These are just some of the potential refactoring opportunities I identified in the provided code snippet. Implementing these refactorings would improve the code's modularity, readability, and maintainability.

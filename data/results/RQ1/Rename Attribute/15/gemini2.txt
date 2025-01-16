@@ -1,0 +1,60 @@
+## Refactoring Opportunities
+
+There are a few opportunities for rename attribute refactorings in the provided code snippet:
+
+1. **filterRequested**: This attribute describes a flag indicating if filtering was requested. A clearer name could be `isFilteringRequested`.
+
+Here's the refactored code with the change:
+
+```java
+public class StrictRunner implements InternalRunner {
+
+  private final Class<?> testClass;
+  private final InternalRunner runner;
+  private boolean isFilteringRequested;
+
+  // ... rest of the code ...
+
+  @Override
+  public void run(RunNotifier notifier) {
+    // ...
+    UnnecessaryStubbingsReporter reporter = new UnnecessaryStubbingsReporter();
+    FailureDetector listener = new FailureDetector();
+
+    Mockito.framework().addListener(reporter);
+    try {
+      // ...
+      notifier.addListener(listener);
+      runner.run(notifier);
+    } finally {
+      Mockito.framework().removeListener(reporter);
+    }
+
+    if (!isFilteringRequested && listener.isSuccessful()) {
+      // ... rest of the logic ...
+    }
+  }
+
+  // ... rest of the class ...
+}
+```
+
+2. **RecordingFilter**: This class name doesn't clearly convey its purpose. It could be renamed to `FilterTracker` as it keeps track of filtering requests.
+
+Here's the refactored code with the change:
+
+```java
+public class StrictRunner implements InternalRunner {
+
+  // ... rest of the code ...
+
+  private class FilterTracker extends Filter {
+
+    // ... rest of the class ...
+  }
+
+  // ... rest of the class ...
+}
+```
+
+These are the suggested refactorings. The original code can function perfectly well without them, but the changes improve readability and maintainability.

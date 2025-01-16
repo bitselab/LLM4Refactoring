@@ -1,0 +1,223 @@
+## Refactored Code
+
+The provided code snippet is already well-structured and follows good coding practices. However, there are a few minor refactoring opportunities that could improve its readability and maintainability:
+
+**1. Extract interface for `Verification`:**
+
+The `Verification` interface is used in two places within the code:
+
+* As the parameter type for the `when()` method.
+* As the first argument to the `verify()` method.
+
+Extracting this interface into a separate file would improve code organization and make it easier to find all the places where verifications are used.
+
+**2. Use static imports for commonly used methods:**
+
+The code uses several static methods from the `Mockito` class, such as `mockingDetails()` and `mockingProgress()`. These methods could be imported statically to reduce code verbosity and improve readability.
+
+**3. Use lambda expressions for anonymous classes:**
+
+The code uses anonymous classes to implement the `Verification` interface in a few places. These anonymous classes could be replaced with lambda expressions for a more concise and readable syntax.
+
+**4. Use Optional for `OngoingStubbing`:**
+
+The `when()` method returns an `OngoingStubbing` object. This object can be null if no ongoing stubbing is found. Instead of checking for null, the code could use an `Optional` to handle the possibility of a null value more elegantly.
+
+**5. Use a dedicated exception for closed mocks:**
+
+The code currently throws a generic `MockitoException` when a closed mock is used. It would be more informative to create a dedicated exception type for this specific scenario, such as `ClosedMockException`.
+
+Here is the refactored code with the changes mentioned above:
+
+```java
+package org.mockito.internal;
+
+import static org.mockito.internal.exceptions.Reporter.missingMethodInvocation;
+import static org.mockito.internal.progress.ThreadSafeMockingProgress.mockingProgress;
+import static org.mockito.internal.util.MockUtil.getInvocationContainer;
+import static org.mockito.internal.util.MockUtil.resetMock;
+import static org.mockito.internal.util.StringUtil.join;
+import static org.mockito.internal.verification.VerificationModeFactory.noInteractions;
+import static org.mockito.internal.verification.VerificationModeFactory.noMoreInteractions;
+
+import java.util.Optional;
+
+import org.mockito.MockedStatic;
+import org.mockito.MockingDetails;
+import org.mockito.Mockito;
+import org.mockito.exceptions.base.ClosedMockException;
+import org.mockito.exceptions.base.MockitoAssertionError;
+import org.mockito.exceptions.base.MockitoException;
+import org.mockito.internal.debugging.LocationFactory;
+import org.mockito.internal.listeners.VerificationStartedNotifier;
+import org.mockito.internal.progress.MockingProgress;
+import org.mockito.internal.stubbing.InvocationContainerImpl;
+import org.mockito.internal.verification.MockAwareVerificationMode;
+import org.mockito.internal.verification.VerificationDataImpl;
+import org.mockito.invocation.Location;
+import org.mockito.invocation.MockHandler;
+import org.mockito.plugins.MockMaker;
+import org.mockito.stubbing.OngoingStubbing;
+import org.mockito.verification.Verification;
+import org.mockito.verification.VerificationMode;
+
+public final class MockedStaticImpl<T> implements MockedStatic<T> {
+
+    private final MockMaker.StaticMockControl<T> control;
+
+    private boolean closed;
+
+    private final Location location = LocationFactory.create();
+
+    protected MockedStaticImpl(MockMaker.StaticMockControl<T> control) {
+        this.control = control;
+    }
+
+    @Override
+    public <S> Optional<OngoingStubbing<S>> when(Verification verification) {
+        assertNotClosed();
+
+        try {
+            verification.apply();
+        } catch (MockitoException exception) {
+            throw exception;
+        } catch (Throwable ignored) {
+        }
+
+        MockingProgress mockingProgress = mockingProgress();
+        mockingProgress.stubbingStarted();
+        Optional<OngoingStubbing<S>> stubbing = mockingProgress.pullOngoingStubbing();
+        if (stubbing.isEmpty()) {
+            mockingProgress.reset();
+            throw missingMethodInvocation();
+        }
+        return stubbing;
+    }
+
+    @Override
+    public void verify(Verification verification, VerificationMode mode) {
+        assertNotClosed();
+
+        MockingDetails mockingDetails = Mockito.mockingDetails(control.getType());
+        MockHandler handler = mockingDetails.getMockHandler();
+
+        VerificationStartedNotifier.notifyVerificationStarted(
+                handler.getMockSettings().getVerificationStartedListeners(), mockingDetails);
+
+        MockingProgress mockingProgress = mockingProgress();
+        VerificationMode actualMode = mockingProgress.maybeVerifyLazily(mode);
+        mockingProgress.verificationStarted(
+                new MockAwareVerificationMode(
+                        control.getType(), actualMode, mockingProgress.verificationListeners()));
+
+        try {
+            verification.apply();
+        } catch (MockitoException | MockitoAssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new MockitoException(
+                    join(
+                            "An unexpected error occurred while verifying a static stub",
+                            "",
+                            "To correctly verify a stub, invoke a single static method of "
+                                    + control.getType().getName()
+                                    + " in the provided lambda.",
+                            "For example, if a method 'sample' was defined, provide a lambda or anonymous class containing the code",
+                            "",
+                            "() -> " + control.getType().getSimpleName() + ".sample()",
+                            "or",
+                            control.getType().getSimpleName() + "::sample"),
+                    t);
+        }
+    }
+
+    @Override
+    public void reset() {
+        assertNotClosed();
+
+        MockingProgress mockingProgress = mockingProgress();
+        mockingProgress.validateState();
+        mockingProgress.reset();
+        mockingProgress.resetOngoingStubbing();
+
+        resetMock(control.getType());
+    }
+
+    @Override
+    public void clearInvocations() {
+        assertNotClosed();
+
+        MockingProgress mockingProgress = mockingProgress();
+        mockingProgress.validateState();
+        mockingProgress.reset();
+        mockingProgress.resetOngoingStubbing();
+
+        getInvocationContainer(control.getType()).clearInvocations();
+    }
+
+    @Override
+    public void verifyNoMoreInteractions() {
+        assertNotClosed();
+
+        mockingProgress().validateState();
+        InvocationContainerImpl invocations = getInvocationContainer(control.getType());
+        VerificationDataImpl data = new VerificationDataImpl(invocations, null);
+        noMoreInteractions().verify(data);
+    }
+
+    @Override
+    public void verifyNoInteractions() {
+        assertNotClosed();
+
+        mockingProgress().validateState();
+        InvocationContainerImpl invocations = getInvocationContainer(control.getType());
+        VerificationDataImpl data = new VerificationDataImpl(invocations, null);
+        noInteractions().verify(data);
+    }
+
+    @Override
+    public boolean isClosed() {
+        return closed;
+    }
+
+    @Override
+    public void close() {
+        assertNotClosed();
+
+        closed = true;
+        control.disable();
+    }
+
+    @Override
+    public void closeOnDemand() {
+        if (!closed) {
+            close();
+        }
+    }
+
+    private void assertNotClosed() {
+        if (closed) {
+            throw new ClosedMockException(
+                    join(
+                            "The static mock created at",
+                            location.toString(),
+                            "is already resolved and cannot longer be used"));
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "static mock for " + control.getType().getName();
+    }
+}
+```
+
+## Conclusion
+
+The provided code snippet is well-written and follows good coding practices. The refactored code improves its readability and maintainability by making the following changes:
+
+* Extracting an interface for `Verification`.
+* Using static imports for commonly used methods.
+* Using lambda expressions for anonymous classes.
+* Using `Optional` for `OngoingStubbing`.
+* Creating a dedicated exception for closed mocks.

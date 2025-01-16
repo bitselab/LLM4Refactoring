@@ -1,0 +1,70 @@
+## Refactoring Opportunities in the Code Snippet
+
+This code snippet is well-written and adheres to good coding practices. However, there are a few minor refactoring opportunities that could be considered:
+
+**1. Extract Method:**
+
+* The logic for finding a JDK among project modules could be extracted into a separate method called `findJdkInModules`. This would improve code readability and reduce redundancy.
+* The logic for choosing the highest version JDK could be extracted into a separate method called `chooseHighestVersionJdk`. This would improve code readability and make it easier to modify the selection criteria.
+
+**2. Extract Variable:**
+
+* The constant `JavaSdkType.class` could be extracted into a static final variable named `JAVA_SDK_TYPE`. This would improve code readability and make it easier to modify the type of SDK to be searched for.
+
+**3. Inline Method:**
+
+* The `chooseJdk` method could be inlined into the `getAnyJdk` method, as it is only called once. This would simplify the code and reduce the number of methods.
+
+**4. Rename Method:**
+
+* The `chooseJdk` method could be renamed to `findHighestVersionJdk` to better reflect its purpose.
+
+**Refactored Code:**
+
+```java
+package com.intellij.openapi.projectRoots.ex;
+
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.JavaSdkType;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.ProjectRootManager;
+import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.lang.JavaVersion;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+
+/**
+ * @author Eugene Zhuravlev
+ */
+public final class PathUtilEx {
+
+    private static final Class<JavaSdkType> JAVA_SDK_TYPE = JavaSdkType.class;
+
+    @Nullable
+    public static Sdk getAnyJdk(@NotNull Project project) {
+        return findHighestVersionJdk(Arrays.asList(ModuleManager.getInstance(project).getModules()));
+    }
+
+    @Nullable
+    private static Sdk findHighestVersionJdk(@NotNull Collection<? extends Module> modules) {
+        List<Sdk> jdks = ContainerUtil.mapNotNull(modules, module -> {
+            if (module == null) return null;
+            Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
+            if (sdk == null || !JAVA_SDK_TYPE.isInstance(sdk.getSdkType())) return null;
+            return sdk;
+        });
+        if (jdks.isEmpty()) {
+            return null;
+        }
+        return jdks.stream().max(Comparator.comparing(jdk -> JavaVersion.tryParse(jdk.getVersionString()), Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(null);
+    }
+}
+```

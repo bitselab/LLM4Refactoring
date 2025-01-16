@@ -1,0 +1,170 @@
+## Refactoring Opportunities in PostStreamingWithPipe
+
+While the provided code is well-written and follows good practices, there are a few opportunities for refactoring to improve its readability and maintainability:
+
+**1. Extract Interface for PipeBody:**
+
+The `PipeBody` class currently serves two purposes: it acts as a request body and provides a sink for writing data. This can be improved by extracting an interface for the sink functionality, allowing for better separation of concerns and potential future implementations using different mechanisms like files or network sockets.
+
+Here's the refactored code with the extracted interface:
+
+```java
+package okhttp3.recipes;
+
+import java.io.IOException;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okio.BufferedSink;
+
+public final class PostStreamingWithPipe {
+  public static final MediaType MEDIA_TYPE_MARKDOWN
+      = MediaType.get("text/x-markdown; charset=utf-8");
+
+  private final OkHttpClient client = new OkHttpClient();
+
+  public void run() throws Exception {
+    DataSink dataSink = new PipeDataSink();
+
+    Request request = new Request.Builder()
+        .url("https://api.github.com/markdown/raw")
+        .post(new StreamingRequestBody(dataSink))
+        .build();
+
+    streamPrimesToSinkAsynchronously(dataSink);
+
+    try (Response response = client.newCall(request).execute()) {
+      if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+
+      System.out.println(response.body().string());
+    }
+  }
+
+  private void streamPrimesToSinkAsynchronously(DataSink dataSink) {
+    Thread thread = new Thread("writer") {
+      @Override public void run() {
+        try {
+          dataSink.writeUtf8("Numbers\n");
+          dataSink.writeUtf8("-------\n");
+          for (int i = 2; i <= 997; i++) {
+            System.out.println(i);
+            Thread.sleep(10);
+            dataSink.writeUtf8(String.format(" * %s = %s\n", i, factor(i)));
+          }
+          dataSink.close();
+        } catch (IOException | InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
+
+      private String factor(int n) {
+        for (int i = 2; i < n; i++) {
+          int x = n / i;
+          if (x * i == n) return factor(x) + " × " + i;
+        }
+        return Integer.toString(n);
+      }
+    };
+
+    thread.start();
+  }
+
+  // Interface for writing data to the request body
+  interface DataSink {
+    void writeUtf8(String string) throws IOException;
+    void close() throws IOException;
+  }
+
+  // Request body implementation using DataSink
+  static class StreamingRequestBody extends RequestBody {
+    private final DataSink dataSink;
+
+    StreamingRequestBody(DataSink dataSink) {
+      this.dataSink = dataSink;
+    }
+
+    @Override
+    public MediaType contentType() {
+      return MEDIA_TYPE_MARKDOWN;
+    }
+
+    @Override
+    public void writeTo(BufferedSink sink) throws IOException {
+      dataSink.close(); // Ensure dataSink is closed after writing to sink
+    }
+  }
+
+  // Implementation using Okio Pipe
+  static class PipeDataSink implements DataSink {
+    private final Pipe pipe = new Pipe(8192);
+    private final BufferedSink sink = Okio.buffer(pipe.sink());
+
+    @Override
+    public void writeUtf8(String string) throws IOException {
+      sink.writeUtf8(string);
+    }
+
+    @Override
+    public void close() throws IOException {
+      sink.close();
+    }
+  }
+
+  public static void main(String... args) throws Exception {
+    new PostStreamingWithPipe().run();
+  }
+}
+```
+
+**2. Use Functional Interface for `factor` method:**
+
+The `factor` method can be refactored to use a functional interface like `IntFunction<String>` from Java 8. This improves code readability and potentially allows for future optimizations using lambda expressions or method references.
+
+Here's the updated code with the functional interface:
+
+```java
+// ... (rest of the code)
+
+  private void streamPrimesToSinkAsynchronously(DataSink dataSink) {
+    Thread thread = new Thread("writer") {
+      @Override public void run() {
+        try {
+          dataSink.writeUtf8("Numbers\n");
+          dataSink.writeUtf8("-------\n");
+          for (int i = 2; i <= 997; i++) {
+            System.out.println(i);
+            Thread.sleep(10);
+            dataSink.writeUtf8(String.format(" * %s = %s\n", i, factor(i)));
+          }
+          dataSink.close();
+        } catch (IOException | InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
+
+      // Using IntFunction<String> for factor method
+      private String factor(int n) {
+        IntFunction<String> factorFunction = i -> {
+          int x = n / i;
+          if (x * i == n) return factorFunction.apply(x) + " × " + i;
+          return Integer.toString(n);
+        };
+        return factorFunction.apply(2);
+      }
+    };
+
+    thread.start();
+  }
+
+// ... (rest of the code)
+```
+
+**3. Consider using CompletableFuture for asynchronous writing:**
+
+While the current implementation uses a separate thread for writing data asynchronously, using `CompletableFuture` from Java 8 could provide a more concise and potentially more efficient approach.
+
+This refactoring is more involved and would require changes to the `DataSink` interface and potentially the `StreamingRequestBody` implementation. However, it could improve code readability and maintainability.
+
+**Overall, the provided code is well-written and functional. The suggested refactoring opportunities aim to improve its structure, readability, and potential for future enhancements.**

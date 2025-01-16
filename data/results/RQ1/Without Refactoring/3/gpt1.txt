@@ -1,0 +1,75 @@
+### Refactoring Opportunities:
+
+Upon reviewing the provided code, there are a few areas that could benefit from refactoring to improve readability, reduce repetition, and simplify the logic. Here’s a breakdown:
+
+1. **Repeated Null Checks for `o1` and `o2`**: The code checks for `null` multiple times for both `o1` and `o2`. These checks are somewhat repetitive, and they can be consolidated into a more streamlined approach.
+
+2. **Duplicated `null` and `toString()` Checks**: There are repeated checks for `null` on the `toString()` results for both objects. This can also be simplified.
+
+### Refactored Code:
+
+```java
+package org.apache.commons.lang3.compare;
+
+import java.io.Serializable;
+import java.util.Comparator;
+
+/**
+ * Compares Object's {@link Object#toString()} values.
+ *
+ * This class is stateless.
+ *
+ * @since 3.10
+ */
+public final class ObjectToStringComparator implements Comparator<Object>, Serializable {
+
+    /**
+     * Singleton instance.
+     *
+     * This class is stateless.
+     */
+    public static final ObjectToStringComparator INSTANCE = new ObjectToStringComparator();
+
+    /**
+     * For {@link Serializable}.
+     */
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public int compare(final Object o1, final Object o2) {
+        if (o1 == o2) {
+            return 0; // If both are the same object or both null, return 0
+        }
+
+        String string1 = (o1 != null) ? o1.toString() : null;
+        String string2 = (o2 != null) ? o2.toString() : null;
+
+        // Handle null values in toString() results
+        if (string1 == null) {
+            return (string2 == null) ? 0 : 1;
+        }
+        if (string2 == null) {
+            return -1;
+        }
+
+        return string1.compareTo(string2);
+    }
+}
+```
+
+### Refactoring Details:
+
+1. **Optimized Null Check for `o1` and `o2`**:
+   - Instead of performing multiple null checks for `o1` and `o2`, we check if `o1 == o2` early on. This handles the case where both objects are either the same instance or both `null`, returning `0` directly.
+   - This eliminates the need to check null on both `o1` and `o2` multiple times.
+
+2. **Simplified Null Handling for `toString()`**:
+   - If `o1` or `o2` is `null`, we handle the `toString()` call more concisely by using the ternary operator.
+   - We ensure that `null` values for `toString()` are handled properly by comparing the results (`string1` and `string2`) directly, reducing repetitive code.
+
+3. **Overall Code Reduction**:
+   - The number of conditional checks is reduced, making the logic more readable and easier to maintain. This also avoids redundant code, particularly around `null` and `toString()` checks.
+
+### Summary:
+
+This refactor simplifies the code by consolidating and reducing redundant null checks and comparisons, improving the clarity and maintainability of the comparator logic while preserving the original functionality.

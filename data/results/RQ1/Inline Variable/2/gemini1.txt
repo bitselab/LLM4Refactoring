@@ -1,0 +1,33 @@
+Here are some potential refactoring opportunities in the code snippet you provided:
+
+**1. Reduce Code Duplication:**
+
+* The code contains a lot of duplicate logic for testing different BOMs and stream encodings. This can be refactored using techniques like parameterized tests or a separate helper method to reduce redundancy.
+
+**2. Extract Meaningful Methods:**
+
+* There are several large methods that handle specific functionalities like `testHttpValid`, `testHttpInvalid`, and `testRawBomValid`. These methods can be further broken down into smaller, more focused methods that improve readability and maintainability.
+
+**3. Use More Descriptive Variable Names:**
+
+* Some variable names like `bomEnc`, `streamEnc`, and `prologEnc` are not very descriptive. Consider using more specific names that clearly indicate their purpose.
+
+**4. Utilize Constants:**
+
+* Repeated string values like character encodings (UTF-8, UTF-16) can be defined as constants to improve readability and avoid typos.
+
+**5. Leverage Streams:**
+
+* The code uses `IOUtils.toString` to read the entire stream content into a String. If the goal is not to process the entire content at once, consider using stream processing techniques for better memory efficiency.
+
+**Example of Refactored Code (using parameterized tests):**
+
+```java
+@ParameterizedTest
+@ValueSource(strings = {"UTF-8", "UTF-16BE", "UTF-16LE"})
+public void testHttpValid(String encoding) throws Exception {
+  // ... (test logic with parameterized encoding)
+}
+```
+
+**Note:** These are just suggestions, and the best approach might depend on the specific context and coding style preferences.

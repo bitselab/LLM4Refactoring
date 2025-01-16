@@ -1,0 +1,168 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The logic for filtering hints and handling `visitBiRel()` is complex and can be broken down into smaller, descriptive methods.  
+   - The `getInvalidQueryHint()` and `isMatchInvalidInheritPath()` methods can be simplified for readability.
+
+2. **Extract Class:**  
+   - The `ClearOuterQueryHintShuttle` class is deeply nested. Extracting it as a separate class improves readability and modularity.
+
+3. **Extract Variable:**  
+   - Repeated expressions such as `hints.stream().map(hint -> hint.hintName)` can be stored in a variable for better readability.
+
+4. **Rename Method:**  
+   - `visitBiRel()` can be renamed to `removeInvalidQueryHints()` to reflect its purpose more clearly.
+
+5. **Rename Attribute:**  
+   - `queryHintNeedRemove` can be renamed to `queryHintToRemove` for clarity.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.flink.table.planner.hint;
+
+import org.apache.calcite.rel.BiRel;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.hint.Hintable;
+import org.apache.calcite.rel.hint.RelHint;
+import org.apache.calcite.rel.logical.LogicalCorrelate;
+import org.apache.calcite.rel.logical.LogicalJoin;
+import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql2rel.SqlToRelConverter;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class ClearQueryHintsWithInvalidPropagationShuttle extends QueryHintsRelShuttle {
+
+    @Override
+    protected RelNode visitBiRel(BiRel biRel) {
+        List<RelHint> hints = ((Hintable) biRel).getHints();
+        Set<String> hintNames = extractHintNames(hints);
+
+        if (!containsQueryHints(hintNames)) {
+            return super.visit(biRel);
+        }
+
+        Optional<RelHint> aliasHint = findAliasHint(hints);
+        if (aliasHint.isEmpty()) {
+            return super.visit(biRel);
+        }
+
+        List<RelHint> outerQueryHints = findOuterQueryHints(hints, aliasHint.get());
+        if (outerQueryHints.isEmpty()) {
+            return super.visit(biRel);
+        }
+
+        RelNode updatedRelNode = removeOuterQueryHints(biRel, outerQueryHints);
+        return super.visit(updatedRelNode);
+    }
+
+    private Set<String> extractHintNames(List<RelHint> hints) {
+        return hints.stream().map(hint -> hint.hintName).collect(Collectors.toSet());
+    }
+
+    private boolean containsQueryHints(Set<String> hintNames) {
+        return hintNames.stream().anyMatch(FlinkHints::isQueryHint);
+    }
+
+    private Optional<RelHint> findAliasHint(List<RelHint> hints) {
+        return hints.stream()
+                .filter(hint -> FlinkHints.HINT_ALIAS.equals(hint.hintName))
+                .findFirst();
+    }
+
+    private List<RelHint> findOuterQueryHints(List<RelHint> hints, RelHint aliasHint) {
+        return hints.stream()
+                .filter(hint -> FlinkHints.isQueryHint(hint.hintName) &&
+                        hint.inheritPath.size() > aliasHint.inheritPath.size())
+                .collect(Collectors.toList());
+    }
+
+    private RelNode removeOuterQueryHints(BiRel biRel, List<RelHint> outerQueryHints) {
+        RelNode updatedRelNode = biRel;
+        for (RelHint hint : outerQueryHints) {
+            updatedRelNode = updatedRelNode.accept(new ClearOuterQueryHintShuttle(hint));
+        }
+        return updatedRelNode;
+    }
+}
+
+// Extracted ClearOuterQueryHintShuttle as a separate class for clarity
+class ClearOuterQueryHintShuttle extends RelShuttleImpl {
+
+    private final Deque<Integer> currentInheritPath;
+    private final RelHint queryHintToRemove;
+
+    public ClearOuterQueryHintShuttle(RelHint queryHintToRemove) {
+        this.queryHintToRemove = queryHintToRemove;
+        this.currentInheritPath = new ArrayDeque<>(queryHintToRemove.inheritPath);
+    }
+
+    @Override
+    protected RelNode visitChild(RelNode parent, int i, RelNode child) {
+        currentInheritPath.addLast(i);
+        RelNode newNode = super.visitChild(parent, i, child);
+        currentInheritPath.removeLast();
+        return newNode;
+    }
+
+    @Override
+    public RelNode visit(LogicalCorrelate correlate) {
+        return removeInvalidQueryHints(correlate);
+    }
+
+    @Override
+    public RelNode visit(LogicalJoin join) {
+        return removeInvalidQueryHints(join);
+    }
+
+    private RelNode removeInvalidQueryHints(BiRel biRel) {
+        List<RelHint> hints = new ArrayList<>(((Hintable) biRel).getHints());
+        getInvalidQueryHint(hints).ifPresent(hints::remove);
+        return super.visit(((Hintable) biRel).withHints(hints));
+    }
+
+    private Optional<RelHint> getInvalidQueryHint(List<RelHint> hints) {
+        return hints.stream()
+                .filter(hint -> isInvalidHint(hint))
+                .findFirst();
+    }
+
+    private boolean isInvalidHint(RelHint hint) {
+        return hint.hintName.equals(queryHintToRemove.hintName) &&
+                inheritPathsMatch(hint.inheritPath, new ArrayList<>(currentInheritPath));
+    }
+
+    private boolean inheritPathsMatch(List<Integer> path1, List<Integer> path2) {
+        return path1.equals(path2);
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extracted Methods:**  
+   - `extractHintNames()`, `containsQueryHints()`, `findAliasHint()`, `findOuterQueryHints()`, and `removeOuterQueryHints()` improve readability.  
+   - `isInvalidHint()` and `inheritPathsMatch()` simplify hint validation logic.
+
+2. **Extracted Class:**  
+   - `ClearOuterQueryHintShuttle` was extracted for modularity and clarity.
+
+3. **Renamed Attributes:**  
+   - `queryHintNeedRemove` → `queryHintToRemove` for clarity.
+
+4. **Renamed Methods:**  
+   - `visitBiRel()` → `removeInvalidQueryHints()` in the shuttle class for better semantics.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Clear, self-explanatory method and class names improve code comprehension.  
+- **Maintainability:** Smaller, well-named methods simplify future modifications.  
+- **Separation of Concerns:** Extracting the shuttle class decouples logic, making each class more focused.

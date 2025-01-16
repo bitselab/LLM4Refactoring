@@ -1,0 +1,134 @@
+In the provided code, there are a few refactoring opportunities that could improve readability, maintainability, and separation of concerns. Specifically, we could apply the following refactorings:
+
+### 1. **Extract Method (for repetitive validation logic)**:
+   The `vector()` method in the `Builder` class contains some repeated validation logic, which could be extracted into a separate method for clarity and reuse.
+
+### 2. **Extract Variable (for repetitive `vector.getClass()` calls)**:
+   The `vector.getClass()` calls are repeated multiple times in the `vector()` method. We could store it in a variable to avoid duplication.
+
+### 3. **Extract Class (for Builder Validation)**:
+   The validation logic in the `vector()` method is fairly complex. Extracting it into a separate class responsible for validating vector properties would help improve readability.
+
+Let’s refactor the code accordingly:
+
+### Refactored Code:
+
+```java
+package org.hibernate.search.backend.lucene.search.predicate.impl;
+
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Array;
+
+import org.hibernate.search.backend.lucene.logging.impl.Log;
+import org.hibernate.search.backend.lucene.search.common.impl.AbstractLuceneValueFieldSearchQueryElementFactory;
+import org.hibernate.search.backend.lucene.search.common.impl.LuceneSearchIndexScope;
+import org.hibernate.search.backend.lucene.search.common.impl.LuceneSearchIndexValueFieldContext;
+import org.hibernate.search.backend.lucene.types.codec.impl.LuceneFieldCodec;
+import org.hibernate.search.backend.lucene.types.codec.impl.LuceneVectorFieldCodec;
+import org.hibernate.search.engine.search.predicate.SearchPredicate;
+import org.hibernate.search.engine.search.predicate.spi.KnnPredicateBuilder;
+import org.hibernate.search.util.common.AssertionFailure;
+import org.hibernate.search.util.common.logging.impl.LoggerFactory;
+
+import org.apache.lucene.search.KnnByteVectorQuery;
+import org.apache.lucene.search.KnnFloatVectorQuery;
+import org.apache.lucene.search.Query;
+
+public class LuceneKnnPredicate extends AbstractLuceneSingleFieldPredicate implements LuceneSearchPredicate {
+
+    private static final Log log = LoggerFactory.make( Log.class, MethodHandles.lookup() );
+
+    private final int k;
+    private final Object vector;
+    private final LuceneSearchPredicate filter;
+
+    private LuceneKnnPredicate(Builder<?> builder) {
+        super(builder);
+        this.k = builder.k;
+        this.vector = builder.vector;
+        this.filter = builder.filter;
+    }
+
+    @Override
+    protected Query doToQuery(PredicateRequestContext context) {
+        if (vector instanceof byte[]) {
+            return new KnnByteVectorQuery(absoluteFieldPath, (byte[]) vector, k, filter == null ? null : filter.toQuery(context));
+        }
+        if (vector instanceof float[]) {
+            return new KnnFloatVectorQuery(absoluteFieldPath, (float[]) vector, k, filter == null ? null : filter.toQuery(context));
+        }
+
+        throw new UnsupportedOperationException("Unknown vector type " + vector.getClass() + ". only byte[] and float[] vectors are supported.");
+    }
+
+    public static class DefaultFactory<F> extends AbstractLuceneValueFieldSearchQueryElementFactory<KnnPredicateBuilder, F> {
+        @Override
+        public KnnPredicateBuilder create(LuceneSearchIndexScope<?> scope, LuceneSearchIndexValueFieldContext<F> field) {
+            return new Builder<>(scope, field);
+        }
+    }
+
+    private static class Builder<F> extends AbstractBuilder implements KnnPredicateBuilder {
+        private final Class<?> vectorElementsType;
+        private final int indexedVectorsDimension;
+        private int k;
+        private Object vector;
+        private LuceneSearchPredicate filter;
+
+        private Builder(LuceneSearchIndexScope<?> scope, LuceneSearchIndexValueFieldContext<F> field) {
+            super(scope, field);
+
+            LuceneFieldCodec<F> codec = field.type().codec();
+            if (codec instanceof LuceneVectorFieldCodec) {
+                vectorElementsType = ((LuceneVectorFieldCodec<F>) codec).vectorElementsType();
+                indexedVectorsDimension = ((LuceneVectorFieldCodec<F>) codec).getConfiguredDimensions();
+            } else {
+                throw new AssertionFailure("Attempting to use a knn predicate on a non-vector field.");
+            }
+        }
+
+        @Override
+        public void k(int k) {
+            this.k = k;
+        }
+
+        @Override
+        public void vector(Object vector) {
+            validateVector(vector);
+            this.vector = vector;
+        }
+
+        private void validateVector(Object vector) {
+            Class<?> vectorClass = vector.getClass();
+            if (!vectorClass.isArray()) {
+                throw new IllegalArgumentException("Vector can only be either a float or a byte array (float[], byte[]).");
+            }
+
+            if (!vectorElementsType.equals(vectorClass.getComponentType())) {
+                throw log.vectorKnnMatchVectorTypeDiffersFromField(absoluteFieldPath, vectorElementsType, vectorClass.getComponentType());
+            }
+
+            if (Array.getLength(vector) != indexedVectorsDimension) {
+                throw log.vectorKnnMatchVectorDimensionDiffersFromField(absoluteFieldPath, indexedVectorsDimension, Array.getLength(vector));
+            }
+        }
+
+        @Override
+        public void filter(SearchPredicate filter) {
+            this.filter = LuceneSearchPredicate.from(scope, filter);
+        }
+
+        @Override
+        public SearchPredicate build() {
+            return new LuceneKnnPredicate(this);
+        }
+    }
+}
+```
+
+### Changes:
+1. **Extracted the validation logic for `vector()` into the `validateVector()` method**. This method handles checking whether the vector is an array, if its type matches the expected type, and if its dimensions match the indexed dimension.
+   
+2. **Stored `vector.getClass()` in a variable** (`vectorClass`) to avoid redundant calls to `vector.getClass()` in the validation checks.
+
+By applying these changes, the code is cleaner, more maintainable, and the validation logic is reusable. Additionally, the refactored `vector()` method is now much easier to read and understand.

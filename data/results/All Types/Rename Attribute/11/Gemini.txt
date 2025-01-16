@@ -1,0 +1,132 @@
+## Refactoring Opportunities in the Code
+
+Here's an analysis of the provided code snippet with potential refactoring opportunities:
+
+**1. Extract Class:**
+
+- The `CoreClientUpgradeRequest` class seems to be a separate entity with its own responsibilities. It handles building an upgrade request based on provided parameters and sending it asynchronously. Extracting this functionality into a dedicated class would improve modularity and separation of concerns.
+
+**Refactored Code:**
+
+```java
+// New class: CoreClientUpgradeRequest.java
+public class CoreClientUpgradeRequest
+{
+    private final WebSocketCoreClient client;
+    private final URI wsUri;
+    private final FrameHandler frameHandler;
+    // ... other fields and methods
+
+    public CoreClientUpgradeRequest(WebSocketCoreClient client, URI wsUri, FrameHandler frameHandler)
+    {
+        this.client = client;
+        this.wsUri = wsUri;
+        this.frameHandler = frameHandler;
+    }
+
+    // ... other methods for building and sending the upgrade request
+}
+
+// Modified WebSocketCoreClient.java
+public class WebSocketCoreClient extends ContainerLifeCycle
+{
+    // ... existing code
+
+    public CompletableFuture<CoreSession> connect(FrameHandler frameHandler, URI wsUri) throws IOException
+    {
+        CoreClientUpgradeRequest request = new CoreClientUpgradeRequest(this, wsUri, frameHandler);
+        return connect(request);
+    }
+
+    // ... other methods
+}
+```
+
+**2. Extract Method:**
+
+- In the `connect` method, there's a block of code that validates the requested extensions against the available extensions in the registry. This logic could be extracted into a separate method for better readability and reusability.
+
+**Refactored Code:**
+
+```java
+public class WebSocketCoreClient extends ContainerLifeCycle
+{
+    // ... existing code
+
+    public CompletableFuture<CoreSession> connect(FrameHandler frameHandler, URI wsUri) throws IOException
+    {
+        CoreClientUpgradeRequest request = new CoreClientUpgradeRequest(this, wsUri, frameHandler);
+        validateRequestedExtensions(request);
+        return connect(request);
+    }
+
+    private void validateRequestedExtensions(CoreClientUpgradeRequest request)
+    {
+        for (ExtensionConfig reqExt : request.getExtensions())
+        {
+            if (!components.getExtensionRegistry().isAvailable(reqExt.getName()))
+            {
+                throw new IllegalArgumentException("Requested extension [" + reqExt.getName() + "] is not installed");
+            }
+        }
+    }
+
+    // ... other methods
+}
+```
+
+**3. Inline Variable:**
+
+- In the `connect` method, the `l` variable is used only once within the loop. It can be inlined directly into the loop for conciseness.
+
+**Refactored Code:**
+
+```java
+public class WebSocketCoreClient extends ContainerLifeCycle
+{
+    // ... existing code
+
+    public CompletableFuture<CoreSession> connect(FrameHandler frameHandler, URI wsUri) throws IOException
+    {
+        CoreClientUpgradeRequest request = new CoreClientUpgradeRequest(this, wsUri, frameHandler);
+        validateRequestedExtensions(request);
+        for (Request.Listener listener : getBeans(Request.Listener.class))
+        {
+            request.listener(listener);
+        }
+        return connect(request);
+    }
+
+    // ... other methods
+}
+```
+
+**4. Rename Parameter:**
+
+- The `wsUri` parameter in the `connect` methods could be renamed to `uri` for consistency and clarity.
+
+**Refactored Code:**
+
+```java
+public class WebSocketCoreClient extends ContainerLifeCycle
+{
+    // ... existing code
+
+    public CompletableFuture<CoreSession> connect(FrameHandler frameHandler, URI uri) throws IOException
+    {
+        CoreClientUpgradeRequest request = new CoreClientUpgradeRequest(this, uri, frameHandler);
+        validateRequestedExtensions(request);
+        for (Request.Listener listener : getBeans(Request.Listener.class))
+        {
+            request.listener(listener);
+        }
+        return connect(request);
+    }
+
+    // ... other methods
+}
+```
+
+**Summary:**
+
+By applying these refactoring techniques, the code becomes more modular, readable, and maintainable. The extracted class encapsulates the upgrade request handling logic, while method extraction and variable inlining improve code organization and conciseness. Parameter renaming enhances clarity and consistency.

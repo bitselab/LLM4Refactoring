@@ -1,0 +1,211 @@
+The code you provided is well-structured, but there are several potential areas for improvement and refactoring. Below are some refactoring opportunities:
+
+### 1. **Consolidate Enum Constructors:**
+   The `LanguageLevel` enum has a large number of entries with very similar constructor patterns. The `Validator` and `PostProcessors` are often initialized together. This pattern could potentially be optimized to reduce redundancy.
+
+### 2. **Simplify Stream Usage for `yieldSupport`:**
+   The `isYieldSupported` method uses `Arrays.stream(yieldSupport).anyMatch(...)`. This could be refactored to improve readability and possibly performance.
+
+### 3. **Eliminate Duplicate Processor Logic:**
+   Multiple processors are being added to the `processors` list that perform very similar operations (e.g., handling `postProcess` logic). These could be refactored into more generic processors to reduce duplication.
+
+### 4. **Nested Classes for Processors:**
+   The processor classes (`UnicodeEscapeProcessor`, `LineEndingProcessor`, etc.) could be moved into separate top-level classes or implemented as `Processor` interfaces directly, depending on your design goals.
+
+### Refactored Code:
+
+```java
+package com.github.javaparser;
+
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.validator.ProblemReporter;
+import com.github.javaparser.ast.validator.Validator;
+import com.github.javaparser.ast.validator.language_level_validations.*;
+import com.github.javaparser.ast.validator.postprocessors.*;
+import com.github.javaparser.printer.lexicalpreservation.LexicalPreservingPrinter;
+import com.github.javaparser.resolution.SymbolResolver;
+import com.github.javaparser.utils.LineSeparator;
+
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Supplier;
+
+import static com.github.javaparser.ParserConfiguration.LanguageLevel.POPULAR;
+
+public class ParserConfiguration {
+
+    public enum LanguageLevel {
+
+        JAVA_1_0(Java1_0Validator::new, null),
+        JAVA_1_1(Java1_1Validator::new, null),
+        JAVA_1_2(Java1_2Validator::new, null),
+        JAVA_1_3(Java1_3Validator::new, null),
+        JAVA_1_4(Java1_4Validator::new, null),
+        JAVA_5(Java5Validator::new, null),
+        JAVA_6(Java6Validator::new, null),
+        JAVA_7(Java7Validator::new, null),
+        JAVA_8(Java8Validator::new, null),
+        JAVA_9(Java9Validator::new, null),
+        JAVA_10(Java10Validator::new, Java10PostProcessor::new),
+        JAVA_10_PREVIEW(Java10PreviewValidator::new, Java10PostProcessor::new),
+        JAVA_11(Java11Validator::new, Java11PostProcessor::new),
+        JAVA_11_PREVIEW(Java11PreviewValidator::new, Java11PostProcessor::new),
+        JAVA_12(Java12Validator::new, Java12PostProcessor::new),
+        JAVA_12_PREVIEW(Java12PreviewValidator::new, Java12PostProcessor::new),
+        JAVA_13(Java13Validator::new, Java13PostProcessor::new),
+        JAVA_13_PREVIEW(Java13PreviewValidator::new, Java13PostProcessor::new),
+        JAVA_14(Java14Validator::new, Java14PostProcessor::new),
+        JAVA_14_PREVIEW(Java14PreviewValidator::new, Java14PostProcessor::new),
+        JAVA_15(Java15Validator::new, Java15PostProcessor::new),
+        JAVA_15_PREVIEW(Java15PreviewValidator::new, Java15PostProcessor::new),
+        JAVA_16(Java16Validator::new, Java16PostProcessor::new),
+        JAVA_16_PREVIEW(Java16PreviewValidator::new, Java16PostProcessor::new),
+        JAVA_17(Java17Validator::new, Java17PostProcessor::new),
+        JAVA_17_PREVIEW(Java17PreviewValidator::new, Java17PostProcessor::new),
+        JAVA_18(Java18Validator::new, Java18PostProcessor::new);
+
+        public static final LanguageLevel RAW = null;
+        public static final LanguageLevel POPULAR = JAVA_11;
+        public static final LanguageLevel CURRENT = JAVA_16;
+        public static final LanguageLevel BLEEDING_EDGE = JAVA_17_PREVIEW;
+
+        private final Supplier<Validator> validatorSupplier;
+        private final Supplier<PostProcessors> postProcessorSupplier;
+
+        private static final LanguageLevel[] YIELD_SUPPORT = {
+            JAVA_13, JAVA_13_PREVIEW, JAVA_14, JAVA_14_PREVIEW, JAVA_15, JAVA_15_PREVIEW, JAVA_16, JAVA_16_PREVIEW, JAVA_17, JAVA_17_PREVIEW, JAVA_18
+        };
+
+        LanguageLevel(Supplier<Validator> validatorSupplier, Supplier<PostProcessors> postProcessorSupplier) {
+            this.validatorSupplier = validatorSupplier;
+            this.postProcessorSupplier = postProcessorSupplier;
+        }
+
+        public boolean isYieldSupported() {
+            return Arrays.asList(YIELD_SUPPORT).contains(this);
+        }
+
+        public Validator getValidator() {
+            return validatorSupplier.get();
+        }
+
+        public PostProcessors getPostProcessor() {
+            return postProcessorSupplier != null ? postProcessorSupplier.get() : null;
+        }
+    }
+
+    private boolean detectOriginalLineSeparator = true;
+    private boolean storeTokens = true;
+    private boolean attributeComments = true;
+    private boolean doNotAssignCommentsPrecedingEmptyLines = true;
+    private boolean ignoreAnnotationsWhenAttributingComments = false;
+    private boolean lexicalPreservationEnabled = false;
+    private boolean preprocessUnicodeEscapes = false;
+    private SymbolResolver symbolResolver = null;
+    private int tabSize = 1;
+    private LanguageLevel languageLevel = POPULAR;
+    private Charset characterEncoding = Providers.UTF8;
+
+    private final List<Supplier<Processor>> processors = new ArrayList<>();
+
+    public ParserConfiguration() {
+        processors.add(this::createUnicodeEscapeProcessor);
+        processors.add(this::createLineEndingProcessor);
+        processors.add(this::createCommentProcessor);
+        processors.add(this::createLanguageLevelProcessor);
+        processors.add(this::createSymbolResolverProcessor);
+        processors.add(this::createLexicalPreservationProcessor);
+    }
+
+    private Processor createUnicodeEscapeProcessor() {
+        return new UnicodeEscapeProcessor();
+    }
+
+    private Processor createLineEndingProcessor() {
+        return new LineEndingProcessor();
+    }
+
+    private Processor createCommentProcessor() {
+        return new Processor() {
+            @Override
+            public void postProcess(ParseResult<? extends Node> result, ParserConfiguration configuration) {
+                if (configuration.isAttributeComments()) {
+                    result.ifSuccessful(resultNode -> result.getCommentsCollection()
+                            .ifPresent(comments -> new CommentsInserter(configuration).insertComments(resultNode, comments.copy().getComments())));
+                }
+            }
+        };
+    }
+
+    private Processor createLanguageLevelProcessor() {
+        return new Processor() {
+            @Override
+            public void postProcess(ParseResult<? extends Node> result, ParserConfiguration configuration) {
+                LanguageLevel level = configuration.getLanguageLevel();
+                if (level != null) {
+                    PostProcessors postProcessor = level.getPostProcessor();
+                    if (postProcessor != null) {
+                        postProcessor.postProcess(result, configuration);
+                    }
+                    Validator validator = level.getValidator();
+                    if (validator != null) {
+                        validator.accept(result.getResult().get(), new ProblemReporter(newProblem -> result.getProblems().add(newProblem)));
+                    }
+                }
+            }
+        };
+    }
+
+    private Processor createSymbolResolverProcessor() {
+        return new Processor() {
+            @Override
+            public void postProcess(ParseResult<? extends Node> result, ParserConfiguration configuration) {
+                configuration.getSymbolResolver().ifPresent(symbolResolver -> result.ifSuccessful(resultNode -> {
+                    if (resultNode instanceof CompilationUnit) {
+                        resultNode.setData(Node.SYMBOL_RESOLVER_KEY, symbolResolver);
+                    }
+                }));
+            }
+        };
+    }
+
+    private Processor createLexicalPreservationProcessor() {
+        return new Processor() {
+            @Override
+            public void postProcess(ParseResult<? extends Node> result, ParserConfiguration configuration) {
+                if (configuration.isLexicalPreservationEnabled()) {
+                    result.ifSuccessful(LexicalPreservingPrinter::setup);
+                }
+            }
+        };
+    }
+
+    public boolean isAttributeComments() {
+        return attributeComments;
+    }
+
+    public ParserConfiguration setAttributeComments(boolean attributeComments) {
+        this.attributeComments = attributeComments;
+        return this;
+    }
+
+    // Other getter/setter methods remain unchanged.
+}
+```
+
+### Refactoring Summary:
+
+1. **Enum `LanguageLevel` Constructor Refactoring:**
+   - The enum constructors now use `Supplier<Validator>` and `Supplier<PostProcessors>` to simplify and reduce redundancy in the creation of `Validator` and `PostProcessor` objects.
+
+2. **Simplified `isYieldSupported` Implementation:**
+   - The `isYieldSupported` method has been simplified by directly checking if the enum value is present in the `YIELD_SUPPORT` array.
+
+3. **Processor Creation Consolidation:**
+   - Instead of manually adding separate processor instances in the constructor, I refactored the code to generate the processors dynamically by extracting the processor creation logic into separate methods (e.g., `createUnicodeEscapeProcessor`).
+
+These changes make the code more maintainable and reduce redundancy, while maintaining the existing functionality.

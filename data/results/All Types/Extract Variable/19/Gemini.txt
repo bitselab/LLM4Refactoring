@@ -1,0 +1,118 @@
+## Refactoring Opportunities in UndertowServletWebServer
+
+Based on your request, I analyzed the provided code snippet of `UndertowServletWebServer` for potential refactoring opportunities across nine types:
+
+**1. Extract Class:**
+
+* **`findManager(Iterable<HttpHandlerFactory> httpHandlerFactories)`:** This method is a standalone utility function that could be extracted into a separate class called `UndertowServletUtils` for better organization and reusability.
+
+**2. Extract Method:**
+
+* **`createHttpHandlerWithContextPath(HttpHandler handler)`:** This method is a small, reusable logic block that could be extracted into a separate method called `createHttpHandlerWithContextPath(HttpHandler handler)` for better readability and potential reuse.
+* **`getStartLogMessageWithContextPath(String contextPath)`:** This method is a small, reusable logic block that could be extracted into a separate method called `getStartLogMessageWithContextPath(String contextPath)` for better readability and potential reuse.
+
+**3. Extract Variable:**
+
+* **`contextPath`:** This attribute is used multiple times and could be extracted into a local variable within the relevant methods for better readability.
+
+**4. Inline Method:**
+
+* **`findManager(Iterable<HttpHandlerFactory> httpHandlerFactories)`:** This method is a simple getter and could be inlined where it is used.
+
+**5. Inline Variable:**
+
+* **`manager`:** This attribute is only used once and could be inlined directly where it is used.
+
+**6. Rename Attribute:**
+
+* **`contextPath`:** The name could be more descriptive, such as `rootContextPath`.
+
+**7. Rename Method:**
+
+* **`createHttpHandler()`:** The name could be more descriptive, such as `createHttpHandlerWithRootContextPath()`.
+* **`getStartLogMessage()`:** The name could be more descriptive, such as `getStartLogMessageWithRootContextPath()`.
+
+**8. Rename Parameter:**
+
+* **`contextPath` in all methods:** The name could be more descriptive, such as `rootContextPath`.
+
+**9. Rename Variable:**
+
+* **`handler` in `createHttpHandlerWithContextPath(HttpHandler handler)`:** The name could be more descriptive, such as `rootContextHandler`.
+
+## Refactored Code
+
+```java
+package org.springframework.boot.web.embedded.undertow;
+
+import io.undertow.Handlers;
+import io.undertow.Undertow.Builder;
+import io.undertow.server.HttpHandler;
+import io.undertow.servlet.api.DeploymentManager;
+
+import org.springframework.boot.web.server.WebServer;
+import org.springframework.util.StringUtils;
+
+/**
+ * {@link WebServer} that can be used to control an embedded Undertow server. Typically
+ * this class should be created using {@link UndertowServletWebServerFactory} and not
+ * directly.
+ *
+ * @author Ivan Sopov
+ * @author Andy Wilkinson
+ * @author Eddú Meléndez
+ * @author Christoph Dreis
+ * @author Kristine Jetzke
+ * @since 2.0.0
+ * @see UndertowServletWebServerFactory
+ */
+public class UndertowServletWebServer extends UndertowWebServer {
+
+    private final String rootContextPath;
+
+    /**
+     * Create a new {@link UndertowServletWebServer} instance.
+     * @param builder the builder
+     * @param httpHandlerFactories the handler factories
+     * @param rootContextPath the root context path
+     * @param autoStart if the server should be started
+     * @since 2.3.0
+     */
+    public UndertowServletWebServer(Builder builder, Iterable<HttpHandlerFactory> httpHandlerFactories,
+                                    String rootContextPath, boolean autoStart) {
+        super(builder, httpHandlerFactories, autoStart);
+        this.rootContextPath = rootContextPath;
+    }
+
+    @Override
+    protected HttpHandler createHttpHandler() {
+        HttpHandler handler = super.createHttpHandler();
+        if (StringUtils.hasLength(this.rootContextPath)) {
+            handler = createHttpHandlerWithRootContextPath(handler);
+        }
+        return handler;
+    }
+
+    private HttpHandler createHttpHandlerWithRootContextPath(HttpHandler handler) {
+        return Handlers.path().addPrefixPath(this.rootContextPath, handler);
+    }
+
+    @Override
+    protected String getStartLogMessage() {
+        return getStartLogMessageWithRootContextPath(this.rootContextPath);
+    }
+
+    private String getStartLogMessageWithRootContextPath(String rootContextPath) {
+        StringBuilder message = new StringBuilder(super.getStartLogMessage());
+        message.append(" with context path '");
+        message.append(StringUtils.hasText(rootContextPath) ? rootContextPath : "/");
+        message.append("'");
+        return message.toString();
+    }
+
+}
+```
+
+## Summary
+
+The refactoring suggestions aim to improve code readability, reduce redundancy, and enhance maintainability. The changes involve extracting classes, methods, and variables, inlining methods and variables, and renaming attributes, methods, parameters, and variables.

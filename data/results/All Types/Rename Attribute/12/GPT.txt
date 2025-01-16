@@ -1,0 +1,229 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The logic inside `findObjects()` is complex and can be split into helper methods for better readability.  
+   - The `findObjectsWalk()` method contains multiple responsibilities and should be split.  
+   - Extract listener notifications for better encapsulation.
+
+2. **Extract Class:**  
+   - The `BitmapObjectFilter` class is simple but fine as is; no need to extract further.
+
+3. **Extract Variable:**  
+   - Magic numbers and object creations (e.g., `bitmapIndex.newBitmapBuilder()`) could be assigned to clearly named variables.
+
+4. **Inline Variable:**  
+   - The `marked` flag in `findObjectsWalk()` can be eliminated by inlining logic.
+
+5. **Rename Method/Variable:**  
+   - Rename `findObjectsWalk` to `traverseObjects` for clarity.  
+   - Rename `prevCommit` and `prevBitmap` to `cachedCommit` and `cachedBitmap` for clearer meaning.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.eclipse.jgit.revwalk;
+
+import java.io.IOException;
+import java.util.Arrays;
+
+import org.eclipse.jgit.errors.IncorrectObjectTypeException;
+import org.eclipse.jgit.errors.MissingObjectException;
+import org.eclipse.jgit.internal.revwalk.AddToBitmapFilter;
+import org.eclipse.jgit.internal.revwalk.AddToBitmapWithCacheFilter;
+import org.eclipse.jgit.internal.revwalk.AddUnseenToBitmapFilter;
+import org.eclipse.jgit.lib.AnyObjectId;
+import org.eclipse.jgit.lib.BitmapIndex;
+import org.eclipse.jgit.lib.BitmapIndex.Bitmap;
+import org.eclipse.jgit.lib.BitmapIndex.BitmapBuilder;
+import org.eclipse.jgit.lib.NullProgressMonitor;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ProgressMonitor;
+import org.eclipse.jgit.revwalk.filter.ObjectFilter;
+
+public final class BitmapWalker {
+
+    private final ObjectWalk walker;
+    private final BitmapIndex bitmapIndex;
+    private final ProgressMonitor progressMonitor;
+    private final BitmapWalkListener listener;
+
+    private long bitmapIndexMissCount;
+    private AnyObjectId cachedCommit;
+    private Bitmap cachedBitmap;
+
+    public interface BitmapWalkListener {
+        void onCommitSeen(ObjectId oid);
+        void onCommitWithBitmap(ObjectId oid);
+        void onCommitWithoutBitmap(ObjectId oid);
+    }
+
+    public static final BitmapWalkListener NO_LISTENER = new BitmapWalkListener() {
+        @Override public void onCommitSeen(ObjectId oid) {}
+        @Override public void onCommitWithBitmap(ObjectId oid) {}
+        @Override public void onCommitWithoutBitmap(ObjectId oid) {}
+    };
+
+    public BitmapWalker(ObjectWalk walker, BitmapIndex bitmapIndex, ProgressMonitor progressMonitor) {
+        this(walker, bitmapIndex, progressMonitor, NO_LISTENER);
+    }
+
+    public BitmapWalker(ObjectWalk walker, BitmapIndex bitmapIndex, ProgressMonitor progressMonitor, BitmapWalkListener listener) {
+        this.walker = walker;
+        this.bitmapIndex = bitmapIndex;
+        this.progressMonitor = (progressMonitor == null) ? NullProgressMonitor.INSTANCE : progressMonitor;
+        this.listener = listener;
+    }
+
+    public void setCachedCommit(AnyObjectId commit) {
+        this.cachedCommit = commit;
+    }
+
+    public void setCachedBitmap(Bitmap bitmap) {
+        this.cachedBitmap = bitmap;
+    }
+
+    public long getBitmapIndexMissCount() {
+        return bitmapIndexMissCount;
+    }
+
+    public BitmapBuilder findObjects(Iterable<? extends ObjectId> startPoints, BitmapBuilder seenObjects, boolean ignoreMissing) throws IOException {
+        try {
+            return traverseObjects(startPoints, seenObjects, ignoreMissing);
+        } catch (MissingObjectException e) {
+            if (ignoreMissing) {
+                return handleMissingObjects(startPoints);
+            }
+            throw e;
+        }
+    }
+
+    private BitmapBuilder handleMissingObjects(Iterable<? extends ObjectId> startPoints) throws IOException {
+        BitmapBuilder resultBitmap = bitmapIndex.newBitmapBuilder();
+
+        for (ObjectId obj : startPoints) {
+            Bitmap bitmap = bitmapIndex.getBitmap(obj);
+            if (bitmap != null) {
+                resultBitmap.or(bitmap);
+                listener.onCommitWithBitmap(obj);
+            }
+        }
+
+        for (ObjectId obj : startPoints) {
+            if (!resultBitmap.contains(obj)) {
+                try {
+                    resultBitmap.or(traverseObjects(Arrays.asList(obj), resultBitmap, false));
+                } catch (MissingObjectException ignored) {
+                    // Skip unreachable objects
+                }
+            }
+        }
+
+        return resultBitmap;
+    }
+
+    private BitmapBuilder traverseObjects(Iterable<? extends ObjectId> startPoints, BitmapBuilder seenObjects, boolean ignoreMissing) throws IOException {
+        walker.reset();
+        BitmapBuilder resultBitmap = bitmapIndex.newBitmapBuilder();
+
+        markStartPoints(startPoints, resultBitmap, ignoreMissing);
+        configureWalkerFilter(resultBitmap, seenObjects);
+
+        walkCommits(resultBitmap);
+        walkObjects(resultBitmap);
+
+        return resultBitmap;
+    }
+
+    private void markStartPoints(Iterable<? extends ObjectId> startPoints, BitmapBuilder resultBitmap, boolean ignoreMissing) throws IOException {
+        for (ObjectId obj : startPoints) {
+            Bitmap bitmap = bitmapIndex.getBitmap(obj);
+            if (bitmap != null) {
+                resultBitmap.or(bitmap);
+                listener.onCommitWithBitmap(obj);
+            } else {
+                markWalkerStart(obj, ignoreMissing);
+            }
+        }
+    }
+
+    private void markWalkerStart(ObjectId obj, boolean ignoreMissing) throws IOException {
+        try {
+            walker.markStart(walker.parseAny(obj));
+        } catch (MissingObjectException e) {
+            if (!ignoreMissing) throw e;
+        }
+    }
+
+    private void configureWalkerFilter(BitmapBuilder resultBitmap, BitmapBuilder seenObjects) {
+        if (cachedCommit != null) {
+            walker.setRevFilter(new AddToBitmapWithCacheFilter(cachedCommit, cachedBitmap, resultBitmap));
+        } else if (seenObjects == null) {
+            walker.setRevFilter(new AddToBitmapFilter(resultBitmap));
+        } else {
+            walker.setRevFilter(new AddUnseenToBitmapFilter(seenObjects, resultBitmap));
+        }
+        walker.setObjectFilter(new BitmapObjectFilter(resultBitmap));
+    }
+
+    private void walkCommits(BitmapBuilder resultBitmap) throws IOException {
+        ObjectId commit;
+        while ((commit = walker.next()) != null) {
+            progressMonitor.update(1);
+            bitmapIndexMissCount++;
+            listener.onCommitWithoutBitmap(commit);
+        }
+    }
+
+    private void walkObjects(BitmapBuilder resultBitmap) throws IOException {
+        RevObject object;
+        while ((object = walker.nextObject()) != null) {
+            resultBitmap.addObject(object, object.getType());
+            progressMonitor.update(1);
+        }
+    }
+
+    static class BitmapObjectFilter extends ObjectFilter {
+        private final BitmapBuilder bitmap;
+
+        BitmapObjectFilter(BitmapBuilder bitmap) {
+            this.bitmap = bitmap;
+        }
+
+        @Override
+        public boolean include(ObjectWalk walker, AnyObjectId objid) throws IOException {
+            return !bitmap.contains(objid);
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extracted Methods:**  
+   - `markStartPoints()`: Handles marking start objects in the walker.  
+   - `configureWalkerFilter()`: Configures the correct filter based on cached data.  
+   - `walkCommits()` and `walkObjects()`: Encapsulate commit and object walking logic.  
+   - `handleMissingObjects()`: Handles missing objects more cleanly.
+
+2. **Renamed Attributes:**  
+   - `prevCommit` → `cachedCommit`  
+   - `prevBitmap` → `cachedBitmap`  
+   - `countOfBitmapIndexMisses` → `bitmapIndexMissCount`  
+
+3. **Removed Redundant Flags:**  
+   - Removed the `marked` flag by inlining logic.
+
+4. **Extracted Variable:**  
+   - `bitmapIndex.newBitmapBuilder()` is reused and clearly assigned.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Simplified, modularized methods make the class much easier to understand.  
+- **Maintainability:** Clear method responsibilities make future changes safer and easier.  
+- **Scalability:** Easier to extend or modify traversal and filtering logic.

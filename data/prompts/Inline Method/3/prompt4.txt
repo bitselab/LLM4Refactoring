@@ -1,0 +1,29 @@
+As a developer, imagine your team leader requests you to review a piece of code to identify potential refactoring opportunities for the following nine types of refactoring: [Extract Class, Extract Method, Extract Variable, Inline Method, Inline Variable, Rename Attribute, Rename Method, Rename Parameter, Rename Variable]. The original code snippet is as follows:
+```
+package org.apache.commons.lang3;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.apache.commons.lang3.builder.ToStringStyle;
+import org.junit.jupiter.api.AfterEach;
+
+/**
+ * All tests subclass this test.
+ */
+public class AbstractLangTest {
+
+    /**
+     * All tests should leave the {@link ToStringStyle} registry empty.
+     */
+    @AfterEach
+    public void after() {
+        validateNullToStringStyleRegistry();
+    }
+
+    void validateNullToStringStyleRegistry() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

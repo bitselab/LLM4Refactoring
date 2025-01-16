@@ -1,0 +1,102 @@
+Absolutely, there are several opportunities for Extract Variable Refactoring in the provided code snippet. Here's the refactored code with variable extraction:
+
+```java
+package org.apache.lucene.queryparser.flexible.standard.parser;
+
+import java.util.Locale;
+import org.apache.lucene.queryparser.flexible.core.messages.QueryParserMessages;
+import org.apache.lucene.queryparser.flexible.core.parser.EscapeQuerySyntax;
+import org.apache.lucene.queryparser.flexible.core.util.UnescapedCharSequence;
+import org.apache.lucene.queryparser.flexible.messages.MessageImpl;
+
+/** Implementation of {@link EscapeQuerySyntax} for the standard lucene syntax. */
+public class EscapeQuerySyntaxImpl implements EscapeQuerySyntax {
+
+  private static final char[] WILDCARD_CHARS = {'*', '?'};
+
+  private static final String[] ESCAPABLE_TERM_EXTRA_FIRST_CHARS = {"+", "-", "@"};
+
+  private static final String[] ESCAPABLE_TERM_CHARS = {
+      "\"", "<", ">", "=", "!", "(", ")", "^", "[", "{", ":", "]", "}", "~", "/"
+  };
+
+  // TODO: check what to do with these "*", "?", "\\"
+  private static final String[] ESCAPABLE_QUOTED_CHARS = {"\""};
+  private static final String[] ESCAPABLE_WHITE_CHARS = {
+      " ", "\t", "\n", "\r", "\f", "\b", "\u3000"
+  };
+  private static final String[] ESCAPABLE_WORD_TOKENS = {
+      "AND", "OR", "NOT", "TO", "WITHIN", "SENTENCE", "PARAGRAPH", "INORDER"
+  };
+
+  private static final CharSequence ESCAPE_CHAR = "\\";
+
+  private static CharSequence escapeIgnoringCase(
+      CharSequence string, CharSequence sequence1, Locale locale) {
+    if (escapeChar == null || sequence1 == null || string == null) {
+      throw new NullPointerException();
+    }
+
+    int count = string.length();
+    int sequence1Length = sequence1.length();
+
+    // empty search string - escape every character
+    if (sequence1Length == 0) {
+      StringBuilder result = new StringBuilder(count * (1 + escapeChar.length()));
+      for (int i = 0; i < count; i++) {
+        result.append(escapeChar);
+        result.append(string.charAt(i));
+      }
+      return result;
+    }
+
+    // normal case
+    StringBuilder result = new StringBuilder();
+    char first = sequence1.charAt(0);
+    int start = 0, copyStart = 0, firstIndex;
+    while (start < count) {
+      if ((firstIndex = string.toString().toLowerCase(locale).indexOf(first, start)) == -1) {
+        break;
+      }
+      boolean found = true;
+      if (sequence1Length > 1) {
+        if (firstIndex + sequence1Length > count) {
+          break;
+        }
+        for (int i = 1; i < sequence1Length; i++) {
+          if (string.toString().toLowerCase(locale).charAt(firstIndex + i) != sequence1.charAt(i)) {
+            found = false;
+            break;
+          }
+        }
+      }
+      if (found) {
+        result.append(string, copyStart, firstIndex);
+        result.append(escapeChar);
+        result.append(string, firstIndex, firstIndex + sequence1Length);
+        copyStart = start = firstIndex + sequence1Length;
+      } else {
+        start = firstIndex + 1;
+      }
+    }
+    if (result.isEmpty() && copyStart == 0) {
+      return string;
+    }
+    result.append(string, copyStart, string.length());
+    return result;
+  }
+
+  private static CharSequence escapeChar(CharSequence str, Locale locale) {
+    if (str == null || str.isEmpty()) {
+      return str;
+    }
+
+    CharSequence buffer = str;
+    // regular escapable char for terms
+    for (String escapableTermChar : ESCAPABLE_TERM_CHARS) {
+      buffer = escapeIgnoringCase(buffer, escapableTermChar.toLowerCase(locale), ESCAPE_CHAR, locale);
+    }
+
+    // first char of a term as more escaping chars
+    for (String escapableTermExtraFirstChar : ESCAPABLE_TERM_EXTRA_FIRST_CHARS) {
+      

@@ -1,0 +1,82 @@
+Absolutely, there are several opportunities for Extract Class refactoring in the provided code. Here's a breakdown of the potential refactorings:
+
+1. **Extracting VectorFieldBuilder class:** Notice how the logic for defining vector field options (dimension, beamWidth, maxConnections, etc.) is repeated across multiple test methods. We can extract this logic into a separate class named `VectorFieldBuilder`. This class would have methods to set each option and return a builder object for chaining.
+
+Here's the refactored code with `VectorFieldBuilder`:
+
+```java
+class VectorFieldBuilder {
+
+  private int dimension;
+  private Integer beamWidth;
+  private Integer maxConnections;
+  private String name;
+  private Projectable projectable;
+  private Searchable searchable;
+  private VectorSimilarity vectorSimilarity;
+
+  public VectorFieldBuilder setDimension(int dimension) {
+    this.dimension = dimension;
+    return this;
+  }
+
+  public VectorFieldBuilder setBeamWidth(Integer beamWidth) {
+    this.beamWidth = beamWidth;
+    return this;
+  }
+
+  // Similar setter methods for other options
+
+  public @Indexed(index = INDEX_NAME) VectorField build() {
+    // Create and return an Indexed annotation with the defined options
+  }
+}
+```
+
+In the test methods, you can then use this builder to simplify the test setup:
+
+```java
+@Test
+public void defaultAttributes() {
+  IndexedEntity entity = new IndexedEntity();
+  backendMock.expectSchema(INDEX_NAME, b -> b
+      .field("vector", byte[].class, f -> f.dimension(5)));
+  setupHelper.start().setup(entity.getClass());
+  backendMock.verifyExpectationsMet();
+}
+
+// Similar tests using VectorFieldBuilder
+```
+
+2. **Extracting ExceptionUtil class:** The exception verification logic using `assertThatThrownBy` is repeated in several test methods. This can be extracted into a separate class named `ExceptionUtil` with a method to verify the exception message and details.
+
+Here's the refactored code with `ExceptionUtil`:
+
+```java
+class ExceptionUtil {
+
+  public static void verifyException(Supplier<Void> supplier, String type, String pathContext, String message) {
+    assertThatThrownBy(supplier)
+        .isInstanceOf(SearchException.class)
+        .satisfies(FailureReportUtils.hasFailureReport()
+            .typeContext(type)
+            .pathContext(pathContext)
+            .failure(message));
+  }
+}
+```
+
+In the test methods, you can then use this utility method to reduce boilerplate code:
+
+```java
+@Test
+public void defaultBridge_invalidFieldType() {
+  ExceptionUtil.verifyException(() -> setupHelper.start().setup(IndexedEntity.class),
+      IndexedEntity.class.getName(), ".notVector",
+      "No built-in vector index field type for class: 'java.lang.Integer'.");
+}
+
+// Similar tests using ExceptionUtil
+```
+
+These refactorings will improve code maintainability and readability by separating reusable logic into dedicated classes.

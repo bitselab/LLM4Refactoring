@@ -1,0 +1,88 @@
+## Refactoring Opportunities in CachingTokenFilter
+
+After reviewing the provided code snippet, I identified several potential refactoring opportunities:
+
+### 1. Extract Method: `fillCache()`
+
+The `fillCache()` method is responsible for reading and caching all tokens from the input stream. This logic is well-defined and could be extracted into a separate method for improved readability and maintainability.
+
+**Refactored code:**
+
+```java
+private void fillCache() throws IOException {
+  while (input.incrementToken()) {
+    cache.add(captureState());
+  }
+  // capture final state
+  input.end();
+  finalState = captureState();
+}
+
+// Extracted method
+private void readAndCacheTokens() throws IOException {
+  while (input.incrementToken()) {
+    cache.add(captureState());
+  }
+}
+```
+
+### 2. Inline Variable: `finalState`
+
+The `finalState` variable is only used once, within the `end()` method. Inlining this variable would reduce memory usage and improve code clarity.
+
+**Refactored code:**
+
+```java
+@Override
+public final void end() {
+  if (cache != null) {
+    restoreState(captureState());
+  }
+}
+```
+
+### 3. Rename Method: `restoreState`
+
+The `restoreState` method name is not very descriptive. Renaming it to `applyState` would better reflect its purpose.
+
+**Refactored code:**
+
+```java
+// ...
+
+private void applyState(AttributeSource.State state) {
+  // ...
+}
+
+// ...
+
+@Override
+public final void end() {
+  if (cache != null) {
+    applyState(captureState());
+  }
+}
+```
+
+### 4. Extract Variable: `cacheSize`
+
+The initial size of the `cache` list is hardcoded as `64`. Extracting this value into a variable would improve flexibility and maintainability.
+
+**Refactored code:**
+
+```java
+private static final int INITIAL_CACHE_SIZE = 64;
+
+// ...
+
+if (cache == null) { // first-time
+  // fill cache lazily
+  cache = new ArrayList<>(INITIAL_CACHE_SIZE);
+  readAndCacheTokens();
+  iterator = cache.iterator();
+}
+```
+
+## Conclusion
+
+By applying these refactoring techniques, the code becomes more readable, maintainable, and flexible. The extracted methods encapsulate specific functionalities, while inlining the `finalState` variable reduces memory usage. Renaming the `restoreState` method improves clarity, and extracting the `cacheSize` value enhances flexibility.

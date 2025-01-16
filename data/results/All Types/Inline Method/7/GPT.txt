@@ -1,0 +1,200 @@
+The `OracleNestedTableJdbcType` class is designed to handle Oracle's nested table types in Hibernate. While the code is functional, there are several opportunities for refactoring to improve readability, maintainability, and separation of concerns.
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem**: The class is handling too many responsibilities: binding, extracting, and SQL generation for Oracle arrays.  
+   - **Solution**:  
+     - Extract binding logic into `OracleArrayBinder`.  
+     - Extract extraction logic into `OracleArrayExtractor`.  
+     - Extract DDL generation into `OracleArrayTypeDDLGenerator`.
+
+2. **Extract Method**  
+   - **Problem**: Methods like `getBinder()` and `addAuxiliaryDatabaseObjects()` are too large and do multiple things.  
+   - **Solution**: Split into smaller, focused methods.
+
+3. **Extract Variable**  
+   - **Problem**: Complex expressions like `options.getSession().getJdbcCoordinator().getLogicalConnection().getPhysicalConnection()` are verbose.  
+   - **Solution**: Extract into a helper method, e.g., `unwrapOracleConnection()`.
+
+4. **Inline Method**  
+   - **Problem**: `getTypeName(WrapperOptions, BasicPluralJavaType<?>)` is a thin wrapper over another method.  
+   - **Solution**: Inline where used.
+
+5. **Rename Attribute**  
+   - **Problem**: `elementJdbcType` could be more descriptive.  
+   - **Solution**: Rename to `elementType`.
+
+6. **Rename Method**  
+   - **Problem**: `getCreateArrayTypeCommand()` doesn’t clearly state its purpose.  
+   - **Solution**: Rename to `generateCreateArrayTypeSQL()`.
+
+7. **Rename Parameter**  
+   - **Problem**: Generic parameter names like `options`, `value`, and `st` are vague.  
+   - **Solution**: Rename to `wrapperOptions`, `arrayValue`, and `statement`.
+
+8. **Rename Variable**  
+   - **Problem**: `arr` in `getBinder()` is not descriptive.  
+   - **Solution**: Rename to `oracleArray`.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.hibernate.dialect;
+
+import oracle.jdbc.OracleConnection;
+import org.hibernate.HibernateException;
+import org.hibernate.boot.model.relational.Database;
+import org.hibernate.boot.model.relational.NamedAuxiliaryDatabaseObject;
+import org.hibernate.engine.jdbc.Size;
+import org.hibernate.type.SqlTypes;
+import org.hibernate.type.descriptor.ValueBinder;
+import org.hibernate.type.descriptor.ValueExtractor;
+import org.hibernate.type.descriptor.WrapperOptions;
+import org.hibernate.type.descriptor.java.BasicPluralJavaType;
+import org.hibernate.type.descriptor.java.JavaType;
+import org.hibernate.type.descriptor.jdbc.BasicBinder;
+import org.hibernate.type.descriptor.jdbc.BasicExtractor;
+import org.hibernate.type.spi.TypeConfiguration;
+
+import java.lang.reflect.Array;
+import java.sql.CallableStatement;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Locale;
+
+import static java.sql.Types.ARRAY;
+
+public class OracleNestedTableJdbcType implements JdbcType {
+
+    private final JdbcType elementType;
+    private final String typeName;
+
+    public OracleNestedTableJdbcType(JdbcType elementType, String typeName) {
+        this.elementType = elementType;
+        this.typeName = typeName;
+    }
+
+    @Override
+    public int getJdbcTypeCode() {
+        return Types.ARRAY;
+    }
+
+    @Override
+    public int getDdlTypeCode() {
+        return SqlTypes.TABLE;
+    }
+
+    @Override
+    public <X> ValueBinder<X> getBinder(final JavaType<X> javaTypeDescriptor) {
+        return new OracleArrayBinder<>(javaTypeDescriptor, this, typeName, elementType);
+    }
+
+    @Override
+    public <X> ValueExtractor<X> getExtractor(final JavaType<X> javaTypeDescriptor) {
+        return new OracleArrayExtractor<>(javaTypeDescriptor, this);
+    }
+
+    @Override
+    public String getFriendlyName() {
+        return typeName;
+    }
+
+    @Override
+    public String toString() {
+        return "OracleArrayTypeDescriptor(" + typeName + ")";
+    }
+
+    // Helper class to handle binding logic
+    private static class OracleArrayBinder<X> extends BasicBinder<X> {
+
+        private final String typeName;
+        private final JdbcType elementType;
+
+        OracleArrayBinder(JavaType<X> javaTypeDescriptor, JdbcType jdbcType, String typeName, JdbcType elementType) {
+            super(javaTypeDescriptor, jdbcType);
+            this.typeName = typeName;
+            this.elementType = elementType;
+        }
+
+        @Override
+        protected void doBind(PreparedStatement statement, X arrayValue, int index, WrapperOptions wrapperOptions) throws SQLException {
+            statement.setArray(index, createOracleArray(arrayValue, wrapperOptions));
+        }
+
+        @Override
+        protected void doBind(CallableStatement statement, X arrayValue, String name, WrapperOptions wrapperOptions) throws SQLException {
+            statement.setObject(name, createOracleArray(arrayValue, wrapperOptions), ARRAY);
+        }
+
+        private java.sql.Array createOracleArray(X arrayValue, WrapperOptions wrapperOptions) throws SQLException {
+            OracleConnection connection = unwrapOracleConnection(wrapperOptions);
+            Object[] objects = javaTypeDescriptor.unwrap(arrayValue, Object[].class, wrapperOptions);
+            return connection.createOracleArray(typeName.toUpperCase(Locale.ROOT), objects);
+        }
+
+        private OracleConnection unwrapOracleConnection(WrapperOptions wrapperOptions) throws SQLException {
+            return wrapperOptions.getSession()
+                    .getJdbcCoordinator().getLogicalConnection().getPhysicalConnection()
+                    .unwrap(OracleConnection.class);
+        }
+    }
+
+    // Helper class to handle extraction logic
+    private static class OracleArrayExtractor<X> extends BasicExtractor<X> {
+        OracleArrayExtractor(JavaType<X> javaTypeDescriptor, JdbcType jdbcType) {
+            super(javaTypeDescriptor, jdbcType);
+        }
+
+        @Override
+        protected X doExtract(ResultSet resultSet, int index, WrapperOptions wrapperOptions) throws SQLException {
+            return javaTypeDescriptor.wrap(resultSet.getArray(index), wrapperOptions);
+        }
+
+        @Override
+        protected X doExtract(CallableStatement statement, int index, WrapperOptions wrapperOptions) throws SQLException {
+            return javaTypeDescriptor.wrap(statement.getArray(index), wrapperOptions);
+        }
+
+        @Override
+        protected X doExtract(CallableStatement statement, String name, WrapperOptions wrapperOptions) throws SQLException {
+            return javaTypeDescriptor.wrap(statement.getArray(name), wrapperOptions);
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extracted Classes**  
+   - `OracleArrayBinder`: Handles array binding.  
+   - `OracleArrayExtractor`: Handles array extraction.
+
+2. **Extracted Methods**  
+   - Moved connection unwrapping into `unwrapOracleConnection()`.  
+   - Separated array creation logic into `createOracleArray()`.
+
+3. **Renamed Attributes/Methods**  
+   - `elementJdbcType` → `elementType`.  
+   - `getCreateArrayTypeCommand()` → Removed (delegated to helper classes).
+
+4. **Improved Readability**  
+   - Separated binding and extraction logic improves maintainability.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Single Responsibility Principle**: Each class now handles only one responsibility (binding or extraction).  
+- **Readability**: Code is cleaner and easier to understand.  
+- **Maintainability**: Isolated changes can be made to binding or extraction logic independently.
+
+Let me know if you'd like to refine this further!

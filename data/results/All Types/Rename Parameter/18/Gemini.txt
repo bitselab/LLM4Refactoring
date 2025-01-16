@@ -1,0 +1,79 @@
+## Refactoring Opportunities in the Code
+
+The provided code is well-written and follows good coding practices. However, there are a few minor refactoring opportunities that could be considered:
+
+**1. Extract Variable:** The string literal `"Solr server(s),"` in the `catch` block of the `build` method could be extracted into a variable to improve readability.
+
+**Refactored Code:**
+
+```java
+private static final String SOLR_SERVERS_MESSAGE = "Solr server(s),";
+
+public CloudHttp2SolrClient build() {
+    if (stateProvider == null) {
+        if (!zkHosts.isEmpty() && !solrUrls.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Both zkHost(s) & solrUrl(s) have been specified. Only specify one.");
+        } else if (!zkHosts.isEmpty()) {
+            stateProvider =
+                    ClusterStateProvider.newZkClusterStateProvider(zkHosts, zkChroot, canUseZkACLs);
+            if (stateProvider instanceof SolrZkClientTimeoutAware) {
+                var timeoutAware = (SolrZkClientTimeoutAware) stateProvider;
+                timeoutAware.setZkClientTimeout(zkClientTimeout);
+                timeoutAware.setZkConnectTimeout(zkConnectTimeout);
+            }
+        } else if (!solrUrls.isEmpty()) {
+            try {
+                stateProvider = new Http2ClusterStateProvider(solrUrls, httpClient);
+            } catch (Exception e) {
+                throw new RuntimeException(
+                        "Couldn't initialize a HttpClusterStateProvider (" + SOLR_SERVERS_MESSAGE + " "
+                                + solrUrls
+                                + ", down?)",
+                        e);
+            }
+        } else {
+            throw new IllegalArgumentException("Both zkHosts and solrUrl cannot be null.");
+        }
+    }
+    return new CloudHttp2SolrClient(this);
+}
+```
+
+**2. Inline Variable:** The `SOLR_SERVERS_MESSAGE` variable in the `catch` block of the `build` method is only used once. It could be inlined to simplify the code.
+
+**Refactored Code:**
+
+```java
+public CloudHttp2SolrClient build() {
+    if (stateProvider == null) {
+        if (!zkHosts.isEmpty() && !solrUrls.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Both zkHost(s) & solrUrl(s) have been specified. Only specify one.");
+        } else if (!zkHosts.isEmpty()) {
+            stateProvider =
+                    ClusterStateProvider.newZkClusterStateProvider(zkHosts, zkChroot, canUseZkACLs);
+            if (stateProvider instanceof SolrZkClientTimeoutAware) {
+                var timeoutAware = (SolrZkClientTimeoutAware) stateProvider;
+                timeoutAware.setZkClientTimeout(zkClientTimeout);
+                timeoutAware.setZkConnectTimeout(zkConnectTimeout);
+            }
+        } else if (!solrUrls.isEmpty()) {
+            try {
+                stateProvider = new Http2ClusterStateProvider(solrUrls, httpClient);
+            } catch (Exception e) {
+                throw new RuntimeException(
+                        "Couldn't initialize a HttpClusterStateProvider (Solr server(s), "
+                                + solrUrls
+                                + ", down?)",
+                        e);
+            }
+        } else {
+            throw new IllegalArgumentException("Both zkHosts and solrUrl cannot be null.");
+        }
+    }
+    return new CloudHttp2SolrClient(this);
+}
+```
+
+It's important to note that these are just suggestions, and the decision of whether or not to refactor should be based on the specific needs of the project.

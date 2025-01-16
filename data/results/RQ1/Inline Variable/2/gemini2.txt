@@ -1,0 +1,39 @@
+Here are some potential inline variable refactoring opportunities in the provided code snippet:
+
+1. **Extracting BOM bytes into a separate variable:**
+
+Instead of repeating the definition of BOM bytes for different encodings within the `BOMs` map, you can create a separate variable for each byte array and reference them in the map.
+
+```java
+private static final int[] NO_BOM_BYTES = {};
+private static final int[] UTF_16BE_BOM_BYTES = {0xFE, 0xFF};
+// ... (similar definitions for other BOMs)
+
+private static final Map<String, int[]> BOMs = new HashMap<>();
+
+static {
+  BOMs.put("no-bom", NO_BOM_BYTES);
+  BOMs.put("UTF-16BE-bom", UTF_16BE_BOM_BYTES);
+  // ... (add other BOMs to the map)
+}
+```
+
+2. **Extracting XML message formats into separate variables:**
+
+Similar to BOM bytes, you can extract the message formats for different XML types into separate variables and reference them in the `XMLs` map.
+
+```java
+private static final MessageFormat XML = new MessageFormat("<root>{2}</root>");
+private static final MessageFormat XML_WITH_PROLOG = new MessageFormat("<?xml version=\"1.0\"?>\n<root>{2}</root>");
+// ... (similar definitions for other XML formats)
+
+private static final Map<String, MessageFormat> XMLs = new HashMap<>();
+
+static {
+  XMLs.put(XML1, XML);
+  XMLs.put(XML2, XML_WITH_PROLOG);
+  // ... (add other XML formats to the map)
+}
+```
+
+These refactorings can improve code readability and maintainability by reducing redundancy and making the code more concise.

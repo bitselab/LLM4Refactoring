@@ -1,0 +1,53 @@
+Absolutely, I can assist you in identifying potential inline method refactoring opportunities within the provided code snippet. Here's a detailed analysis:
+
+**Potential Inline Method Candidates:**
+
+1. **`wrapAndSetZkHostFromSysPropIfNeeded` method:**
+
+   - This method checks if a `zkHost` property exists in the provided `Properties` object and sets it based on the system property value if it's missing.
+   - The logic is relatively simple and directly used within the `fromConfig` method.
+   - Inline refactoring this method would likely improve readability and reduce nesting.
+
+2. **`separateStrings` and `separatePaths` methods:**
+
+   - Both methods perform similar tasks of splitting comma-separated strings with slight variations in handling special characters.
+   - These methods could potentially be combined into a single method with an additional flag to differentiate path handling.
+   - However, if there's a chance they might be used independently in the future, it might be better to keep them separate.
+
+**Code Analysis for Inline Refactoring:**
+
+Here's a revised version of the `fromConfig` method with the `wrapAndSetZkHostFromSysPropIfNeeded` method inlined:
+
+```java
+public static NodeConfig fromConfig(
+    Path solrHome, Properties substituteProperties, ConfigNode root, SolrResourceLoader loader) {
+
+  checkForIllegalConfig(root);
+
+  // ... existing code ...
+
+  final String defaultZkHost = substituteProperties != null ? substituteProperties.getProperty(ZK_HOST) : null;
+
+  // Inline logic from wrapAndSetZkHostFromSysPropIfNeeded
+  Properties results = substituteProperties == null ? new Properties() : new Properties(substituteProperties);
+  final String sysprop = System.getProperty(ZK_HOST);
+  if (StrUtils.isNotNullOrEmpty(sysprop)) {
+    results.setProperty(ZK_HOST, sysprop);
+  }
+
+  // ... existing code ...
+}
+```
+
+**Cautions and Considerations:**
+
+- Inline refactoring should be applied judiciously to avoid cluttering the calling method's code.
+- If the inlined logic becomes complex, it might be better to extract a new helper method with a more descriptive name.
+- Consider the maintainability implications of inlining methods, especially if they might be reused elsewhere in the codebase.
+
+**Additional Recommendations:**
+
+- Review the usage of `separateStrings` and `separatePaths` methods to determine if combining them is a viable option.
+- Explore other potential inline refactoring opportunities within the codebase.
+
+By following these guidelines, you can effectively leverage inline method refactoring to enhance code readability and maintainability in the `SolrXmlConfig` class.

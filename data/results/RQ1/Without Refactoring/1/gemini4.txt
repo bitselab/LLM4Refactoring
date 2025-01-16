@@ -1,0 +1,93 @@
+## Refactoring Opportunities:
+
+Here's an analysis of the provided code with identified refactoring opportunities:
+
+**1. Extract Method:**
+
+The `isMatch` method performs two distinct tasks: checking if the line number is ignored and comparing the line content with the header line. These functionalities can be separated into two methods for improved readability and maintainability.
+
+**Refactored Code:**
+
+```java
+private boolean isIgnoreLine(int lineNo) {
+    return ignoreLines.get(lineNo);
+}
+
+private boolean isHeaderLineMatch(int lineNumber, String line) {
+    return getHeaderLines().get(lineNumber).equals(line);
+}
+
+private boolean isMatch(int lineNumber, String line) {
+    return isIgnoreLine(lineNumber + 1) || isHeaderLineMatch(lineNumber, line);
+}
+```
+
+**2. Inline Variable:**
+
+The `ignoreLines` variable is only used in the `isMatch` method. It can be inlined directly into the method to reduce the overall code complexity.
+
+**Refactored Code:**
+
+```java
+private boolean isMatch(int lineNumber, String line) {
+    return TokenUtil.asBitSet(getIgnoreLines()).get(lineNumber + 1) || isHeaderLineMatch(lineNumber, line);
+}
+```
+
+**3. Rename Method:**
+
+The `isHeaderLineMatch` method clearly describes its purpose. Renaming it to `isHeaderLineMatch` would improve its clarity.
+
+**Refactored Code:**
+
+```java
+private boolean isHeaderLineMatch(int lineNumber, String line) {
+    return getHeaderLines().get(lineNumber).equals(line);
+}
+```
+
+**4. Rename Attribute:**
+
+The `ignoreLines` attribute describes lines to be ignored, but the name doesn't explicitly reflect this. Renaming it to `ignoredHeaderLines` would be more descriptive.
+
+**Refactored Code:**
+
+```java
+private BitSet ignoredHeaderLines = new BitSet();
+
+private boolean isIgnoreLine(int lineNo) {
+    return ignoredHeaderLines.get(lineNo);
+}
+
+private boolean isMatch(int lineNumber, String line) {
+    return TokenUtil.asBitSet(ignoredHeaderLines).get(lineNumber + 1) || isHeaderLineMatch(lineNumber, line);
+}
+```
+
+**5. Extract Variable:**
+
+In the `processFiltered` method, the expression `getHeaderLines().size()` is used twice. Extracting this into a variable would improve readability.
+
+**Refactored Code:**
+
+```java
+@Override
+protected void processFiltered(File file, FileText fileText) {
+    int headerLinesSize = getHeaderLines().size();
+    if (headerLinesSize > fileText.size()) {
+        log(1, MSG_MISSING);
+    }
+    else {
+        for (int i = 0; i < headerLinesSize; i++) {
+            if (!isMatch(i, fileText.get(i))) {
+                log(i + 1, MSG_MISMATCH, getHeaderLines().get(i));
+                break;
+            }
+        }
+    }
+}
+```
+
+## Conclusion:
+
+By applying these refactoring techniques, the code becomes more readable, maintainable, and easier to understand.

@@ -1,0 +1,204 @@
+The `AbstractApplicationContext` class is quite extensive and covers a wide range of functionality. However, several areas could benefit from refactoring to improve **readability**, **maintainability**, and **single responsibility adherence**.
+
+### **Refactoring Opportunities**
+
+1. **Extract Class:**  
+   - Extract event publishing logic into a dedicated `ApplicationEventPublisherHelper`.  
+   - Move `LifecycleProcessor` initialization into `LifecycleProcessorInitializer`.  
+
+2. **Extract Method:**  
+   - Break down the large `refresh()` method into smaller, more focused methods.  
+
+3. **Extract Variable:**  
+   - Replace repeated `"Event must not be null"` assertion message with a constant.  
+
+4. **Rename Method:**  
+   - `initMessageSource()` → `initializeMessageSource()` for clarity.  
+   - `initApplicationEventMulticaster()` → `initializeEventMulticaster()`.  
+
+---
+
+### **Refactored Code**
+
+#### **1. Extracted Class: `ApplicationEventPublisherHelper`**
+
+```java
+package org.springframework.context.support;
+
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEvent;
+import org.springframework.context.PayloadApplicationEvent;
+import org.springframework.core.ResolvableType;
+import org.springframework.util.Assert;
+
+class ApplicationEventPublisherHelper {
+
+    private final AbstractApplicationContext context;
+
+    ApplicationEventPublisherHelper(AbstractApplicationContext context) {
+        this.context = context;
+    }
+
+    void publishEvent(Object event, ResolvableType typeHint) {
+        Assert.notNull(event, AbstractApplicationContext.EVENT_NULL_ASSERTION_MSG);
+
+        ApplicationEvent applicationEvent = (event instanceof ApplicationEvent)
+                ? (ApplicationEvent) event
+                : new PayloadApplicationEvent<>(context, event, typeHint);
+
+        ResolvableType eventType = (typeHint != null) ? typeHint : ResolvableType.forInstance(applicationEvent);
+
+        if (context.earlyApplicationEvents != null) {
+            context.earlyApplicationEvents.add(applicationEvent);
+        } else if (context.applicationEventMulticaster != null) {
+            context.applicationEventMulticaster.multicastEvent(applicationEvent, eventType);
+        }
+
+        if (context.parent != null && context.parent instanceof AbstractApplicationContext) {
+            ((AbstractApplicationContext) context.parent).publishEvent(event, eventType);
+        } else if (context.parent != null) {
+            context.parent.publishEvent(event);
+        }
+    }
+}
+```
+
+---
+
+#### **2. Extracted Class: `LifecycleProcessorInitializer`**
+
+```java
+package org.springframework.context.support;
+
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.context.LifecycleProcessor;
+import org.springframework.context.support.DefaultLifecycleProcessor;
+
+class LifecycleProcessorInitializer {
+
+    private static final String LIFECYCLE_PROCESSOR_BEAN_NAME = "lifecycleProcessor";
+
+    static LifecycleProcessor initialize(ConfigurableListableBeanFactory beanFactory) {
+        if (beanFactory.containsLocalBean(LIFECYCLE_PROCESSOR_BEAN_NAME)) {
+            return beanFactory.getBean(LIFECYCLE_PROCESSOR_BEAN_NAME, LifecycleProcessor.class);
+        } else {
+            DefaultLifecycleProcessor lifecycleProcessor = new DefaultLifecycleProcessor();
+            lifecycleProcessor.setBeanFactory(beanFactory);
+            beanFactory.registerSingleton(LIFECYCLE_PROCESSOR_BEAN_NAME, lifecycleProcessor);
+            return lifecycleProcessor;
+        }
+    }
+}
+```
+
+---
+
+#### **3. Refactored `AbstractApplicationContext`**
+
+```java
+package org.springframework.context.support;
+
+import org.springframework.context.*;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.core.ResolvableType;
+import org.springframework.util.Assert;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+public abstract class AbstractApplicationContext extends DefaultResourceLoader
+        implements ConfigurableApplicationContext {
+
+    protected static final String EVENT_NULL_ASSERTION_MSG = "Event must not be null";
+
+    private final Lock startupShutdownLock = new ReentrantLock();
+    private final ApplicationEventPublisherHelper eventPublisherHelper;
+
+    private LifecycleProcessor lifecycleProcessor;
+    private Set<ApplicationEvent> earlyApplicationEvents = new LinkedHashSet<>();
+
+    public AbstractApplicationContext() {
+        this.eventPublisherHelper = new ApplicationEventPublisherHelper(this);
+    }
+
+    @Override
+    public void refresh() throws BeansException, IllegalStateException {
+        this.startupShutdownLock.lock();
+        try {
+            prepareContext();
+            ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
+            prepareBeanFactory(beanFactory);
+            invokeBeanFactoryPostProcessors(beanFactory);
+            registerBeanPostProcessors(beanFactory);
+            initializeMessageSource();
+            initializeEventMulticaster();
+            initializeLifecycleProcessor(beanFactory);
+            registerListeners();
+            finishBeanFactoryInitialization(beanFactory);
+            finishRefresh();
+        } finally {
+            this.startupShutdownLock.unlock();
+        }
+    }
+
+    private void prepareContext() {
+        this.earlyApplicationEvents = new LinkedHashSet<>();
+    }
+
+    private void initializeLifecycleProcessor(ConfigurableListableBeanFactory beanFactory) {
+        this.lifecycleProcessor = LifecycleProcessorInitializer.initialize(beanFactory);
+    }
+
+    protected void initializeMessageSource() {
+        // Renamed from initMessageSource for clarity
+        ConfigurableListableBeanFactory beanFactory = getBeanFactory();
+        if (beanFactory.containsLocalBean(MESSAGE_SOURCE_BEAN_NAME)) {
+            this.messageSource = beanFactory.getBean(MESSAGE_SOURCE_BEAN_NAME, MessageSource.class);
+        }
+    }
+
+    protected void initializeEventMulticaster() {
+        // Renamed from initApplicationEventMulticaster
+        ConfigurableListableBeanFactory beanFactory = getBeanFactory();
+        if (beanFactory.containsLocalBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME)) {
+            this.applicationEventMulticaster = beanFactory.getBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME, ApplicationEventMulticaster.class);
+        }
+    }
+
+    @Override
+    public void publishEvent(Object event) {
+        eventPublisherHelper.publishEvent(event, null);
+    }
+
+    protected abstract ConfigurableListableBeanFactory getBeanFactory();
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - Created `ApplicationEventPublisherHelper` for event publishing.  
+   - Introduced `LifecycleProcessorInitializer` for cleaner lifecycle initialization.
+
+2. **Extract Method:**  
+   - Simplified `refresh()` by breaking it into smaller, more focused methods.
+
+3. **Extract Variable:**  
+   - Used `EVENT_NULL_ASSERTION_MSG` for null event assertions.
+
+4. **Rename Method:**  
+   - Renamed `initMessageSource()` → `initializeMessageSource()`  
+   - Renamed `initApplicationEventMulticaster()` → `initializeEventMulticaster()`
+
+---
+
+### **Benefits of Refactoring**
+
+- **Clarity:** Smaller, focused methods make the class easier to understand.  
+- **Maintainability:** Easier to extend or modify specific behaviors without side effects.  
+- **Single Responsibility:** Cleaner separation of concerns across dedicated classes.
+
+Let me know if you'd like further improvements!

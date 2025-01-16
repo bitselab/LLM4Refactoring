@@ -1,0 +1,254 @@
+The `CommandLineBuilder` class is functional but could benefit from several refactoring opportunities to improve clarity, maintainability, and adherence to modern design principles. Below are detailed recommendations and the refactored code.
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem**: `findExecutable` and `findJavaBin` are utility methods unrelated to building command lines.  
+   - **Solution**: Extract these methods into a new `ExecutableFinder` utility class.
+
+2. **Extract Method**  
+   - **Problem**: Methods like `addOption` and `shellQuoteIfNeeded` contain complex logic.  
+   - **Solution**: Break them into smaller, more focused methods.
+
+3. **Extract Variable**  
+   - **Problem**: Inline complex expressions reduce readability.  
+   - **Solution**: Extract frequently used or complex expressions into variables.
+
+4. **Inline Method**  
+   - **Problem**: Deprecated methods (`addRawArg`, `addEqualsArg`) just wrap newer methods.  
+   - **Solution**: Remove or inline them to reduce clutter.
+
+5. **Rename Attribute/Method/Variable**  
+   - **Problem**: Non-descriptive names like `commandLine` and `args`.  
+   - **Solution**: Rename `commandLine` to `builtCommandLine` and `args` to `arguments` for clarity.
+
+6. **Handle Deprecated Methods**  
+   - **Problem**: Deprecated methods are still public without clear replacements.  
+   - **Solution**: Provide clear alternatives and mark them for future removal.
+
+---
+
+### **Refactored Code**
+
+---
+
+#### **1. `ExecutableFinder.java` (Extracted Class)**
+
+```java
+package org.eclipse.jetty.start;
+
+import java.io.File;
+
+public final class ExecutableFinder {
+
+    private ExecutableFinder() {
+        // Utility class, prevent instantiation
+    }
+
+    public static File findExecutable(File root, String path) {
+        String normalizedPath = path.replace('/', File.separatorChar);
+        File executable = new File(root, normalizedPath);
+        return executable.exists() ? executable : null;
+    }
+
+    public static String findJavaBinary() {
+        File javaHome = new File(System.getProperty("java.home"));
+        if (!javaHome.exists()) {
+            return null;
+        }
+
+        File javaBin = findExecutable(javaHome, "bin/java");
+        if (javaBin != null) {
+            return javaBin.getAbsolutePath();
+        }
+
+        javaBin = findExecutable(javaHome, "bin/java.exe");
+        return (javaBin != null) ? javaBin.getAbsolutePath() : "java";
+    }
+}
+```
+
+---
+
+#### **2. `CommandLineBuilder.java` (Refactored Main Class)**
+
+```java
+package org.eclipse.jetty.start;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+public class CommandLineBuilder {
+
+    private final StringBuilder builtCommandLine = new StringBuilder();
+    private final List<String> arguments = new ArrayList<>();
+    private final String separator;
+
+    public CommandLineBuilder() {
+        this(false);
+    }
+
+    public CommandLineBuilder(boolean multiline) {
+        this.separator = multiline ? (" \\" + System.lineSeparator() + "  ") : " ";
+    }
+
+    /**
+     * Apply shell quoting if necessary for a given input.
+     */
+    public static String shellQuoteIfNeeded(String input) {
+        if (input == null) return null;
+        if (input.isEmpty()) return "''";
+
+        if (!requiresQuoting(input)) {
+            return input;
+        }
+
+        return quoteString(input);
+    }
+
+    private static boolean requiresQuoting(String input) {
+        for (char c : input.toCharArray()) {
+            if (!Character.isLetterOrDigit(c) && "/:.,+-_".indexOf(c) == -1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String quoteString(String input) {
+        StringBuilder builder = new StringBuilder(input.length() * 2).append("'");
+        for (char c : input.toCharArray()) {
+            if (c == '\'') {
+                builder.append("'\\''");
+            } else {
+                builder.append(c);
+            }
+        }
+        return builder.append("'").toString();
+    }
+
+    /**
+     * Add a simple argument with proper quoting.
+     */
+    public void addArgument(String arg) {
+        if (arg != null) {
+            appendSeparator();
+            arguments.add(arg);
+            builtCommandLine.append(shellQuoteIfNeeded(arg));
+        }
+    }
+
+    /**
+     * Add a name-value pair as an argument, with quoting.
+     */
+    public void addArgument(String name, String value) {
+        Objects.requireNonNull(name);
+        appendSeparator();
+
+        if (value != null && !value.isEmpty()) {
+            String formattedArg = name + "=" + value;
+            arguments.add(formattedArg);
+            builtCommandLine.append(shellQuoteIfNeeded(name)).append('=').append(shellQuoteIfNeeded(value));
+        } else {
+            arguments.add(name);
+            builtCommandLine.append(shellQuoteIfNeeded(name));
+        }
+    }
+
+    /**
+     * Add an option without quoting.
+     */
+    public void addOption(String option) {
+        addOption(option, null, null);
+    }
+
+    /**
+     * Add a formatted option with a name and value.
+     */
+    public void addOption(String option, String name, String value) {
+        Objects.requireNonNull(option);
+        appendSeparator();
+
+        if (name == null || name.isEmpty()) {
+            arguments.add(option);
+            builtCommandLine.append(option);
+        } else if (value != null && !value.isEmpty()) {
+            String formattedOption = option + name + "=" + value;
+            arguments.add(formattedOption);
+            builtCommandLine.append(option)
+                    .append(shellQuoteIfNeeded(name))
+                    .append('=')
+                    .append(shellQuoteIfNeeded(value));
+        } else {
+            arguments.add(option + name);
+            builtCommandLine.append(option).append(shellQuoteIfNeeded(name));
+        }
+    }
+
+    /**
+     * Get the list of arguments.
+     */
+    public List<String> getArguments() {
+        return arguments;
+    }
+
+    /**
+     * Convert to command line format.
+     */
+    public String toCommandLine() {
+        return builtCommandLine.toString();
+    }
+
+    /**
+     * Debugging output for the command line.
+     */
+    public void debug() {
+        if (!StartLog.isDebugEnabled()) {
+            return;
+        }
+        StartLog.debug("Command Line: %,d entries", arguments.size());
+        for (int i = 0; i < arguments.size(); i++) {
+            StartLog.debug(" [%d]: \"%s\"", i, arguments.get(i));
+        }
+    }
+
+    private void appendSeparator() {
+        if (builtCommandLine.length() > 0) {
+            builtCommandLine.append(separator);
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class**  
+   - Moved `findExecutable` and `findJavaBin` to `ExecutableFinder`.
+
+2. **Extract Method**  
+   - Split quoting logic in `shellQuoteIfNeeded` into `requiresQuoting` and `quoteString`.
+
+3. **Extract Variable**  
+   - Extracted the separator logic in `appendSeparator`.
+
+4. **Renamed Attributes**  
+   - `commandLine` → `builtCommandLine`  
+   - `args` → `arguments`
+
+5. **Removed Deprecated Methods**  
+   - Removed `addRawArg`, `addEqualsArg`, and `quote` to clean up the API.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Separation of Concerns**: `ExecutableFinder` focuses on file system tasks, while `CommandLineBuilder` handles command line construction.  
+- **Improved Readability**: Clear method extraction improves the flow and understanding of complex logic.  
+- **Better Maintainability**: Smaller, single-responsibility methods are easier to test and modify.
+
+Let me know if you'd like further improvements or additional refactoring!

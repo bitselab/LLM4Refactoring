@@ -1,0 +1,234 @@
+### **Refactoring Analysis**
+
+After reviewing the `CreateBranchCommand` class, I identified several opportunities for improvement aligned with the requested refactoring types:
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem:** The `call()` method handles branch creation, reflog message construction, and upstream configuration, violating the Single Responsibility Principle.  
+   - **Solution:** Extract helper classes to handle specific responsibilities:
+     - `BranchRefUpdater`: Handles the branch creation and update logic.
+     - `UpstreamConfigurator`: Manages upstream configuration.
+
+2. **Extract Method**  
+   - **Problem:** The `call()` method is too long and complex.  
+   - **Solution:** Split it into smaller, focused methods (e.g., `validateBranchExistence`, `generateReflogMessage`, `configureUpstream`).
+
+3. **Extract Variable**  
+   - **Problem:** Complex expressions, like the construction of `startPointFullName`, reduce readability.  
+   - **Solution:** Introduce descriptive variables.
+
+4. **Inline Method**  
+   - **Problem:** The `getStartPointOrHead()` method is only used once.  
+   - **Solution:** Inline it.
+
+5. **Rename Attribute/Method/Parameter/Variable**  
+   - **Problem:** Names like `name`, `force`, and `startPoint` are too generic.  
+   - **Solution:** Rename for clarity, e.g., `branchName`, `forceCreate`, and `startRef`.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.eclipse.jgit.api;
+
+import static org.eclipse.jgit.lib.Constants.HEAD;
+import static org.eclipse.jgit.lib.Constants.R_HEADS;
+
+import java.io.IOException;
+import java.text.MessageFormat;
+
+import org.eclipse.jgit.api.errors.*;
+import org.eclipse.jgit.errors.AmbiguousObjectException;
+import org.eclipse.jgit.internal.JGitText;
+import org.eclipse.jgit.lib.*;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevWalk;
+
+public class CreateBranchCommand extends GitCommand<Ref> {
+    private String branchName;
+    private boolean forceCreate = false;
+    private SetupUpstreamMode upstreamMode;
+    private String startRef = HEAD;
+    private RevCommit startCommit;
+
+    protected CreateBranchCommand(Repository repo) {
+        super(repo);
+    }
+
+    @Override
+    public Ref call() throws GitAPIException {
+        checkCallable();
+        validateBranchName();
+
+        try (RevWalk revWalk = new RevWalk(repo)) {
+            BranchRefUpdater refUpdater = new BranchRefUpdater(repo, branchName, forceCreate, revWalk);
+            Ref resultRef = refUpdater.createOrUpdateBranch(getStartPointObjectId(), startCommit, startRef);
+
+            configureUpstreamIfNeeded(resultRef, refUpdater.getBaseBranch());
+            return resultRef;
+        } catch (IOException e) {
+            throw new JGitInternalException(e.getMessage(), e);
+        }
+    }
+
+    private ObjectId getStartPointObjectId() throws IOException {
+        if (startCommit != null) return startCommit.getId();
+        ObjectId objectId = repo.resolve(startRef);
+        if (objectId == null) {
+            throw new RefNotFoundException(MessageFormat.format(JGitText.get().refNotResolved, startRef));
+        }
+        return objectId;
+    }
+
+    private void validateBranchName() throws InvalidRefNameException {
+        if (branchName == null || !Repository.isValidRefName(R_HEADS + branchName) || !isValidBranchName(branchName)) {
+            throw new InvalidRefNameException(MessageFormat.format(JGitText.get().branchNameInvalid, branchName == null ? "<null>" : branchName));
+        }
+    }
+
+    private void configureUpstreamIfNeeded(Ref resultRef, String baseBranch) throws IOException {
+        if (baseBranch.isEmpty()) return;
+
+        UpstreamConfigurator configurator = new UpstreamConfigurator(repo, upstreamMode, branchName, baseBranch);
+        configurator.configureUpstream();
+    }
+
+    public static boolean isValidBranchName(String branchName) {
+        return !HEAD.equals(branchName) && !branchName.startsWith("-");
+    }
+
+    public CreateBranchCommand setName(String branchName) {
+        checkCallable();
+        this.branchName = branchName;
+        return this;
+    }
+
+    public CreateBranchCommand setForce(boolean forceCreate) {
+        checkCallable();
+        this.forceCreate = forceCreate;
+        return this;
+    }
+
+    public CreateBranchCommand setStartPoint(String startRef) {
+        checkCallable();
+        this.startRef = startRef;
+        this.startCommit = null;
+        return this;
+    }
+
+    public CreateBranchCommand setStartPoint(RevCommit startCommit) {
+        checkCallable();
+        this.startCommit = startCommit;
+        this.startRef = null;
+        return this;
+    }
+
+    public CreateBranchCommand setUpstreamMode(SetupUpstreamMode mode) {
+        checkCallable();
+        this.upstreamMode = mode;
+        return this;
+    }
+}
+
+// Extracted Class: Handles branch updates
+class BranchRefUpdater {
+    private final Repository repo;
+    private final String branchName;
+    private final boolean forceCreate;
+    private final RevWalk revWalk;
+    private String baseBranch = "";
+
+    BranchRefUpdater(Repository repo, String branchName, boolean forceCreate, RevWalk revWalk) {
+        this.repo = repo;
+        this.branchName = branchName;
+        this.forceCreate = forceCreate;
+        this.revWalk = revWalk;
+    }
+
+    public Ref createOrUpdateBranch(ObjectId startAt, RevCommit startCommit, String startRef) throws IOException, GitAPIException {
+        Ref existingRef = repo.findRef(R_HEADS + branchName);
+        boolean branchExists = existingRef != null;
+
+        if (!forceCreate && branchExists) {
+            throw new RefAlreadyExistsException(MessageFormat.format(JGitText.get().refAlreadyExists1, branchName));
+        }
+
+        String reflogMessage = generateReflogMessage(branchExists, startAt, startCommit, startRef);
+        RefUpdate refUpdate = repo.updateRef(R_HEADS + branchName);
+        refUpdate.setNewObjectId(startAt);
+        refUpdate.setRefLogMessage(reflogMessage, false);
+
+        handleRefUpdateResult(refUpdate.update(), branchExists);
+        return repo.findRef(branchName);
+    }
+
+    private String generateReflogMessage(boolean exists, ObjectId startAt, RevCommit startCommit, String startRef) throws IOException {
+        Ref baseRef = repo.findRef(startRef);
+        if (baseRef != null) {
+            baseBranch = baseRef.getName();
+            return exists ? "branch: Reset start-point to branch " + baseBranch : "branch: Created from branch " + baseBranch;
+        }
+
+        String baseCommitMessage = (startCommit != null) ? startCommit.getShortMessage()
+                : revWalk.parseCommit(startAt).getShortMessage();
+        return exists ? "branch: Reset start-point to commit " + baseCommitMessage : "branch: Created from commit " + baseCommitMessage;
+    }
+
+    private void handleRefUpdateResult(RefUpdate.Result result, boolean exists) {
+        boolean success = switch (result) {
+            case NEW -> !exists;
+            case NO_CHANGE, FAST_FORWARD, FORCED -> exists;
+            default -> false;
+        };
+
+        if (!success) {
+            throw new JGitInternalException(MessageFormat.format(JGitText.get().createBranchUnexpectedResult, result.name()));
+        }
+    }
+
+    public String getBaseBranch() {
+        return baseBranch;
+    }
+}
+
+// Extracted Class: Handles upstream configuration
+class UpstreamConfigurator {
+    private final Repository repo;
+    private final SetupUpstreamMode upstreamMode;
+    private final String branchName;
+    private final String baseBranch;
+
+    UpstreamConfigurator(Repository repo, SetupUpstreamMode upstreamMode, String branchName, String baseBranch) {
+        this.repo = repo;
+        this.upstreamMode = upstreamMode;
+        this.branchName = branchName;
+        this.baseBranch = baseBranch;
+    }
+
+    public void configureUpstream() throws IOException {
+        if (upstreamMode == SetupUpstreamMode.NOTRACK) return;
+
+        StoredConfig config = repo.getConfig();
+        String remoteName = repo.getRemoteName(baseBranch);
+
+        config.setString(ConfigConstants.CONFIG_BRANCH_SECTION, branchName, ConfigConstants.CONFIG_KEY_REMOTE, remoteName != null ? remoteName : ".");
+        config.setString(ConfigConstants.CONFIG_BRANCH_SECTION, branchName, ConfigConstants.CONFIG_KEY_MERGE, Constants.R_HEADS + repo.shortenRemoteBranchName(baseBranch));
+        config.save();
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+- **Extract Class:** Introduced `BranchRefUpdater` and `UpstreamConfigurator`.
+- **Extract Method:** Split logic in `call()` into clear steps.
+- **Extract Variable:** Simplified complex expressions.
+- **Inline Method:** Removed unnecessary `getStartPointOrHead()`.
+- **Rename:** Clear and descriptive names for attributes and methods.
+
+This refactored version improves code readability, modularity, and maintainability.

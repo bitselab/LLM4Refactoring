@@ -1,0 +1,185 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - Extract utility methods into a helper class `JavadocParagraphUtils` to separate concerns.
+
+2. **Extract Method:**  
+   - Break down complex methods (`checkParagraphTag`) into smaller, more focused methods.
+
+3. **Extract Variable:**  
+   - Extract repeated `JavadocTokenTypes` checks into meaningful variables for better readability.
+
+4. **Rename Method:**  
+   - Rename vague methods for clarity (`getNearestNode` → `findNextNonWhitespaceNode`).
+
+---
+
+### **Refactored Code**
+
+```java
+package com.puppycrawl.tools.checkstyle.checks.javadoc;
+
+import com.puppycrawl.tools.checkstyle.StatelessCheck;
+import com.puppycrawl.tools.checkstyle.api.DetailNode;
+import com.puppycrawl.tools.checkstyle.api.JavadocTokenTypes;
+import com.puppycrawl.tools.checkstyle.utils.CommonUtil;
+import com.puppycrawl.tools.checkstyle.utils.JavadocUtil;
+
+@StatelessCheck
+public class JavadocParagraphCheck extends AbstractJavadocCheck {
+
+    public static final String MSG_TAG_AFTER = "javadoc.paragraph.tag.after";
+    public static final String MSG_LINE_BEFORE = "javadoc.paragraph.line.before";
+    public static final String MSG_REDUNDANT_PARAGRAPH = "javadoc.paragraph.redundant.paragraph";
+    public static final String MSG_MISPLACED_TAG = "javadoc.paragraph.misplaced.tag";
+
+    private boolean allowNewlineParagraph = true;
+
+    public void setAllowNewlineParagraph(boolean value) {
+        allowNewlineParagraph = value;
+    }
+
+    @Override
+    public int[] getDefaultJavadocTokens() {
+        return new int[]{JavadocTokenTypes.NEWLINE, JavadocTokenTypes.HTML_ELEMENT};
+    }
+
+    @Override
+    public int[] getRequiredJavadocTokens() {
+        return getAcceptableJavadocTokens();
+    }
+
+    @Override
+    public void visitJavadocToken(DetailNode ast) {
+        if (ast.getType() == JavadocTokenTypes.NEWLINE && JavadocParagraphUtils.isEmptyLine(ast)) {
+            checkEmptyLine(ast);
+        } else if (JavadocParagraphUtils.isParagraphTag(ast)) {
+            checkParagraphTag(ast);
+        }
+    }
+
+    private void checkEmptyLine(DetailNode newline) {
+        DetailNode nextNode = JavadocParagraphUtils.findNextNonWhitespaceNode(newline);
+        if (nextNode.getType() == JavadocTokenTypes.TEXT && !CommonUtil.isBlank(nextNode.getText())) {
+            log(newline.getLineNumber(), MSG_TAG_AFTER);
+        }
+    }
+
+    private void checkParagraphTag(DetailNode tag) {
+        if (JavadocParagraphUtils.isFirstParagraph(tag)) {
+            log(tag.getLineNumber(), MSG_REDUNDANT_PARAGRAPH);
+        } else if (!JavadocParagraphUtils.hasEmptyLineBefore(tag)) {
+            log(tag.getLineNumber(), MSG_LINE_BEFORE);
+        }
+        if (allowNewlineParagraph && JavadocParagraphUtils.isImmediatelyFollowedByText(tag)) {
+            log(tag.getLineNumber(), MSG_MISPLACED_TAG);
+        }
+    }
+}
+```
+
+---
+
+### **Extracted Utility Class**
+
+```java
+package com.puppycrawl.tools.checkstyle.utils;
+
+import com.puppycrawl.tools.checkstyle.api.DetailNode;
+import com.puppycrawl.tools.checkstyle.api.JavadocTokenTypes;
+
+public final class JavadocParagraphUtils {
+
+    private JavadocParagraphUtils() {
+    }
+
+    public static boolean isEmptyLine(DetailNode newLine) {
+        DetailNode previousSibling = JavadocUtil.getPreviousSibling(newLine);
+        if (previousSibling != null && previousSibling.getParent().getType() == JavadocTokenTypes.JAVADOC) {
+            if (previousSibling.getType() == JavadocTokenTypes.TEXT && CommonUtil.isBlank(previousSibling.getText())) {
+                previousSibling = JavadocUtil.getPreviousSibling(previousSibling);
+            }
+            return previousSibling != null && previousSibling.getType() == JavadocTokenTypes.LEADING_ASTERISK;
+        }
+        return false;
+    }
+
+    public static DetailNode findNextNonWhitespaceNode(DetailNode node) {
+        DetailNode nextNode = node;
+        while (nextNode.getType() == JavadocTokenTypes.LEADING_ASTERISK || nextNode.getType() == JavadocTokenTypes.NEWLINE) {
+            nextNode = JavadocUtil.getNextSibling(nextNode);
+        }
+        return nextNode;
+    }
+
+    public static boolean isParagraphTag(DetailNode node) {
+        return node.getType() == JavadocTokenTypes.HTML_ELEMENT &&
+               JavadocUtil.getFirstChild(node).getType() == JavadocTokenTypes.P_TAG_START;
+    }
+
+    public static boolean isFirstParagraph(DetailNode tag) {
+        DetailNode previousNode = JavadocUtil.getPreviousSibling(tag);
+        while (previousNode != null) {
+            if (previousNode.getType() == JavadocTokenTypes.TEXT && !CommonUtil.isBlank(previousNode.getText()) ||
+                !isIgnoredNode(previousNode)) {
+                return false;
+            }
+            previousNode = JavadocUtil.getPreviousSibling(previousNode);
+        }
+        return true;
+    }
+
+    private static boolean isIgnoredNode(DetailNode node) {
+        return node.getType() == JavadocTokenTypes.LEADING_ASTERISK ||
+               node.getType() == JavadocTokenTypes.NEWLINE ||
+               node.getType() == JavadocTokenTypes.TEXT;
+    }
+
+    public static boolean hasEmptyLineBefore(DetailNode tag) {
+        DetailNode previousNode = JavadocUtil.getPreviousSibling(tag);
+        while (previousNode != null) {
+            if (previousNode.getType() == JavadocTokenTypes.NEWLINE && isEmptyLine(previousNode)) {
+                return true;
+            }
+            previousNode = JavadocUtil.getPreviousSibling(previousNode);
+        }
+        return false;
+    }
+
+    public static boolean isImmediatelyFollowedByText(DetailNode tag) {
+        DetailNode nextSibling = JavadocUtil.getNextSibling(tag);
+        return nextSibling.getType() == JavadocTokenTypes.NEWLINE ||
+               nextSibling.getType() == JavadocTokenTypes.EOF ||
+               nextSibling.getText().startsWith(" ");
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - Created `JavadocParagraphUtils` to handle utility methods related to Javadoc checks.
+
+2. **Extract Method:**  
+   - Simplified `checkParagraphTag` by delegating logic to utility methods.
+
+3. **Extract Variable:**  
+   - Removed redundant checks with clearer method calls in `JavadocParagraphUtils`.
+
+4. **Rename Method:**  
+   - `getNearestNode` → `findNextNonWhitespaceNode` for clarity.
+
+---
+
+### **Benefits**
+
+- **Improved Readability:**  
+  - Main class (`JavadocParagraphCheck`) is now cleaner and more readable.
+
+- **Better Maintainability:**  
+  - Centralized logic in `JavadocParagraphUtils` simplifies testing and future changes.
+
+- **Enhanced Modularity:**  
+  - Clear separation of concerns between validation and utility logic.

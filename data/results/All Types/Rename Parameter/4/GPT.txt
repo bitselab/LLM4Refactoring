@@ -1,0 +1,214 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The logic in the constructor for assigning `field` and `format` can be extracted into a helper method for better readability.  
+   - The `resolveType()` method performs multiple checks that can be extracted into smaller, more descriptive methods.  
+   - The `toEvaluator()` method contains complex logic that can be broken down into smaller methods.
+
+2. **Extract Variable:**  
+   - Complex expressions, especially in the `resolveType()` and `toEvaluator()` methods, can benefit from extracted variables for clarity.
+
+3. **Rename Method:**  
+   - `toFormatter()` can be renamed to `createFormatter()` for better semantic clarity.
+
+4. **Rename Attribute:**  
+   - `field` and `format` could be renamed to `dateField` and `formatPattern` respectively to better convey their purpose.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.elasticsearch.xpack.esql.expression.function.scalar.date;
+
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.common.time.DateFormatter;
+import org.elasticsearch.compute.ann.Evaluator;
+import org.elasticsearch.compute.ann.Fixed;
+import org.elasticsearch.compute.operator.EvalOperator.ExpressionEvaluator;
+import org.elasticsearch.xpack.esql.evaluator.mapper.EvaluatorMapper;
+import org.elasticsearch.xpack.esql.expression.function.FunctionInfo;
+import org.elasticsearch.xpack.esql.expression.function.Param;
+import org.elasticsearch.xpack.esql.session.EsqlConfiguration;
+import org.elasticsearch.xpack.ql.expression.Expression;
+import org.elasticsearch.xpack.ql.expression.function.OptionalArgument;
+import org.elasticsearch.xpack.ql.expression.function.scalar.ConfigurationFunction;
+import org.elasticsearch.xpack.ql.expression.gen.script.ScriptTemplate;
+import org.elasticsearch.xpack.ql.session.Configuration;
+import org.elasticsearch.xpack.ql.tree.NodeInfo;
+import org.elasticsearch.xpack.ql.tree.Source;
+import org.elasticsearch.xpack.ql.type.DataType;
+import org.elasticsearch.xpack.ql.type.DataTypes;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.function.Function;
+
+import static org.elasticsearch.xpack.ql.expression.TypeResolutions.ParamOrdinal.FIRST;
+import static org.elasticsearch.xpack.ql.expression.TypeResolutions.ParamOrdinal.SECOND;
+import static org.elasticsearch.xpack.ql.expression.TypeResolutions.isDate;
+import static org.elasticsearch.xpack.ql.expression.TypeResolutions.isStringAndExact;
+import static org.elasticsearch.xpack.ql.util.DateUtils.UTC_DATE_TIME_FORMATTER;
+
+public class DateFormat extends ConfigurationFunction implements OptionalArgument, EvaluatorMapper {
+
+    private final Expression dateField;
+    private final Expression formatPattern;
+
+    @FunctionInfo(returnType = "keyword", description = "Returns a string representation of a date, in the provided format.")
+    public DateFormat(Source source, 
+                     @Param(optional = true, name = "format", type = { "keyword" }, description = "A valid date pattern") Expression first, 
+                     @Param(name = "date", type = { "date" }, description = "Date expression") Expression date, 
+                     Configuration configuration) {
+        super(source, date != null ? List.of(first, date) : List.of(first), configuration);
+        this.dateField = resolveDateField(date, first);
+        this.formatPattern = resolveFormatPattern(date, first);
+    }
+
+    private Expression resolveDateField(Expression date, Expression first) {
+        return date != null ? date : first;
+    }
+
+    private Expression resolveFormatPattern(Expression date, Expression first) {
+        return date != null ? first : null;
+    }
+
+    @Override
+    public DataType dataType() {
+        return DataTypes.KEYWORD;
+    }
+
+    @Override
+    protected TypeResolution resolveType() {
+        if (!childrenResolved()) {
+            return new TypeResolution("Unresolved children");
+        }
+
+        TypeResolution resolution = validateDateType();
+        if (resolution.unresolved()) {
+            return resolution;
+        }
+
+        return validateFormatType();
+    }
+
+    private TypeResolution validateDateType() {
+        return isDate(dateField, sourceText(), formatPattern == null ? FIRST : SECOND);
+    }
+
+    private TypeResolution validateFormatType() {
+        if (formatPattern != null) {
+            TypeResolution resolution = isStringAndExact(formatPattern, sourceText(), FIRST);
+            if (resolution.unresolved()) {
+                return resolution;
+            }
+        }
+        return TypeResolution.TYPE_RESOLVED;
+    }
+
+    @Override
+    public boolean foldable() {
+        return dateField.foldable() && (formatPattern == null || formatPattern.foldable());
+    }
+
+    @Override
+    public Object fold() {
+        return EvaluatorMapper.super.fold();
+    }
+
+    @Evaluator(extraName = "Constant")
+    static BytesRef process(long val, @Fixed DateFormatter formatter) {
+        return new BytesRef(formatter.formatMillis(val));
+    }
+
+    @Evaluator
+    static BytesRef process(long val, BytesRef formatter, @Fixed Locale locale) {
+        return process(val, createFormatter(formatter, locale));
+    }
+
+    @Override
+    public ExpressionEvaluator.Factory toEvaluator(Function<Expression, ExpressionEvaluator.Factory> toEvaluator) {
+        var fieldEvaluator = toEvaluator.apply(dateField);
+
+        if (formatPattern == null) {
+            return createDefaultEvaluator(fieldEvaluator);
+        }
+
+        validateFormatDataType();
+
+        if (formatPattern.foldable()) {
+            return createConstantFormatEvaluator(fieldEvaluator);
+        }
+
+        return createDynamicFormatEvaluator(toEvaluator, fieldEvaluator);
+    }
+
+    private ExpressionEvaluator.Factory createDefaultEvaluator(ExpressionEvaluator.Factory fieldEvaluator) {
+        return dvrCtx -> new DateFormatConstantEvaluator(source(), fieldEvaluator.get(dvrCtx), UTC_DATE_TIME_FORMATTER, dvrCtx);
+    }
+
+    private void validateFormatDataType() {
+        if (formatPattern.dataType() != DataTypes.KEYWORD) {
+            throw new IllegalArgumentException("Unsupported data type for format [" + formatPattern.dataType() + "]");
+        }
+    }
+
+    private ExpressionEvaluator.Factory createConstantFormatEvaluator(ExpressionEvaluator.Factory fieldEvaluator) {
+        DateFormatter formatter = createFormatter(formatPattern.fold(), ((EsqlConfiguration) configuration()).locale());
+        return dvrCtx -> new DateFormatConstantEvaluator(source(), fieldEvaluator.get(dvrCtx), formatter, dvrCtx);
+    }
+
+    private ExpressionEvaluator.Factory createDynamicFormatEvaluator(Function<Expression, ExpressionEvaluator.Factory> toEvaluator,
+                                                                     ExpressionEvaluator.Factory fieldEvaluator) {
+        var formatEvaluator = toEvaluator.apply(formatPattern);
+        return dvrCtx -> new DateFormatEvaluator(source(), fieldEvaluator.get(dvrCtx), formatEvaluator.get(dvrCtx),
+                ((EsqlConfiguration) configuration()).locale(), dvrCtx);
+    }
+
+    private static DateFormatter createFormatter(Object format, Locale locale) {
+        DateFormatter formatter = format == null ? UTC_DATE_TIME_FORMATTER : DateFormatter.forPattern(((BytesRef) format).utf8ToString());
+        return formatter.withLocale(locale);
+    }
+
+    @Override
+    public Expression replaceChildren(List<Expression> newChildren) {
+        return new DateFormat(source(), newChildren.get(0), newChildren.size() > 1 ? newChildren.get(1) : null, configuration());
+    }
+
+    @Override
+    protected NodeInfo<? extends Expression> info() {
+        Expression first = formatPattern != null ? formatPattern : dateField;
+        Expression second = formatPattern != null ? dateField : null;
+        return NodeInfo.create(this, DateFormat::new, first, second, configuration());
+    }
+
+    @Override
+    public ScriptTemplate asScript() {
+        throw new UnsupportedOperationException("functions do not support scripting");
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extracted Methods:**  
+   - `resolveDateField()` and `resolveFormatPattern()` simplify the constructor.  
+   - `validateDateType()` and `validateFormatType()` improve `resolveType()`.  
+   - `createDefaultEvaluator()`, `validateFormatDataType()`, `createConstantFormatEvaluator()`, and `createDynamicFormatEvaluator()` clean up `toEvaluator()`.
+
+2. **Renamed Attributes:**  
+   - `field` → `dateField`  
+   - `format` → `formatPattern`  
+
+3. **Renamed Method:**  
+   - `toFormatter()` → `createFormatter()`  
+
+---
+
+### **Benefits of Refactoring**
+
+- **Improved Readability:** Clearer method names and extracted logic improve understanding.  
+- **Better Maintainability:** Smaller methods are easier to modify and debug.  
+- **Enhanced Error Handling:** Dedicated validation methods make error handling more robust.

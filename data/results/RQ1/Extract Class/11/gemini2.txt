@@ -1,0 +1,90 @@
+## Refactoring Opportunity: Extract Class CircuitBreakerConfig
+
+There is a refactoring opportunity to extract a class named `CircuitBreakerConfig` to improve code readability and maintainability. This class can encapsulate the configuration details (enabled/disabled, thresholds) for both memory and CPU circuit breakers.
+
+Here's the refactored code:
+
+```java
+package org.apache.solr.util.circuitbreaker;
+
+import java.lang.invoke.MethodHandles;
+import org.apache.solr.common.util.NamedList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Single CircuitBreaker that registers both a Memory and a CPU CircuitBreaker. This is only for
+ * backward compatibility with the 9.x versions prior to 9.4.
+ *
+ * @deprecated Use individual Circuit Breakers instead
+ */
+@Deprecated(since = "9.4")
+public class CircuitBreakerManager extends CircuitBreaker {
+
+  private CircuitBreakerConfig memConfig;
+  private CircuitBreakerConfig cpuConfig;
+  // ... other fields and methods
+
+  @Override
+  public void init(NamedList<?> args) {
+    super.init(args);
+    log.warn("CircuitBreakerManager is deprecated. Use individual Circuit Breakers instead");
+
+    memConfig = new CircuitBreakerConfig();
+    memConfig.setEnabled(args.getBoolean("memEnabled", false));
+    memConfig.setThreshold(args.getInt("memThreshold", 100));
+
+    cpuConfig = new CircuitBreakerConfig();
+    cpuConfig.setEnabled(args.getBoolean("cpuEnabled", false));
+    cpuConfig.setThreshold(args.getInt("cpuThreshold", 100));
+
+    if (memConfig.isEnabled()) {
+      memCB = new MemoryCircuitBreaker();
+      memCB.setThreshold(memConfig.getThreshold());
+    }
+
+    if (cpuConfig.isEnabled()) {
+      cpuCB = new CPUCircuitBreaker();
+      cpuCB.setThreshold(cpuConfig.getThreshold());
+    }
+  }
+
+  // ... other methods
+}
+
+package org.apache.solr.util.circuitbreaker;
+
+/**
+ * Encapsulates configuration details for a circuit breaker.
+ */
+public class CircuitBreakerConfig {
+
+  private boolean enabled;
+  private int threshold;
+
+  public CircuitBreakerConfig() {
+    this.enabled = false;
+    this.threshold = 100;
+  }
+
+  public CircuitBreakerConfig(boolean enabled, int threshold) {
+    this.enabled = enabled;
+    this.threshold = threshold;
+  }
+
+  public boolean isEnabled() {
+    return enabled;
+  }
+
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
+  }
+
+  public int getThreshold() {
+    return threshold;
+  }
+
+  public void setThreshold(int threshold) {
+    this.threshold = threshold;
+  }
+}

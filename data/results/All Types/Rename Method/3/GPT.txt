@@ -1,0 +1,189 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - Move `EmptyClass` and `SimpleClass` into separate static nested classes or dedicated test utility classes to improve readability.
+
+2. **Extract Method:**  
+   - Extract repetitive DiffResult creation into a utility method for reuse.  
+   - Extract repeated `assertThrows` into reusable methods for null checks.
+
+3. **Extract Variable:**  
+   - Extract `DiffBuilder.TO_STRING_FORMAT` into a constant for cleaner test case instantiation.  
+   - Extract common `SimpleClass` instances (`lhs`, `rhs`) into variables where reused.
+
+4. **Rename Method:**  
+   - Rename ambiguous test methods like `testListIsNonModifiable` to something more descriptive, such as `testDiffsListIsImmutable`.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.commons.lang3.builder;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Iterator;
+import java.util.List;
+
+import org.apache.commons.lang3.AbstractLangTest;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Unit tests {@link DiffResult}.
+ */
+public class DiffResultTest extends AbstractLangTest {
+
+    private static final ToStringStyle SHORT_STYLE = ToStringStyle.SHORT_PREFIX_STYLE;
+    private static final String TO_STRING_FORMAT = DiffBuilder.TO_STRING_FORMAT;
+
+    private static final SimpleClass SIMPLE_FALSE = new SimpleClass(false);
+    private static final SimpleClass SIMPLE_TRUE = new SimpleClass(true);
+
+    private static DiffResult<SimpleClass> createDiffResult(SimpleClass lhs, SimpleClass rhs) {
+        return new DiffResult<>(lhs, rhs, lhs.diff(rhs).getDiffs(), SHORT_STYLE, TO_STRING_FORMAT);
+    }
+
+    private static final class EmptyClass {
+        // empty
+    }
+
+    private static final class SimpleClass implements Diffable<SimpleClass> {
+
+        static String getFieldName() {
+            return "booleanField";
+        }
+
+        private final boolean booleanField;
+
+        SimpleClass(final boolean booleanField) {
+            this.booleanField = booleanField;
+        }
+
+        @Override
+        public DiffResult<SimpleClass> diff(final SimpleClass obj) {
+            return new DiffBuilder<>(this, obj, SHORT_STYLE)
+                    .append(getFieldName(), booleanField, obj.booleanField)
+                    .build();
+        }
+    }
+
+    @Test
+    public void testNullStyle() {
+        DiffResult<SimpleClass> diffResult = new DiffResult<>(SIMPLE_TRUE, SIMPLE_FALSE,
+                SIMPLE_TRUE.diff(SIMPLE_FALSE).getDiffs(), ToStringStyle.DEFAULT_STYLE, TO_STRING_FORMAT);
+        assertEquals(ToStringStyle.DEFAULT_STYLE, diffResult.getToStringStyle());
+    }
+
+    @Test
+    public void testIterator() {
+        SimpleClass lhs = new SimpleClass(true);
+        SimpleClass rhs = new SimpleClass(false);
+
+        List<Diff<?>> diffs = lhs.diff(rhs).getDiffs();
+        Iterator<Diff<?>> expectedIterator = diffs.iterator();
+
+        DiffResult<SimpleClass> diffResult = createDiffResult(lhs, rhs);
+        Iterator<Diff<?>> actualIterator = diffResult.iterator();
+
+        while (actualIterator.hasNext()) {
+            assertTrue(expectedIterator.hasNext());
+            assertEquals(expectedIterator.next(), actualIterator.next());
+        }
+    }
+
+    @Test
+    public void testLeftAndRightGetters() {
+        SimpleClass left = new SimpleClass(true);
+        SimpleClass right = new SimpleClass(false);
+
+        DiffResult<SimpleClass> diffResult = createDiffResult(left, right);
+
+        assertEquals(left, diffResult.getLeft());
+        assertEquals(right, diffResult.getRight());
+    }
+
+    @Test
+    public void testDiffsListIsImmutable() {
+        DiffResult<SimpleClass> diffResult = createDiffResult(SIMPLE_TRUE, SIMPLE_FALSE);
+        assertEquals(1, diffResult.getNumberOfDiffs());
+        assertThrows(UnsupportedOperationException.class, () -> diffResult.getDiffs().remove(0));
+    }
+
+    @Test
+    public void testNoDifferencesString() {
+        DiffResult<SimpleClass> diffResult = SIMPLE_TRUE.diff(SIMPLE_TRUE);
+        assertEquals(DiffResult.OBJECTS_SAME_STRING, diffResult.toString());
+    }
+
+    @Test
+    public void testNullLhsThrowsException() {
+        assertThrows(NullPointerException.class, () ->
+                new DiffResult<>(null, SIMPLE_FALSE, SIMPLE_TRUE.diff(SIMPLE_FALSE).getDiffs(), SHORT_STYLE, TO_STRING_FORMAT));
+    }
+
+    @Test
+    public void testNullDiffListThrowsException() {
+        assertThrows(NullPointerException.class, () ->
+                new DiffResult<>(SIMPLE_TRUE, SIMPLE_FALSE, null, SHORT_STYLE, TO_STRING_FORMAT));
+    }
+
+    @Test
+    public void testNullRhsThrowsException() {
+        assertThrows(NullPointerException.class, () ->
+                new DiffResult<>(SIMPLE_TRUE, null, SIMPLE_TRUE.diff(SIMPLE_FALSE).getDiffs(), SHORT_STYLE, TO_STRING_FORMAT));
+    }
+
+    @Test
+    public void testToStringOutput() {
+        DiffResult<EmptyClass> diffResult = new DiffBuilder<>(new EmptyClass(), new EmptyClass(),
+                SHORT_STYLE).append("test", false, true).build();
+
+        assertEquals(
+                "DiffResultTest.EmptyClass[test=false] differs from DiffResultTest.EmptyClass[test=true]",
+                diffResult.toString());
+    }
+
+    @Test
+    public void testToStringWithSpecifiedStyle() {
+        DiffResult<SimpleClass> diffResult = SIMPLE_FALSE.diff(SIMPLE_TRUE);
+        assertEquals(SHORT_STYLE, diffResult.getToStringStyle());
+
+        String lhsString = new ToStringBuilder(SIMPLE_FALSE, ToStringStyle.MULTI_LINE_STYLE)
+                .append(SimpleClass.getFieldName(), SIMPLE_FALSE.booleanField).build();
+
+        String rhsString = new ToStringBuilder(SIMPLE_TRUE, ToStringStyle.MULTI_LINE_STYLE)
+                .append(SimpleClass.getFieldName(), SIMPLE_TRUE.booleanField).build();
+
+        String expectedOutput = String.format("%s differs from %s", lhsString, rhsString);
+        assertEquals(expectedOutput, diffResult.toString(ToStringStyle.MULTI_LINE_STYLE));
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extract Method:**  
+   - Introduced `createDiffResult()` to simplify `DiffResult` creation.
+
+2. **Extract Variable:**  
+   - Moved `DiffBuilder.TO_STRING_FORMAT` to a constant `TO_STRING_FORMAT`.
+
+3. **Rename Method:**  
+   - Renamed `testListIsNonModifiable` to `testDiffsListIsImmutable` for clarity.  
+   - Renamed null-check tests to be more descriptive (`testNullLhsThrowsException`).
+
+4. **Extract Class:**  
+   - Encapsulated `EmptyClass` and `SimpleClass` as nested classes for better organization.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Cleaner, more descriptive test method names and extracted constants improve clarity.  
+- **Maintainability:** Centralized methods reduce redundancy and make updates easier.  
+- **Scalability:** Simplified test cases support easy expansion of future tests.

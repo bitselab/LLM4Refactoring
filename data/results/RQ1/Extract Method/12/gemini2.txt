@@ -1,0 +1,51 @@
+## Refactoring Opportunities in FileBasedConfig.java
+
+There are a few opportunities for Extract Method refactoring in the provided code snippet:
+
+1. **isUtf8**: This logic can be extracted into a separate method to improve readability and potentially reuse it in other parts of the code if needed.
+
+Here's the refactored code:
+
+```java
+private static boolean isUtf8(byte[] in) {
+  // Existing logic to detect UTF-8 encoding
+  return ...;
+}
+```
+
+2. **hash**: This method is a simple utility function used for calculating the hash of byte data. It can be extracted to a separate utility class for better organization.
+
+However, since this functionality might be specific to this class, keeping it here is also reasonable. You can discuss this with your team and decide based on your project's structure and preferences.
+
+Here's the refactored code assuming it's extracted to a separate utility class (not shown):
+
+```java
+private static ObjectId hash(byte[] rawText) {
+  return ObjectId.fromRaw(Constants.newMessageDigest().digest(rawText));
+}
+```
+
+3. **readIncludedConfig**: This method has some logic for handling relative paths. This logic can be extracted into a separate method to improve readability, especially if this functionality is used elsewhere in the code.
+
+Here's the refactored code:
+
+```java
+private File resolveIncludedConfigFile(String relPath) {
+  if (relPath.startsWith("~/")) {
+    return fs.resolve(fs.userHome(), relPath.substring(2));
+  } else {
+    return fs.resolve(configFile.getParentFile(), relPath);
+  }
+}
+
+@Override
+protected byte[] readIncludedConfig(String relPath) throws ConfigInvalidException {
+  final File file = resolveIncludedConfigFile(relPath);
+  if (!file.exists()) {
+    return null;
+  }
+  // ... remaining logic for reading the file
+}
+```
+
+Remember to update the code based on your team's coding conventions and preferences.

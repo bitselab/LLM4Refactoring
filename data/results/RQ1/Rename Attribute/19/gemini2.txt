@@ -1,0 +1,51 @@
+## Refactored Code with Renamed Attributes
+
+Here's the refactored code with improved attribute names:
+
+```java
+package org.springframework.boot.ssl.pem;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+import java.util.List;
+import java.util.function.Supplier;
+
+import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.function.SingletonSupplier;
+import org.springframework.util.function.ThrowingSupplier;
+
+/**
+ * {@link PemSslStore} loaded from {@link PemSslStoreDetails}.
+ *
+ * @author Phillip Webb
+ * @see PemSslStore#load(PemSslStoreDetails)
+ */
+final class LoadedPemSslStore implements PemSslStore {
+
+  private final PemSslStoreDetails storeDetails; // Renamed details -> storeDetails
+
+  private final Supplier<List<X509Certificate>> certificatesSupplier; // Renamed certificates -> certificatesSupplier
+
+  private final Supplier<PrivateKey> privateKeySupplier;
+
+  LoadedPemSslStore(PemSslStoreDetails storeDetails) {
+    Assert.notNull(storeDetails, "Details must not be null");
+    this.storeDetails = storeDetails;
+    this.certificatesSupplier = supplier(() -> loadCertificates(storeDetails));
+    this.privateKeySupplier = supplier(() -> loadPrivateKey(storeDetails));
+  }
+
+  // ... rest of the code remains unchanged ...
+
+}
+```
+
+The following attribute names were renamed:
+
+* `details` to `storeDetails`: This clarifies the purpose of the attribute, indicating it holds details specific to the store.
+* `certificates` to `certificatesSupplier`: This emphasizes the attribute holds a supplier for the certificates, improving accuracy.
+
+The rest of the code remains unchanged.

@@ -1,0 +1,170 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Extract the lazy class loading logic from `getJavaClass()` to improve readability.  
+
+2. **Rename Attribute:**  
+   - `javaClass` can be renamed to `loadedClass` for clarity.  
+
+3. **Inline Method:**  
+   - The `getClassName()` and `getClassLoader()` methods are simple getters, and in some contexts, they could be inlined, but it's better to keep them for encapsulation.  
+
+4. **Extract Variable:**  
+   - The `Try<Class<?>> clazz` assignment in `getJavaClass()` could be extracted for clarity.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.junit.platform.engine.discovery;
+
+import static org.apiguardian.api.API.Status.EXPERIMENTAL;
+import static org.apiguardian.api.API.Status.STABLE;
+
+import java.util.Objects;
+
+import org.apiguardian.api.API;
+import org.junit.platform.commons.PreconditionViolationException;
+import org.junit.platform.commons.function.Try;
+import org.junit.platform.commons.util.ReflectionUtils;
+import org.junit.platform.commons.util.ToStringBuilder;
+import org.junit.platform.engine.DiscoverySelector;
+
+/**
+ * A {@link DiscoverySelector} that selects a {@link Class} or class name so
+ * that {@link org.junit.platform.engine.TestEngine TestEngines} can discover
+ * tests or containers based on classes.
+ *
+ * <p>If a Java {@link Class} reference is provided, the selector will return
+ * that {@code Class} and its class name accordingly. If a class name is
+ * provided, the selector will only attempt to lazily load the {@link Class}
+ * if {@link #getJavaClass()} is invoked.
+ *
+ * <p>In this context, Java {@link Class} means anything that can be referenced
+ * as a {@link Class} on the JVM &mdash; for example, classes from other JVM
+ * languages such Groovy, Scala, etc.
+ *
+ * @since 1.0
+ * @see DiscoverySelectors#selectClass(String)
+ * @see DiscoverySelectors#selectClass(Class)
+ * @see org.junit.platform.engine.support.descriptor.ClassSource
+ */
+@API(status = STABLE, since = "1.0")
+public class ClassSelector implements DiscoverySelector {
+
+    private final String className;
+    private final ClassLoader classLoader;
+    private Class<?> loadedClass;
+
+    ClassSelector(String className) {
+        this(className, null);
+    }
+
+    ClassSelector(String className, ClassLoader classLoader) {
+        this.className = Objects.requireNonNull(className, "Class name must not be null");
+        this.classLoader = classLoader;
+    }
+
+    ClassSelector(Class<?> loadedClass) {
+        this.className = Objects.requireNonNull(loadedClass, "Class must not be null").getName();
+        this.classLoader = loadedClass.getClassLoader();
+        this.loadedClass = loadedClass;
+    }
+
+    /**
+     * Get the selected class name.
+     */
+    public String getClassName() {
+        return this.className;
+    }
+
+    /**
+     * Get the {@link ClassLoader} used to load the selected class.
+     * @since 1.10
+     */
+    @API(status = EXPERIMENTAL, since = "1.10")
+    public ClassLoader getClassLoader() {
+        return this.classLoader;
+    }
+
+    /**
+     * Get the selected {@link Class}.
+     *
+     * <p>If the {@link Class} was not provided, but only the name, this method
+     * attempts to lazily load the {@link Class} based on its name and throws a
+     * {@link PreconditionViolationException} if the class cannot be loaded.
+     */
+    public Class<?> getJavaClass() {
+        if (this.loadedClass == null) {
+            this.loadedClass = loadClassOrThrow();
+        }
+        return this.loadedClass;
+    }
+
+    /**
+     * Lazily load the class or throw a {@link PreconditionViolationException} if loading fails.
+     */
+    private Class<?> loadClassOrThrow() {
+        Try<Class<?>> classTry = (this.classLoader == null)
+                ? ReflectionUtils.tryToLoadClass(this.className)
+                : ReflectionUtils.tryToLoadClass(this.className, this.classLoader);
+
+        return classTry.getOrThrow(cause -> new PreconditionViolationException(
+                "Could not load class with name: " + this.className, cause));
+    }
+
+    @API(status = STABLE, since = "1.3")
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        ClassSelector other = (ClassSelector) obj;
+        return Objects.equals(this.className, other.className);
+    }
+
+    @API(status = STABLE, since = "1.3")
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.className);
+    }
+
+    @Override
+    public String toString() {
+        return new ToStringBuilder(this)
+                .append("className", this.className)
+                .append("classLoader", this.classLoader)
+                .toString();
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Method:**  
+   - Extracted `loadClassOrThrow()` from `getJavaClass()` for clarity.
+
+2. **Rename Attribute:**  
+   - Renamed `javaClass` → `loadedClass` to better describe its purpose.
+
+3. **Extract Variable:**  
+   - Simplified `Try<Class<?>>` instantiation in the new method.
+
+4. **Added Null Checks:**  
+   - Used `Objects.requireNonNull()` to validate constructor parameters.
+
+---
+
+### **Benefits**
+
+- **Readability:** The lazy loading logic is isolated, making `getJavaClass()` easier to understand.  
+- **Maintainability:** Clearer naming (`loadedClass`) improves the understandability of the code.  
+- **Robustness:** Null checks prevent unexpected `NullPointerException`.  
+
+No further refactoring is necessary.

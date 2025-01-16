@@ -1,0 +1,185 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - The `DataClearConfigImpl` class can be extracted into its own file for better modularity.  
+   - The database clearing logic in `clearDatabase()` can be extracted into a `DatabaseCleaner` class.  
+
+2. **Extract Method:**  
+   - The logic for evicting caches, clearing entities, and resetting the session factory can be broken into smaller methods.  
+   - The complex query creation in `createSelectOrDeleteAllOfSpecificTypeQuery()` can be simplified.  
+
+3. **Extract Variable:**  
+   - String literals like `"select e "`, `"delete "`, and `" where type( e ) in (:type)"` can be extracted into constants for readability.  
+
+4. **Rename Method:**  
+   - `clearAllData()` → `performDataCleanup()`  
+   - `clearDatabase()` → `clearDatabaseEntities()`  
+
+5. **Inline Method:**  
+   - Inline the single-use `selectAllOfSpecificType()` and `deleteAllOfSpecificType()` into `clearEntityInstances()` to simplify the flow.  
+
+---
+
+### **Refactored Code**
+
+```java
+package org.hibernate.search.util.impl.integrationtest.mapper.orm;
+
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.query.Query;
+import org.hibernate.search.mapper.orm.Search;
+import org.hibernate.search.mapper.orm.mapping.impl.HibernateOrmMapping;
+import org.hibernate.search.util.common.SearchException;
+import org.hibernate.search.util.common.impl.Closer;
+import org.hibernate.search.util.common.impl.SuppressingCloser;
+import org.jboss.logging.Logger;
+
+import java.lang.reflect.Modifier;
+import java.util.*;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+
+/**
+ * Cleaner for database and index data after each test method execution.
+ */
+class OrmSetupHelperCleaner {
+    private static final Logger log = Logger.getLogger(OrmSetupHelperCleaner.class.getName());
+
+    private static final String SELECT_QUERY = "select e from %s e";
+    private static final String DELETE_QUERY = "delete from %s e";
+
+    private final DataClearConfigImpl config;
+    private final SessionFactoryImplementor sessionFactory;
+
+    static OrmSetupHelperCleaner create(SessionFactoryImplementor sessionFactory, boolean mockBackend) {
+        return new OrmSetupHelperCleaner(sessionFactory)
+                .appendConfiguration(config -> config.clearDatabaseData(true).clearIndexData(!mockBackend));
+    }
+
+    private OrmSetupHelperCleaner(SessionFactoryImplementor sessionFactory) {
+        this.sessionFactory = sessionFactory;
+        this.config = new DataClearConfigImpl();
+    }
+
+    void cleanupData() {
+        if (!(config.clearDatabaseData || config.clearIndexData)) {
+            return;
+        }
+
+        log.info("Clearing data and reusing the same session factory.");
+        try {
+            performDataCleanup();
+        } catch (RuntimeException e) {
+            new SuppressingCloser(e).push(() -> tearDownSessionFactory(sessionFactory));
+            throw new Error("Failed to clear data before test execution: " + e.getMessage(), e);
+        }
+    }
+
+    private void tearDownSessionFactory(SessionFactoryImplementor sessionFactory) {
+        try (Closer<RuntimeException> closer = new Closer<>()) {
+            closer.push(SessionFactory::close, sessionFactory);
+        }
+    }
+
+    private void performDataCleanup() {
+        HibernateOrmMapping mapping = resolveMapping();
+
+        if (config.clearDatabaseData) {
+            evictCaches();
+            clearDatabaseEntities(mapping);
+            evictCaches();  // Clear caches again after clearing data
+        }
+
+        if (config.clearIndexData && mapping != null) {
+            Search.mapping(sessionFactory).scope(Object.class).schemaManager().dropAndCreate();
+        }
+    }
+
+    private HibernateOrmMapping resolveMapping() {
+        try {
+            return (HibernateOrmMapping) Search.mapping(sessionFactory);
+        } catch (SearchException e) {
+            return e.getMessage().contains("not initialized") ? null : throw e;
+        }
+    }
+
+    private void evictCaches() {
+        sessionFactory.getCache().evictAllRegions();
+    }
+
+    private void clearDatabaseEntities(HibernateOrmMapping mapping) {
+        config.entityClearOrder.forEach(entityClass -> clearEntity(sessionFactory, mapping, entityClass));
+
+        sessionFactory.getJpaMetamodel().getEntities().stream()
+                .sorted(Comparator.comparing(e -> e.getName()))
+                .forEach(entityType -> clearEntity(sessionFactory, mapping, entityType.getJavaType()));
+    }
+
+    private void clearEntity(SessionFactoryImplementor sessionFactory, HibernateOrmMapping mapping, Class<?> entityClass) {
+        if (Modifier.isAbstract(entityClass.getModifiers())) {
+            return;
+        }
+
+        OrmUtils.with(sessionFactory).runInTransaction(session -> {
+            Query<?> query = session.createQuery(String.format(DELETE_QUERY, entityClass.getName()));
+            query.executeUpdate();
+        });
+    }
+
+    public OrmSetupHelperCleaner appendConfiguration(Consumer<DataClearConfig> configurer) {
+        configurer.accept(this.config);
+        return this;
+    }
+
+    private static class DataClearConfigImpl implements DataClearConfig {
+        private final List<Class<?>> entityClearOrder = new ArrayList<>();
+        private boolean clearIndexData = false;
+        private boolean clearDatabaseData = false;
+
+        @Override
+        public DataClearConfig clearDatabaseData(boolean clear) {
+            this.clearDatabaseData = clear;
+            return this;
+        }
+
+        @Override
+        public DataClearConfig clearIndexData(boolean clear) {
+            this.clearIndexData = clear;
+            return this;
+        }
+
+        @Override
+        public DataClearConfig clearOrder(Class<?>... entityClasses) {
+            entityClearOrder.clear();
+            Collections.addAll(entityClearOrder, entityClasses);
+            return this;
+        }
+    }
+}
+```
+
+---
+
+### **Key Refactoring Changes**
+
+1. **Extracted Constants:**  
+   - SQL query templates for selection and deletion (`SELECT_QUERY`, `DELETE_QUERY`) were extracted for readability.
+
+2. **Method Extraction:**  
+   - Extracted `evictCaches()`, `resolveMapping()`, and `clearDatabaseEntities()` to simplify `performDataCleanup()`.
+
+3. **Method Renaming:**  
+   - `clearAllData()` → `performDataCleanup()` for clarity.
+
+4. **Class Simplification:**  
+   - `DataClearConfigImpl` logic was simplified by removing redundant methods and directly managing entity cleanup order.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Improved Readability:** Smaller, self-explanatory methods make the logic clearer.  
+- **Simplified Logic:** Removed complex nested loops and conditionals for a cleaner flow.  
+- **Better Maintainability:** Extracted constants and reusable methods improve scalability and reduce duplication.

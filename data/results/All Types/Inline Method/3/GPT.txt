@@ -1,0 +1,64 @@
+The provided code is already simple and clean. However, there are still some **minor** refactoring opportunities that could slightly improve clarity and maintainability.
+
+### **Refactoring Suggestions**
+
+1. **Extract Method**  
+   - The `after()` method directly calls `validateNullToStringStyleRegistry()`. Since the method name `validateNullToStringStyleRegistry()` is somewhat verbose, the validation logic could be moved into a more descriptive method.  
+   - Alternatively, the assertion can be directly placed in the `after()` method, making the validation clearer.
+
+2. **Rename Method**  
+   - The method name `validateNullToStringStyleRegistry()` can be renamed to something shorter and clearer like `assertToStringStyleRegistryIsNull()` to better reflect its behavior.
+
+3. **Rename Variable/Attribute**  
+   - The term **"Registry"** might be vague. If possible, renaming it to something more descriptive (if the context allows) could be more helpful, but since it refers to a third-party library, it's acceptable as is.
+
+4. **Inline Method**  
+   - Since `validateNullToStringStyleRegistry()` is only called once, it could be inlined within `after()` to reduce unnecessary abstraction.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.commons.lang3;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.apache.commons.lang3.builder.ToStringStyle;
+import org.junit.jupiter.api.AfterEach;
+
+/**
+ * All tests subclass this test.
+ */
+public class AbstractLangTest {
+
+    /**
+     * Ensures that the {@link ToStringStyle} registry is cleared after each test.
+     */
+    @AfterEach
+    public void validateToStringStyleRegistryIsEmpty() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Rename Method**:  
+   - Renamed `after()` to `validateToStringStyleRegistryIsEmpty()` for clarity.  
+
+2. **Inline Method**:  
+   - Removed the `validateNullToStringStyleRegistry()` method and inlined the assertion directly in the `@AfterEach` method.
+
+3. **Improved Documentation**:  
+   - Updated the comment to better describe the purpose of the method.
+
+---
+
+### **Justification**  
+- These changes make the code slightly clearer and more self-explanatory.  
+- Since the validation is simple, keeping everything in one method improves readability.  
+
+If you prefer keeping the validation logic separate, I can adjust accordingly.

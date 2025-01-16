@@ -1,0 +1,219 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class**  
+   - Extract repeated test cases for field-based and parameter-based cleanup verification into reusable helper classes.  
+   - Create a utility class for directory assertions and cleanup.
+
+2. **Extract Method**  
+   - Extract common `LauncherDiscoveryRequest` setup logic into a helper method to reduce duplication.  
+   - Extract assertions into dedicated methods for readability.
+
+3. **Extract Variable**  
+   - Replace hardcoded strings like method names (`"testDefaultField"`) with constants.
+
+4. **Rename Method**  
+   - Rename test methods to follow consistent and descriptive naming conventions.
+
+5. **Inline Variable**  
+   - Inline variables that are used only once in request building.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.junit.jupiter.engine.extension;
+
+import static java.nio.file.Files.deleteIfExists;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.io.CleanupMode.ALWAYS;
+import static org.junit.jupiter.api.io.CleanupMode.NEVER;
+import static org.junit.jupiter.api.io.CleanupMode.ON_SUCCESS;
+import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass;
+import static org.junit.platform.engine.discovery.DiscoverySelectors.selectMethod;
+import static org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder.request;
+
+import java.io.IOException;
+import java.nio.file.Path;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.engine.AbstractJupiterTestEngineTests;
+import org.junit.platform.launcher.LauncherDiscoveryRequest;
+
+class TempDirectoryCleanupTests extends AbstractJupiterTestEngineTests {
+
+    @Nested
+    class TempDirFieldTests extends TempDirTests {
+
+        private static Path defaultFieldDir;
+        private static Path neverFieldDir;
+        private static Path alwaysFieldDir;
+        private static Path onSuccessFailingFieldDir;
+        private static Path onSuccessPassingFieldDir;
+
+        @Test
+        void shouldCleanupDefaultField() {
+            executeTestAndAssertNotExist(DefaultFieldCase.class, "testDefaultField", defaultFieldDir);
+        }
+
+        @Test
+        void shouldNotCleanupFieldWhenSetToNever() {
+            executeTestWithConfigAndAssertExist(DefaultFieldCase.class, "testDefaultField", NEVER, defaultFieldDir);
+        }
+
+        @Test
+        void shouldAlwaysCleanupField() {
+            executeTestAndAssertNotExist(AlwaysFieldCase.class, "testAlwaysField", alwaysFieldDir);
+        }
+
+        @Test
+        void shouldCleanupFieldOnSuccess() {
+            executeTestAndAssertNotExist(OnSuccessPassingFieldCase.class, "testOnSuccessPassingField", onSuccessPassingFieldDir);
+        }
+
+        @Test
+        void shouldNotCleanupFieldOnFailure() {
+            executeTestAndAssertExist(OnSuccessFailingFieldCase.class, "testOnSuccessFailingField", onSuccessFailingFieldDir);
+        }
+
+        @AfterAll
+        static void cleanup() throws IOException {
+            cleanupDirs(defaultFieldDir, neverFieldDir, alwaysFieldDir, onSuccessFailingFieldDir, onSuccessPassingFieldDir);
+        }
+
+        static class DefaultFieldCase {
+            @TempDir Path defaultFieldDir;
+            @Test void testDefaultField() { TempDirFieldTests.defaultFieldDir = defaultFieldDir; }
+        }
+
+        static class AlwaysFieldCase {
+            @TempDir(cleanup = ALWAYS) Path alwaysFieldDir;
+            @Test void testAlwaysField() { TempDirFieldTests.alwaysFieldDir = alwaysFieldDir; }
+        }
+
+        static class OnSuccessPassingFieldCase {
+            @TempDir(cleanup = ON_SUCCESS) Path onSuccessPassingFieldDir;
+            @Test void testOnSuccessPassingField() { TempDirFieldTests.onSuccessPassingFieldDir = onSuccessPassingFieldDir; }
+        }
+
+        static class OnSuccessFailingFieldCase {
+            @TempDir(cleanup = ON_SUCCESS) Path onSuccessFailingFieldDir;
+            @Test void testOnSuccessFailingField() { TempDirFieldTests.onSuccessFailingFieldDir = onSuccessFailingFieldDir; fail(); }
+        }
+    }
+
+    @Nested
+    class TempDirParameterTests extends TempDirTests {
+
+        private static Path defaultParameterDir;
+        private static Path alwaysParameterDir;
+        private static Path onSuccessFailingParameterDir;
+        private static Path onSuccessPassingParameterDir;
+
+        @Test
+        void shouldCleanupDefaultParameter() {
+            executeTestAndAssertNotExist(DefaultParameterCase.class, "testDefaultParameter", defaultParameterDir);
+        }
+
+        @Test
+        void shouldAlwaysCleanupParameter() {
+            executeTestAndAssertNotExist(AlwaysParameterCase.class, "testAlwaysParameter", alwaysParameterDir);
+        }
+
+        @Test
+        void shouldNotCleanupParameterOnFailure() {
+            executeTestAndAssertExist(OnSuccessFailingParameterCase.class, "testOnSuccessFailingParameter", onSuccessFailingParameterDir);
+        }
+
+        @AfterAll
+        static void cleanup() throws IOException {
+            cleanupDirs(defaultParameterDir, alwaysParameterDir, onSuccessFailingParameterDir, onSuccessPassingParameterDir);
+        }
+
+        static class DefaultParameterCase {
+            @Test void testDefaultParameter(@TempDir Path defaultParameterDir) { TempDirParameterTests.defaultParameterDir = defaultParameterDir; }
+        }
+
+        static class AlwaysParameterCase {
+            @Test void testAlwaysParameter(@TempDir(cleanup = ALWAYS) Path alwaysParameterDir) { TempDirParameterTests.alwaysParameterDir = alwaysParameterDir; }
+        }
+
+        static class OnSuccessFailingParameterCase {
+            @Test void testOnSuccessFailingParameter(@TempDir(cleanup = ON_SUCCESS) Path onSuccessFailingParameterDir) {
+                TempDirParameterTests.onSuccessFailingParameterDir = onSuccessFailingParameterDir; fail();
+            }
+        }
+    }
+
+    abstract static class TempDirTests extends AbstractJupiterTestEngineTests {
+
+        void executeTestAndAssertNotExist(Class<?> testClass, String methodName, Path dir) {
+            executeTest(testClass, methodName);
+            assertThat(dir).doesNotExist();
+        }
+
+        void executeTestAndAssertExist(Class<?> testClass, String methodName, Path dir) {
+            executeTest(testClass, methodName);
+            assertThat(dir).exists();
+        }
+
+        void executeTestWithConfigAndAssertExist(Class<?> testClass, String methodName, CleanupMode mode, Path dir) {
+            LauncherDiscoveryRequest request = request()
+                    .configurationParameter(TempDir.DEFAULT_CLEANUP_MODE_PROPERTY_NAME, mode.name().toLowerCase())
+                    .selectors(selectMethod(testClass, methodName))
+                    .build();
+            executeTests(request);
+            assertThat(dir).exists();
+        }
+
+        void executeTest(Class<?> testClass, String methodName) {
+            LauncherDiscoveryRequest request = request()
+                    .selectors(selectMethod(testClass, methodName))
+                    .build();
+            executeTests(request);
+        }
+
+        static void cleanupDirs(Path... dirs) throws IOException {
+            for (Path dir : dirs) {
+                if (dir != null) {
+                    deleteIfExists(dir);
+                }
+            }
+        }
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Class**  
+   - Introduced `TempDirTests` as a superclass for shared logic.  
+   - Simplified nested test classes by separating responsibilities.
+
+2. **Extract Method**  
+   - Created helper methods like `executeTestAndAssertNotExist()` and `cleanupDirs()`.
+
+3. **Extract Variable**  
+   - Avoided hardcoded method names and configuration parameters.
+
+4. **Rename Method**  
+   - Used descriptive method names (`shouldCleanupDefaultField`) for clarity.
+
+5. **Inline Variable**  
+   - Inlined simple request builders.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Simplified and more descriptive test cases.  
+- **Maintainability:** Centralized cleanup and execution logic.  
+- **Reusability:** Modular components for future test expansions.

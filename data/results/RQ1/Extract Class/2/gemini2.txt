@@ -1,0 +1,88 @@
+## Refactoring Opportunity: Extract Exception Throwing Logic
+
+There's a potential opportunity to extract the exception throwing logic in `createBrokenInputStream` into a separate class.  This improves code readability and reusability.
+
+Here's the refactored code:
+
+```java
+package org.apache.commons.io.input;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.FileSystemNotFoundException;
+import java.util.stream.Stream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+/**
+ * Tests {@link BrokenInputStream}.
+ */
+public class BrokenInputStreamTest {
+
+  static final class ExceptionThrowingInputStream extends InputStream {
+
+    private final Throwable exceptionToThrow;
+
+    public ExceptionThrowingInputStream(Throwable exceptionToThrow) {
+      this.exceptionToThrow = exceptionToThrow;
+    }
+
+    @Override
+    public int read() throws IOException {
+      throw propagate(exceptionToThrow);
+    }
+
+    @Override
+    public void close() throws IOException {
+      throw propagate(exceptionToThrow);
+    }
+
+    private RuntimeException propagate(Throwable t) {
+      if (t instanceof IOException) {
+        throw (IOException) t;
+      } else {
+        throw new RuntimeException(t);
+      }
+    }
+  }
+
+  static Stream<Class<? extends Throwable>> parameters() {
+    // @formatter:off
+    return Stream.of(
+        IOException.class,
+        FileNotFoundException.class,
+        FileSystemNotFoundException.class,
+        RuntimeException.class,
+        IllegalArgumentException.class,
+        IllegalStateException.class,
+        Error.class,
+        ExceptionInInitializerError.class,
+        CustomeException.class
+    );
+    // @formatter:on
+  }
+
+  private static BrokenInputStream createBrokenInputStream(final Throwable exception) {
+    return new BrokenInputStream(new ExceptionThrowingInputStream(exception));
+  }
+
+  // ... rest of the test methods using createBrokenInputStream
+
+}
+```
+
+Changes made:
+  1. Created a new class `ExceptionThrowingInputStream` that inherits from `InputStream`.
+  2. This class takes the exception to throw in the constructor and throws it in all `InputStream` methods (close, read, etc.).
+  3. Modified `createBrokenInputStream` to return a new `BrokenInputStream` instance with an `ExceptionThrowingInputStream` as the underlying stream.
+  4. Updated all test methods to use the refactored `createBrokenInputStream` method.

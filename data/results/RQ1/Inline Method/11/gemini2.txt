@@ -1,0 +1,38 @@
+Absolutely! There is an opportunity for Inline Method Refactoring in the `CommandLineBuilder` class. The two methods `addArg(String arg)` and `toString(String delim)` both call the `shellQuoteIfNeeded(String arg)` method. This is a prime candidate for inline refactoring.
+
+Here's the refactored code:
+
+```java
+public class CommandLineBuilder {
+  // ... other code ...
+
+  public void addArg(String arg) {
+    if (arg != null) {
+      if (commandLine.length() > 0) {
+        commandLine.append(separator);
+      }
+      args.add(arg);
+      commandLine.append(shellQuoteIfNeeded(arg));
+    }
+  }
+
+  public String toString(String delim) {
+    StringBuilder buf = new StringBuilder();
+    for (String arg : args) {
+      if (buf.length() > 0) {
+        buf.append(delim);
+      }
+      // Inline shellQuoteIfNeeded call
+      buf.append(arg.isEmpty() ? "''" : shellQuoteIfNeeded(arg));
+    }
+    return buf.toString();
+  }
+
+  // ... other code ...
+}
+```
+
+In the `addArg` method, the call to `shellQuoteIfNeeded` is inlined directly into the `commandLine.append` statement.
+
+In the `toString(String delim)` method, we handle the empty string case explicitly before calling `shellQuoteIfNeeded`. This avoids unnecessary method calls and improves readability.
+ 

@@ -1,0 +1,59 @@
+There is an opportunity for an Extract Method refactoring in the `ReflectionDiffBuilder` class. Here's the refactored code with the new method:
+
+```java
+public class ReflectionDiffBuilder<T> implements Builder<DiffResult<T>> {
+
+  // ... existing code ...
+
+  private static String[] toExcludeFieldNames(final String[] excludeFieldNames) {
+    // ... existing code ...
+  }
+
+  private final DiffBuilder<T> diffBuilder;
+  private String[] excludeFieldNames;
+
+  private ReflectionDiffBuilder(final DiffBuilder<T> diffBuilder, final String[] excludeFieldNames) {
+    this.diffBuilder = diffBuilder;
+    this.excludeFieldNames = excludeFieldNames;
+  }
+
+  // ... existing code ...
+
+  private boolean accept(final Field field) {
+    // ... existing code ...
+  }
+
+  private void appendFields(final Class<?> clazz) {
+    for (final Field field : FieldUtils.getAllFields(clazz)) {
+      if (accept(field)) {
+        try {
+          appendDiff(field.getName(), FieldUtils.readField(field, getLeft(), true), FieldUtils.readField(field, getRight(), true));
+        } catch (final IllegalAccessException e) {
+          // ... existing code ...
+        }
+      }
+    }
+  }
+
+  private void appendDiff(String fieldName, Object leftValue, Object rightValue) {
+    diffBuilder.append(fieldName, leftValue, rightValue);
+  }
+
+  @Override
+  public DiffResult<T> build() {
+    // ... existing code ...
+    appendFields(getLeft().getClass());
+    return diffBuilder.build();
+  }
+
+  // ... existing code ...
+
+}
+```
+
+Changes made:
+
+1. A new private method `appendDiff` is created. This method takes the field name, left value, and right value as parameters and calls `diffBuilder.append` with those arguments.
+2. Inside the `appendFields` loop, the call to `diffBuilder.append` is replaced with a call to the new `appendDiff` method.
+
+This refactoring improves code readability by separating the logic of checking field acceptance from the logic of appending differences to the builder. It also reduces code duplication. 

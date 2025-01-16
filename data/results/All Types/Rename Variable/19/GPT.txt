@@ -1,0 +1,207 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Move the job name configuration logic in `jobLauncherApplicationRunner` to a separate method for readability.  
+   - Extract the logic for applying batch conversion service customizers in `SpringBootBatchConfiguration` into its own method.  
+
+2. **Extract Class:**  
+   - Extract `SpringBootBatchConfiguration` and `DataSourceInitializerConfiguration` as separate classes for better separation of concerns.  
+
+3. **Rename Method:**  
+   - `batchDataSourceInitializer` could be renamed to `createBatchDataSourceInitializer` for clarity.  
+
+4. **Extract Variable:**  
+   - The `String tablePrefix` and `Isolation isolation` retrieval in `getTablePrefix()` and `getIsolationLevelForCreate()` can be simplified with extracted variables for clarity.  
+
+---
+
+### **Refactored Code**
+
+```java
+package org.springframework.boot.autoconfigure.batch;
+
+import java.util.List;
+import javax.sql.DataSource;
+
+import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.support.DefaultBatchConfiguration;
+import org.springframework.batch.core.explore.JobExplorer;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.ExitCodeGenerator;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.core.convert.support.ConfigurableConversionService;
+import org.springframework.jdbc.datasource.init.DatabasePopulator;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.util.StringUtils;
+
+@AutoConfiguration
+@ConditionalOnClass({ JobLauncher.class, DataSource.class, DatabasePopulator.class })
+@ConditionalOnBean({ DataSource.class, PlatformTransactionManager.class })
+@ConditionalOnMissingBean(value = DefaultBatchConfiguration.class, annotation = EnableBatchProcessing.class)
+@EnableConfigurationProperties(BatchProperties.class)
+@Import(DatabaseInitializationDependencyConfigurer.class)
+public class BatchAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(prefix = "spring.batch.job", name = "enabled", havingValue = "true", matchIfMissing = true)
+    public JobLauncherApplicationRunner jobLauncherApplicationRunner(JobLauncher jobLauncher, JobExplorer jobExplorer,
+                                                                     JobRepository jobRepository, BatchProperties properties) {
+        JobLauncherApplicationRunner runner = new JobLauncherApplicationRunner(jobLauncher, jobExplorer, jobRepository);
+        configureJobName(runner, properties);
+        return runner;
+    }
+
+    private void configureJobName(JobLauncherApplicationRunner runner, BatchProperties properties) {
+        String jobNames = properties.getJob().getName();
+        if (StringUtils.hasText(jobNames)) {
+            runner.setJobName(jobNames);
+        }
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ExitCodeGenerator.class)
+    public JobExecutionExitCodeGenerator jobExecutionExitCodeGenerator() {
+        return new JobExecutionExitCodeGenerator();
+    }
+}
+```
+
+---
+
+### **Extracted `SpringBootBatchConfiguration`**
+
+```java
+package org.springframework.boot.autoconfigure.batch;
+
+import java.util.List;
+import javax.sql.DataSource;
+
+import org.springframework.batch.core.configuration.support.DefaultBatchConfiguration;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.core.convert.support.ConfigurableConversionService;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Isolation;
+
+@Configuration(proxyBeanMethods = false)
+class SpringBootBatchConfiguration extends DefaultBatchConfiguration {
+
+    private final DataSource dataSource;
+    private final PlatformTransactionManager transactionManager;
+    private final BatchProperties properties;
+    private final List<BatchConversionServiceCustomizer> customizers;
+
+    SpringBootBatchConfiguration(DataSource dataSource, @BatchDataSource ObjectProvider<DataSource> batchDataSource,
+                                 PlatformTransactionManager transactionManager, BatchProperties properties,
+                                 ObjectProvider<BatchConversionServiceCustomizer> batchConversionServiceCustomizers) {
+        this.dataSource = batchDataSource.getIfAvailable(() -> dataSource);
+        this.transactionManager = transactionManager;
+        this.properties = properties;
+        this.customizers = batchConversionServiceCustomizers.orderedStream().toList();
+    }
+
+    @Override
+    protected DataSource getDataSource() {
+        return this.dataSource;
+    }
+
+    @Override
+    protected PlatformTransactionManager getTransactionManager() {
+        return this.transactionManager;
+    }
+
+    @Override
+    protected String getTablePrefix() {
+        return getOrDefault(properties.getJdbc().getTablePrefix(), super.getTablePrefix());
+    }
+
+    @Override
+    protected Isolation getIsolationLevelForCreate() {
+        return getOrDefault(properties.getJdbc().getIsolationLevelForCreate(), super.getIsolationLevelForCreate());
+    }
+
+    @Override
+    protected ConfigurableConversionService getConversionService() {
+        ConfigurableConversionService conversionService = super.getConversionService();
+        applyCustomizations(conversionService);
+        return conversionService;
+    }
+
+    private void applyCustomizations(ConfigurableConversionService conversionService) {
+        for (BatchConversionServiceCustomizer customizer : this.customizers) {
+            customizer.customize(conversionService);
+        }
+    }
+
+    private <T> T getOrDefault(T value, T defaultValue) {
+        return (value != null) ? value : defaultValue;
+    }
+}
+```
+
+---
+
+### **Extracted `DataSourceInitializerConfiguration`**
+
+```java
+package org.springframework.boot.autoconfigure.batch;
+
+import javax.sql.DataSource;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+
+@Configuration(proxyBeanMethods = false)
+class DataSourceInitializerConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean(BatchDataSourceScriptDatabaseInitializer.class)
+    BatchDataSourceScriptDatabaseInitializer createBatchDataSourceInitializer(DataSource dataSource,
+                                                                              @BatchDataSource ObjectProvider<DataSource> batchDataSource,
+                                                                              BatchProperties properties) {
+        return new BatchDataSourceScriptDatabaseInitializer(
+                batchDataSource.getIfAvailable(() -> dataSource),
+                properties.getJdbc());
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extracted Method:**  
+   - `configureJobName` extracted for job name configuration.  
+   - `applyCustomizations` extracted to simplify conversion service customization.  
+
+2. **Extracted Class:**  
+   - `SpringBootBatchConfiguration` and `DataSourceInitializerConfiguration` moved to separate classes for clarity.  
+
+3. **Rename Method:**  
+   - `batchDataSourceInitializer` renamed to `createBatchDataSourceInitializer`.  
+
+4. **Extract Variable:**  
+   - Used `getOrDefault` for simplifying null checks in `getTablePrefix` and `getIsolationLevelForCreate`.  
+
+---
+
+### **Benefits**
+
+- **Improved Readability:** Smaller, well-named methods/classes make the logic easier to follow.  
+- **Better Maintainability:** Isolated components reduce complexity and make testing/refactoring easier.  
+- **Enhanced Clarity:** Clearer method and variable names improve code comprehension.
+
+No further refactoring is necessary.

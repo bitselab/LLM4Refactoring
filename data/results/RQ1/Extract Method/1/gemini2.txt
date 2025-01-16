@@ -1,0 +1,64 @@
+Certainly! There is a refactoring opportunity in the given code snippet to extract a method to improve readability and reusability. The method can be named something like `checkForMatch` that encapsulates the logic for finding a match and handling the logic based on the match result. Here's the refactored code:
+
+```java
+package com.puppycrawl.tools.checkstyle.checks.regexp;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.puppycrawl.tools.checkstyle.FileStatefulCheck;
+import com.puppycrawl.tools.checkstyle.api.AbstractCheck;
+import com.puppycrawl.tools.checkstyle.api.DetailAST;
+import com.puppycrawl.tools.checkstyle.api.FileContents;
+import com.puppycrawl.tools.checkstyle.api.FileText;
+import com.puppycrawl.tools.checkstyle.api.LineColumn;
+import com.puppycrawl.tools.checkstyle.utils.CommonUtil;
+
+// ... (rest of the class definition)
+
+@Override
+@SuppressWarnings("deprecation")
+public void beginTree(DetailAST rootAST) {
+  matcher = format.matcher(getFileContents().getText().getFullText());
+  matchCount = 0;
+  errorCount = 0;
+  checkForMatch();
+}
+
+private void checkForMatch() {
+  if (matcher.find()) {
+    final FileText text = getFileContents().getText();
+    final LineColumn start = text.lineColumn(matcher.start());
+    final int startLine = start.getLine();
+
+    final boolean ignore = isIgnore(startLine, text, start);
+
+    if (!ignore) {
+      matchCount++;
+      if (illegalPattern || checkForDuplicates && matchCount - 1 > duplicateLimit) {
+        errorCount++;
+        logMessage(startLine);
+      }
+    }
+    if (canContinueValidation(ignore)) {
+      checkForMatch();
+    }
+  } else if (!illegalPattern && matchCount == 0) {
+    String msg;
+    if (message == null || message.isEmpty()) {
+      msg = format.pattern();
+    } else {
+      msg = message;
+    }
+
+    if (errorCount >= errorLimit) {
+      msg = ERROR_LIMIT_EXCEEDED_MESSAGE + msg;
+    }
+    log(1, MSG_REQUIRED_REGEXP, msg);
+  }
+}
+
+// ... (rest of the class members)
+```
+
+The original logic for finding the match and handling it has been moved to a new private helper method `checkForMatch`. This improves the readability of the `beginTree` method by separating the core logic into a distinct function.

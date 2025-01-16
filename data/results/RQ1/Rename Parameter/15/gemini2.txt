@@ -1,0 +1,45 @@
+There are two potential opportunities for rename parameter refactoring in the provided code:
+
+1. **Refactoring parameter "p2" in DataClass constructor:**
+
+The parameter named "p2" in the `DataClass` constructor is a less descriptive name compared to "param2". Renaming it to "param2" would improve readability.
+
+Here's the refactored code:
+
+```java
+private static class DataClass {
+
+    @NotNull
+    private final String param1;
+
+    private final boolean param2; // Renamed from p2
+
+    private int param3;
+
+    @ConstructorProperties({"param1", "param2", "optionalParam"})
+    DataClass(String param1, boolean param2, Optional<Integer> optionalParam) {
+        this.param1 = param1;
+        this.param2 = param2;
+        Assert.notNull(optionalParam, "Optional must not be null");
+        optionalParam.ifPresent(integer -> this.param3 = integer);
+    }
+
+    public String param1() {
+        return this.param1;
+    }
+
+    public boolean param2() {
+        return this.param2;
+    }
+
+    public int param3() {
+        return this.param3;
+    }
+}
+```
+
+2. **Refactoring constructor parameter names in DataClass:**
+
+While not strictly necessary for readability in this specific case, all constructor parameter names could be refactored to match the corresponding field names (`param1`, `param2`, `optionalParam`) for better consistency.
+
+This refactoring would be optional based on your team's coding conventions.

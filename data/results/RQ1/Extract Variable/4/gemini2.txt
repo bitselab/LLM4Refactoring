@@ -1,0 +1,109 @@
+## Refactoring Opportunities
+
+There are a few opportunities for Extract Variable refactoring in the provided code snippet:
+
+1. **Extracting `KNN_DIM`**:
+
+The constant `KNN_DIM` is used multiple times throughout the code. We can extract it into a variable with a descriptive name like `VECTOR_DIMENSION`.
+
+```java
+private static final int VECTOR_DIMENSION = 3;
+```
+
+2. **Extracting DFS Search Type**:
+
+The creation of `SearchType.DFS_QUERY_THEN_FETCH` is repeated within the `assertResponse` call. We can extract this into a variable named `dfsSearchType`.
+
+```java
+SearchType dfsSearchType = SearchType.DFS_QUERY_THEN_FETCH;
+
+assertResponse(
+    prepareSearch()
+        .setQuery(q)
+        .setTrackTotalHits(true)
+        .setProfile(true)
+        .setSearchType(dfsSearchType)
+        .setKnnSearch(randomList(2, 5, () -> new KnnSearchBuilder(
+                vectorField,
+                new float[] { randomFloat(), randomFloat(), randomFloat() },
+                randomIntBetween(5, 10),
+                50,
+                randomBoolean() ? null : randomFloat()
+        ))),
+    // ...
+);
+```
+
+## Refactored Code
+
+Here's the refactored code with the mentioned changes:
+
+```java
+public class DfsProfilerIT extends ESIntegTestCase {
+
+  private static final int VECTOR_DIMENSION = 3;
+
+  public void testProfileDfs() throws Exception {
+    String textField = "text_field";
+    String numericField = "number";
+    String vectorField = "vector";
+    String indexName = "text-dfs-profile";
+    createIndex(indexName, vectorField);
+    ensureGreen();
+
+    int numDocs = randomIntBetween(10, 50);
+    IndexRequestBuilder[] docs = new IndexRequestBuilder[numDocs];
+    for (int i = 0; i < numDocs; i++) {
+      docs[i] = prepareIndex(indexName).setId(String.valueOf(i))
+          .setSource(
+              textField,
+              English.intToEnglish(i),
+              numericField,
+              i,
+              vectorField,
+              new float[] { randomFloat(), randomFloat(), randomFloat() }
+          );
+    }
+    indexRandom(true, docs);
+    refresh();
+    int iters = between(5, 10);
+    for (int i = 0; i < iters; i++) {
+      QueryBuilder q = randomQueryBuilder(List.of(textField), List.of(numericField), numDocs, 3);
+      if (randomBoolean()) {
+        new KnnSearchBuilder(
+            vectorField,
+            new float[] { randomFloat(), randomFloat(), randomFloat() },
+            randomIntBetween(5, 10),
+            50,
+            randomBoolean() ? null : randomFloat()
+        ).addFilterQuery(q);
+      }
+      logger.info("Query: {}", q);
+
+      SearchType dfsSearchType = SearchType.DFS_QUERY_THEN_FETCH;
+
+      assertResponse(
+          prepareSearch()
+              .setQuery(q)
+              .setTrackTotalHits(true)
+              .setProfile(true)
+              .setSearchType(dfsSearchType)
+              .setKnnSearch(randomList(2, 5, () -> new KnnSearchBuilder(
+                  vectorField,
+                  new float[] { randomFloat(), randomFloat(), randomFloat() },
+                  randomIntBetween(5, 10),
+                  50,
+                  randomBoolean() ? null : randomFloat()
+              ))),
+          response -> {
+            // ... (rest of the code remains unchanged)
+          }
+      );
+    }
+  }
+
+  // ... (other methods remain unchanged)
+}
+```
+
+These refactorings improve code readability and maintainability by reducing redundancy.

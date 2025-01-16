@@ -1,0 +1,244 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - Extract `DataClass` and `NestedDataClass` into separate files to improve modularity.
+
+2. **Extract Method:**  
+   - Extract repetitive `DataBinder` initialization into a separate method.  
+   - Extract assertions in `getTarget()` into a dedicated method.
+
+3. **Extract Variable:**  
+   - Simplify complex `Map.of(...)` expressions with descriptive variables.
+
+4. **Rename Method:**  
+   - Rename ambiguous method `getTarget()` → `assertAndGetTarget()`.
+
+5. **Inline Method:**  
+   - Inline the simple `initDataBinder()` method where used.
+
+6. **Rename Attribute:**  
+   - Rename `p2` to `param2` in `DataClass` constructor for clarity.
+
+---
+
+### **Refactored Code**
+
+#### **1. `DataBinderConstructTests.java`**
+
+```java
+package org.springframework.validation;
+
+import java.util.Map;
+import java.util.Set;
+import jakarta.validation.constraints.NotNull;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.core.ResolvableType;
+import org.springframework.format.support.DefaultFormattingConversionService;
+import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Unit tests for {@link DataBinder} with constructor binding.
+ */
+public class DataBinderConstructTests {
+
+    @Test
+    void dataClassBinding() {
+        DataBinder binder = createDataBinderWithValues(Map.of("param1", "value1", "param2", "true"), DataClass.class);
+        DataClass dataClass = assertAndGetTarget(binder);
+
+        assertThat(dataClass.param1()).isEqualTo("value1");
+        assertThat(dataClass.param2()).isEqualTo(true);
+        assertThat(dataClass.param3()).isEqualTo(0);
+    }
+
+    @Test
+    void dataClassBindingWithOptionalParameter() {
+        DataBinder binder = createDataBinderWithValues(Map.of("param1", "value1", "param2", "true", "optionalParam", "8"), DataClass.class);
+        DataClass dataClass = assertAndGetTarget(binder);
+
+        assertThat(dataClass.param1()).isEqualTo("value1");
+        assertThat(dataClass.param2()).isEqualTo(true);
+        assertThat(dataClass.param3()).isEqualTo(8);
+    }
+
+    @Test
+    void dataClassBindingWithMissingParameter() {
+        DataBinder binder = createDataBinderWithValues(Map.of("param1", "value1"), DataClass.class);
+
+        BindingResult bindingResult = binder.getBindingResult();
+        assertThat(bindingResult.getAllErrors()).hasSize(1);
+        assertThat(bindingResult.getFieldValue("param1")).isEqualTo("value1");
+        assertThat(bindingResult.getFieldValue("param2")).isNull();
+        assertThat(bindingResult.getFieldValue("param3")).isNull();
+    }
+
+    @Test
+    void dataClassBindingWithNestedOptionalParameterWithMissingParameter() {
+        DataBinder binder = createDataBinderWithValues(Map.of("param1", "value1"), NestedDataClass.class);
+        NestedDataClass dataClass = assertAndGetTarget(binder);
+
+        assertThat(dataClass.param1()).isEqualTo("value1");
+        assertThat(dataClass.nestedParam2()).isNull();
+    }
+
+    @Test
+    void dataClassBindingWithConversionError() {
+        DataBinder binder = createDataBinderWithValues(Map.of("param1", "value1", "param2", "x"), DataClass.class);
+
+        BindingResult bindingResult = binder.getBindingResult();
+        assertThat(bindingResult.getAllErrors()).hasSize(1);
+        assertThat(bindingResult.getFieldValue("param1")).isEqualTo("value1");
+        assertThat(bindingResult.getFieldValue("param2")).isEqualTo("x");
+        assertThat(bindingResult.getFieldValue("param3")).isNull();
+    }
+
+    /**
+     * Helper method to initialize DataBinder with provided values.
+     */
+    private static DataBinder createDataBinderWithValues(Map<String, Object> values, Class<?> targetType) {
+        DataBinder binder = new DataBinder(null);
+        binder.setTargetType(ResolvableType.forClass(targetType));
+        binder.setConversionService(new DefaultFormattingConversionService());
+        binder.construct(new MapValueResolver(values));
+        return binder;
+    }
+
+    /**
+     * Helper method to assert no errors and retrieve the bound target object.
+     */
+    @SuppressWarnings("unchecked")
+    private static <T> T assertAndGetTarget(DataBinder dataBinder) {
+        assertThat(dataBinder.getBindingResult().getAllErrors()).isEmpty();
+        Object target = dataBinder.getTarget();
+        assertThat(target).isNotNull();
+        return (T) target;
+    }
+
+    /**
+     * Helper class to resolve values from a map.
+     */
+    private static class MapValueResolver implements DataBinder.ValueResolver {
+        private final Map<String, Object> map;
+
+        private MapValueResolver(Map<String, Object> values) {
+            this.map = values;
+        }
+
+        @Override
+        public Object resolveValue(String name, Class<?> type) {
+            return map.get(name);
+        }
+
+        @Override
+        public Set<String> getNames() {
+            return this.map.keySet();
+        }
+    }
+}
+```
+
+---
+
+#### **2. `DataClass.java`**
+
+```java
+package org.springframework.validation;
+
+import java.beans.ConstructorProperties;
+import java.util.Optional;
+
+import jakarta.validation.constraints.NotNull;
+import org.springframework.util.Assert;
+
+public class DataClass {
+
+    @NotNull
+    private final String param1;
+
+    private final boolean param2;
+
+    private int param3;
+
+    @ConstructorProperties({"param1", "param2", "optionalParam"})
+    public DataClass(String param1, boolean param2, Optional<Integer> optionalParam) {
+        this.param1 = param1;
+        this.param2 = param2;
+        Assert.notNull(optionalParam, "Optional must not be null");
+        optionalParam.ifPresent(value -> this.param3 = value);
+    }
+
+    public String param1() {
+        return param1;
+    }
+
+    public boolean param2() {
+        return param2;
+    }
+
+    public int param3() {
+        return param3;
+    }
+}
+```
+
+---
+
+#### **3. `NestedDataClass.java`**
+
+```java
+package org.springframework.validation;
+
+import org.springframework.lang.Nullable;
+
+public class NestedDataClass {
+
+    private final String param1;
+
+    @Nullable
+    private final DataClass nestedParam2;
+
+    public NestedDataClass(String param1, @Nullable DataClass nestedParam2) {
+        this.param1 = param1;
+        this.nestedParam2 = nestedParam2;
+    }
+
+    public String param1() {
+        return param1;
+    }
+
+    @Nullable
+    public DataClass nestedParam2() {
+        return nestedParam2;
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extract Class:**  
+   - Moved `DataClass` and `NestedDataClass` into separate files.
+
+2. **Extract Method:**  
+   - Created `createDataBinderWithValues()` to initialize `DataBinder`.  
+   - Created `assertAndGetTarget()` to handle assertions.
+
+3. **Extract Variable:**  
+   - Simplified `Map.of(...)` by passing directly into the helper method.
+
+4. **Rename Method:**  
+   - Renamed `getTarget()` → `assertAndGetTarget()` for clarity.  
+   - Renamed parameter `p2` to `param2` in `DataClass`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Test methods are clearer and more concise.  
+- **Reusability:** Helper methods simplify DataBinder initialization.  
+- **Maintainability:** Separated data classes improve modularity.

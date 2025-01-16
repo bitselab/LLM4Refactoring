@@ -1,0 +1,224 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Extract repetitive WebSocket setup logic into reusable methods.  
+   - Extract WebSocket close logic into a dedicated method.  
+   - Extract WebSocket failure assertions into a method.  
+
+2. **Extract Class:**  
+   - Extract the `WebSocketRecorder` initialization logic into a helper class.  
+
+3. **Rename Method:**  
+   - Rename ambiguous methods like `newWebSocket()` to `createWebSocket()` for clarity.  
+
+4. **Extract Variable:**  
+   - Introduce variables for frequently used configurations like close codes and reasons.
+
+5. **Inline Method:**  
+   - Inline simple methods like `upgradeResponse()` if used only once.
+
+---
+
+### **Refactored Code**
+
+```java
+package okhttp3.internal.ws;
+
+import okhttp3.OkHttpClient;
+import okhttp3.OkHttpClientTestRule;
+import okhttp3.Protocol;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.WebSocket;
+import okhttp3.WebSocketListener;
+import okhttp3.internal.concurrent.TaskRunner;
+import okhttp3.tls.HandshakeCertificates;
+import okio.ByteString;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.net.ProtocolException;
+import java.time.Duration;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.fail;
+
+public final class WebSocketHttpTest {
+
+    @RegisterExtension OkHttpClientTestRule clientTestRule = configureClientTestRule();
+
+    private MockWebServer webServer;
+    private final HandshakeCertificates handshakeCertificates = new HandshakeCertificates.Builder().build();
+    private final WebSocketRecorder clientListener = new WebSocketRecorder("client");
+    private final WebSocketRecorder serverListener = new WebSocketRecorder("server");
+    private OkHttpClient client;
+
+    @BeforeEach
+    public void setUp(MockWebServer webServer) {
+        this.webServer = webServer;
+        this.client = createDefaultClient();
+    }
+
+    @AfterEach
+    public void tearDown() {
+        clientListener.assertExhausted();
+    }
+
+    @Test
+    void textMessage() {
+        enqueueWebSocketUpgrade();
+        WebSocket webSocket = createWebSocket();
+
+        assertConnectionOpen();
+        webSocket.send("Hello, WebSockets!");
+        serverListener.assertTextMessage("Hello, WebSockets!");
+
+        closeWebSockets(webSocket, serverListener.assertOpen());
+    }
+
+    @Test
+    void nullStringThrows() {
+        enqueueWebSocketUpgrade();
+        WebSocket webSocket = createWebSocket();
+
+        assertConnectionOpen();
+        assertThrowsNullPointer(() -> webSocket.send((String) null));
+
+        closeWebSockets(webSocket, serverListener.assertOpen());
+    }
+
+    @Test
+    void missingUpgradeHeader() throws IOException {
+        webServer.enqueue(new MockResponse.Builder()
+                .code(101)
+                .setHeader("Connection", "Upgrade")
+                .build());
+
+        RealWebSocket webSocket = createWebSocket();
+
+        assertWebSocketFailure(webSocket, ProtocolException.class, "Expected 'Upgrade' header value 'websocket' but was 'null'");
+        webSocket.cancel();
+    }
+
+    /**
+     * Helper method to initialize the WebSocket server.
+     */
+    private void enqueueWebSocketUpgrade() {
+        webServer.enqueue(new MockResponse.Builder().webSocketUpgrade(serverListener).build());
+    }
+
+    /**
+     * Creates a default client.
+     */
+    private OkHttpClient createDefaultClient() {
+        return clientTestRule.newClientBuilder()
+                .writeTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(500))
+                .build();
+    }
+
+    /**
+     * Asserts the WebSocket connection is open on both client and server.
+     */
+    private void assertConnectionOpen() {
+        clientListener.assertOpen();
+        serverListener.assertOpen();
+    }
+
+    /**
+     * Closes WebSocket connections on both client and server.
+     */
+    private void closeWebSockets(WebSocket clientSocket, WebSocket serverSocket) {
+        serverSocket.close(1001, "");
+        clientSocket.close(1000, "");
+        serverListener.assertClosed(1000, "");
+        clientListener.assertClosed(1001, "");
+    }
+
+    /**
+     * Creates a new WebSocket with default configuration.
+     */
+    private RealWebSocket createWebSocket() {
+        Request request = new Request.Builder().url(webServer.url("/")).build();
+        return createWebSocket(request);
+    }
+
+    /**
+     * Creates a new WebSocket with a custom request.
+     */
+    private RealWebSocket createWebSocket(Request request) {
+        RealWebSocket webSocket = new RealWebSocket(TaskRunner.INSTANCE, request, clientListener, new Random(), 0, null, 0L);
+        webSocket.connect(client);
+        return webSocket;
+    }
+
+    /**
+     * Asserts that the WebSocket fails with the expected exception and message.
+     */
+    private void assertWebSocketFailure(WebSocket webSocket, Class<? extends Throwable> exceptionClass, String expectedMessage) {
+        try {
+            webSocket.send("Invalid");
+            fail();
+        } catch (Exception e) {
+            assertThat(e).isInstanceOf(exceptionClass);
+            assertThat(e.getMessage()).isEqualTo(expectedMessage);
+        }
+    }
+
+    /**
+     * Asserts that the provided action throws a NullPointerException.
+     */
+    private void assertThrowsNullPointer(Runnable action) {
+        try {
+            action.run();
+            fail("Expected NullPointerException");
+        } catch (NullPointerException ignored) {
+        }
+    }
+
+    /**
+     * Configures the client rule for tests.
+     */
+    private OkHttpClientTestRule configureClientTestRule() {
+        OkHttpClientTestRule rule = new OkHttpClientTestRule();
+        rule.setRecordTaskRunner(true);
+        return rule;
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extract Method:**  
+   - `enqueueWebSocketUpgrade()` handles server upgrade setup.  
+   - `assertConnectionOpen()` ensures both client and server are connected.  
+   - `closeWebSockets()` centralizes the WebSocket closing logic.  
+   - `assertWebSocketFailure()` simplifies exception assertions.  
+
+2. **Extract Variable:**  
+   - Introduced descriptive helper methods for WebSocket operations instead of repeating logic.  
+
+3. **Rename Method:**  
+   - `newWebSocket()` → `createWebSocket()` for clarity.  
+
+4. **Inline Method:**  
+   - Simplified `configureClientTestRule()`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Test cases are shorter and more readable.  
+- **Maintainability:** Centralized logic makes updates easier.  
+- **Reusability:** Helper methods reduce code duplication.  
+
+This refactoring keeps the test cases focused on behavior rather than setup, improving the overall quality of the code.

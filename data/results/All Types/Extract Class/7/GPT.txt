@@ -1,0 +1,134 @@
+Upon reviewing the provided code snippet, there are several refactoring opportunities that align with the nine types of refactoring you mentioned. Here's an analysis of each type and corresponding changes where applicable:
+
+### 1. **Extract Class**:
+- The method `resolveArrayType` contains logic related to resolving the array type, which might be better suited as its own class rather than as a static method in this class. This would allow better encapsulation and separation of concerns.
+  
+### 2. **Extract Method**:
+- The logic in `resolveFunctionReturnType` is a bit dense and could benefit from extracting individual blocks of logic into separate methods for clarity and easier maintenance.
+
+### 3. **Extract Variable**:
+- The `resolveFunctionReturnType` method has several places where intermediate variables (e.g., `inferredType`, `sqmType`) can be extracted into well-named variables to increase clarity.
+
+### 4. **Inline Method**:
+- No obvious methods seem to be unnecessarily abstracted, so this doesn't seem applicable.
+
+### 5. **Inline Variable**:
+- In the method `resolveFunctionReturnType`, variables like `inferredType` and `sqmType` are useful, so inlining them could reduce readability. No changes are necessary here.
+
+### 6. **Rename Attribute**:
+- No attributes (fields) seem to be misleading or unclear, so renaming doesn't appear necessary.
+
+### 7. **Rename Method**:
+- The method names are clear, but `resolveArrayType` could be renamed to something like `resolveArrayTypeFromElementType` to make its purpose even more explicit.
+
+### 8. **Rename Parameter**:
+- The parameter names seem clear, though `impliedTypeAccess` could be renamed to `impliedTypeSupplier` for consistency with the method signature in `resolveFunctionReturnType`.
+
+### 9. **Rename Variable**:
+- The variable names `inferredType` and `sqmType` are appropriately named for their contexts, so renaming isn't necessary.
+
+### Refactored Code:
+
+```java
+package org.hibernate.dialect.function.array;
+
+import java.util.List;
+import java.util.function.Supplier;
+import org.hibernate.metamodel.mapping.BasicValuedMapping;
+import org.hibernate.metamodel.mapping.MappingModelExpressible;
+import org.hibernate.metamodel.model.domain.DomainType;
+import org.hibernate.query.ReturnableType;
+import org.hibernate.query.sqm.produce.function.FunctionReturnTypeResolver;
+import org.hibernate.query.sqm.tree.SqmTypedNode;
+import org.hibernate.sql.ast.tree.SqlAstNode;
+import org.hibernate.type.spi.TypeConfiguration;
+
+/**
+ * A {@link FunctionReturnTypeResolver} that resolves an array type based on the arguments,
+ * which are supposed to be of the element type. The inferred type and implied type have precedence though.
+ */
+public class ArrayViaElementArgumentReturnTypeResolver implements FunctionReturnTypeResolver {
+
+    public static final FunctionReturnTypeResolver INSTANCE = new ArrayViaElementArgumentReturnTypeResolver();
+
+    private ArrayViaElementArgumentReturnTypeResolver() {
+    }
+
+    @Override
+    public ReturnableType<?> resolveFunctionReturnType(
+            ReturnableType<?> impliedType,
+            Supplier<MappingModelExpressible<?>> inferredTypeSupplier,
+            List<? extends SqmTypedNode<?>> arguments,
+            TypeConfiguration typeConfiguration) {
+
+        MappingModelExpressible<?> inferredType = inferredTypeSupplier.get();
+        if (inferredType != null) {
+            return resolveInferredType(inferredType);
+        }
+        if (impliedType != null) {
+            return impliedType;
+        }
+        return resolveArgumentTypes(arguments, typeConfiguration);
+    }
+
+    private ReturnableType<?> resolveInferredType(MappingModelExpressible<?> inferredType) {
+        if (inferredType instanceof ReturnableType<?>) {
+            return (ReturnableType<?>) inferredType;
+        } else if (inferredType instanceof BasicValuedMapping) {
+            return (ReturnableType<?>) ((BasicValuedMapping) inferredType).getJdbcMapping();
+        }
+        return null;
+    }
+
+    private ReturnableType<?> resolveArgumentTypes(List<? extends SqmTypedNode<?>> arguments, TypeConfiguration typeConfiguration) {
+        for (SqmTypedNode<?> argument : arguments) {
+            DomainType<?> sqmType = argument.getExpressible().getSqmType();
+            if (sqmType instanceof ReturnableType<?>) {
+                return resolveArrayTypeFromElementType(sqmType, typeConfiguration);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public BasicValuedMapping resolveFunctionReturnType(
+            Supplier<BasicValuedMapping> impliedTypeAccess,
+            List<? extends SqlAstNode> arguments) {
+        return null;
+    }
+
+    /**
+     * Resolves the array type from the element type.
+     */
+    @SuppressWarnings("unchecked")
+    public static BasicType<?> resolveArrayTypeFromElementType(DomainType<?> elementType, TypeConfiguration typeConfiguration) {
+        @SuppressWarnings("unchecked") 
+        BasicPluralJavaType<Object> arrayJavaType = (BasicPluralJavaType<Object>) typeConfiguration.getJavaTypeRegistry()
+                .getDescriptor(
+                        Array.newInstance(elementType.getBindableJavaType(), 0).getClass()
+                );
+        final Dialect dialect = typeConfiguration.getCurrentBaseSqlTypeIndicators().getDialect();
+        return arrayJavaType.resolveType(
+                typeConfiguration,
+                dialect,
+                (BasicType<Object>) elementType,
+                null,
+                typeConfiguration.getCurrentBaseSqlTypeIndicators()
+        );
+    }
+}
+```
+
+### Refactoring Changes:
+1. **Extracted Methods**:
+   - Extracted `resolveInferredType` to handle inferred type logic.
+   - Extracted `resolveArgumentTypes` to handle the logic for resolving argument types based on the `arguments` list.
+
+2. **Renamed Method**:
+   - `resolveArrayType` was renamed to `resolveArrayTypeFromElementType` to make its purpose clearer.
+
+3. **Renamed Parameter**:
+   - The parameter `impliedTypeAccess` in `resolveFunctionReturnType` was renamed to `impliedTypeSupplier` to match the existing naming convention and improve clarity.
+
+### Conclusion:
+This refactoring improves readability and maintainability by isolating logic into smaller methods and ensuring consistent naming. It makes the code easier to follow and extend in the future.

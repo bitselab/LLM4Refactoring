@@ -1,0 +1,256 @@
+### **Refactoring Opportunities**
+
+Upon reviewing the code, several opportunities for refactoring were identified to improve readability, maintainability, and efficiency:
+
+1. **Extract Class:**  
+   - **Problem:** `RetryCache` handles both cache management and metrics tracking.  
+   - **Solution:** Extract the metrics handling into a separate `RetryCacheMetricsHandler` class.
+
+2. **Extract Method:**  
+   - **Problem:** The `waitForCompletion` method is too long and mixes logic.  
+   - **Solution:** Extract parts of the method into smaller, more focused methods.
+
+3. **Extract Variable:**  
+   - **Problem:** Repetitive creation of new `CacheEntry` objects.  
+   - **Solution:** Use helper methods to simplify object creation.
+
+4. **Rename Attribute:**  
+   - **Problem:** Variable names like `set` and `lock` are vague.  
+   - **Solution:** Rename `set` to `cacheSet` and `lock` to `cacheLock` for clarity.
+
+5. **Inline Variable:**  
+   - **Problem:** Redundant local variables in simple return statements.  
+   - **Solution:** Inline those variables.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.hadoop.ipc;
+
+import java.util.Arrays;
+import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
+
+import org.apache.hadoop.ipc.metrics.RetryCacheMetrics;
+import org.apache.hadoop.util.LightWeightCache;
+import org.apache.hadoop.util.LightWeightGSet;
+import org.apache.hadoop.util.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Refactored RetryCache for managing non-idempotent RPC request caching.
+ */
+public class RetryCache {
+
+    public static final Logger LOG = LoggerFactory.getLogger(RetryCache.class);
+    private static final int MAX_CAPACITY = 16;
+
+    private final LightWeightGSet<CacheEntry, CacheEntry> cacheSet;
+    private final long expirationTime;
+    private final String cacheName;
+    private final ReentrantLock cacheLock = new ReentrantLock();
+    private final RetryCacheMetricsHandler metricsHandler;
+
+    /**
+     * Constructor
+     */
+    public RetryCache(String cacheName, double percentage, long expirationTime) {
+        int capacity = Math.max(LightWeightGSet.computeCapacity(percentage, cacheName), MAX_CAPACITY);
+        this.cacheSet = new LightWeightCache<>(capacity, capacity, expirationTime, 0);
+        this.expirationTime = expirationTime;
+        this.cacheName = cacheName;
+        this.metricsHandler = new RetryCacheMetricsHandler(this);
+    }
+
+    // -------------- Cache Entry Classes --------------
+
+    public static class CacheEntry implements LightWeightCache.Entry {
+        private static final byte INPROGRESS = 0;
+        private static final byte SUCCESS = 1;
+        private static final byte FAILED = 2;
+
+        private byte state = INPROGRESS;
+        private final long clientIdMsb;
+        private final long clientIdLsb;
+        private final int callId;
+        private final long expirationTime;
+        private LightWeightGSet.LinkedElement next;
+
+        CacheEntry(byte[] clientId, int callId, long expirationTime) {
+            Preconditions.checkArgument(clientId.length == ClientId.BYTE_LENGTH, "Invalid clientId");
+            this.clientIdMsb = ClientId.getMsb(clientId);
+            this.clientIdLsb = ClientId.getLsb(clientId);
+            this.callId = callId;
+            this.expirationTime = expirationTime;
+        }
+
+        synchronized void completed(boolean success) {
+            this.state = success ? SUCCESS : FAILED;
+            this.notifyAll();
+        }
+
+        public synchronized boolean isSuccess() {
+            return state == SUCCESS;
+        }
+
+        @Override
+        public long getExpirationTime() {
+            return expirationTime;
+        }
+
+        @Override
+        public void setNext(LightWeightGSet.LinkedElement next) {
+            this.next = next;
+        }
+
+        @Override
+        public LightWeightGSet.LinkedElement getNext() {
+            return next;
+        }
+
+        @Override
+        public int hashCode() {
+            return (int) (clientIdMsb ^ clientIdLsb) * 31 + callId;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (!(obj instanceof CacheEntry)) return false;
+            CacheEntry other = (CacheEntry) obj;
+            return this.callId == other.callId &&
+                   this.clientIdMsb == other.clientIdMsb &&
+                   this.clientIdLsb == other.clientIdLsb;
+        }
+    }
+
+    public static class CacheEntryWithPayload extends CacheEntry {
+        private Object payload;
+
+        CacheEntryWithPayload(byte[] clientId, int callId, Object payload, long expirationTime) {
+            super(clientId, callId, expirationTime);
+            this.payload = payload;
+        }
+
+        public Object getPayload() {
+            return payload;
+        }
+    }
+
+    // -------------- Core Methods --------------
+
+    public void addCacheEntry(byte[] clientId, int callId) {
+        CacheEntry newEntry = createCacheEntry(clientId, callId, true);
+        lockAndPutEntry(newEntry);
+    }
+
+    public void addCacheEntryWithPayload(byte[] clientId, int callId, Object payload) {
+        CacheEntry newEntry = new CacheEntryWithPayload(clientId, callId, payload, System.nanoTime() + expirationTime);
+        lockAndPutEntry(newEntry);
+    }
+
+    private CacheEntry createCacheEntry(byte[] clientId, int callId, boolean success) {
+        return new CacheEntry(clientId, callId, System.nanoTime() + expirationTime, success);
+    }
+
+    private void lockAndPutEntry(CacheEntry entry) {
+        cacheLock.lock();
+        try {
+            cacheSet.put(entry);
+        } finally {
+            cacheLock.unlock();
+        }
+        metricsHandler.incrementCacheUpdated();
+    }
+
+    public static CacheEntry waitForCompletion(RetryCache cache, byte[] clientId, int callId) {
+        if (skipRetryCache(clientId, callId)) {
+            return null;
+        }
+        return cache != null ? cache.waitForCompletion(cache.createCacheEntry(clientId, callId, false)) : null;
+    }
+
+    private CacheEntry waitForCompletion(CacheEntry newEntry) {
+        cacheLock.lock();
+        try {
+            CacheEntry existingEntry = cacheSet.get(newEntry);
+            if (existingEntry == null) {
+                cacheSet.put(newEntry);
+                metricsHandler.incrementCacheUpdated();
+                return newEntry;
+            } else {
+                metricsHandler.incrementCacheHit();
+                return waitUntilCompleted(existingEntry);
+            }
+        } finally {
+            cacheLock.unlock();
+        }
+    }
+
+    private CacheEntry waitUntilCompleted(CacheEntry entry) {
+        synchronized (entry) {
+            while (entry.state == CacheEntry.INPROGRESS) {
+                try {
+                    entry.wait();
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        return entry;
+    }
+
+    private static boolean skipRetryCache(byte[] clientId, int callId) {
+        return !Server.isRpcInvocation() || callId < 0 || Arrays.equals(clientId, RpcConstants.DUMMY_CLIENT_ID);
+    }
+
+    // -------------- Metrics Handler (Extracted Class) --------------
+
+    private static class RetryCacheMetricsHandler {
+        private final RetryCacheMetrics retryCacheMetrics;
+
+        RetryCacheMetricsHandler(RetryCache retryCache) {
+            this.retryCacheMetrics = RetryCacheMetrics.create(retryCache);
+        }
+
+        void incrementCacheUpdated() {
+            retryCacheMetrics.incrCacheUpdated();
+        }
+
+        void incrementCacheHit() {
+            retryCacheMetrics.incrCacheHit();
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Refactorings**
+
+1. **Extract Class:**  
+   - Created `RetryCacheMetricsHandler` to manage metrics.
+
+2. **Extract Method:**  
+   - Moved repetitive logic into `lockAndPutEntry` and `createCacheEntry`.
+
+3. **Extract Variable:**  
+   - Replaced repeated object creation with helper methods.
+
+4. **Rename Attribute:**  
+   - `set` → `cacheSet`  
+   - `lock` → `cacheLock`
+
+5. **Inline Variable:**  
+   - Simplified return statements where applicable.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Clarity:** Clear separation of concerns with the extracted `RetryCacheMetricsHandler`.  
+- **Readability:** Smaller, well-named methods improve comprehension.  
+- **Maintainability:** Isolated logic simplifies future updates.

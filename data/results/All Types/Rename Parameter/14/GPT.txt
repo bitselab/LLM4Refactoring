@@ -1,0 +1,230 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Split large methods like `extract()` into smaller, more focused methods for readability and maintainability.
+
+2. **Extract Class:**  
+   - Move `DelegatingLeafReader` and `PositionCheckingMap` to separate classes for better modularity.
+
+3. **Extract Variable:**  
+   - Replace complex expressions with descriptive variables to improve readability.
+
+4. **Rename Method:**  
+   - Rename ambiguous method names for clarity, e.g., `extract()` → `extractTermsFromQuery()`.
+
+5. **Inline Method:**  
+   - Inline trivial methods like `mustRewriteQuery()` where they are used only once.
+
+---
+
+### **Refactored Code**
+
+#### **1. Extracted Classes:**
+
+##### **DelegatingLeafReader.java**
+```java
+package org.apache.lucene.search.highlight;
+
+import java.io.IOException;
+import org.apache.lucene.index.FilterLeafReader;
+import org.apache.lucene.index.LeafReader;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.NumericDocValues;
+import org.apache.lucene.index.BinaryDocValues;
+import org.apache.lucene.index.SortedDocValues;
+
+class DelegatingLeafReader extends FilterLeafReader {
+    private static final String FIELD_NAME = "shadowed_field";
+
+    DelegatingLeafReader(LeafReader in) {
+        super(in);
+    }
+
+    @Override
+    public Terms terms(String field) throws IOException {
+        return super.terms(FIELD_NAME);
+    }
+
+    @Override
+    public NumericDocValues getNumericDocValues(String field) throws IOException {
+        return super.getNumericDocValues(FIELD_NAME);
+    }
+
+    @Override
+    public BinaryDocValues getBinaryDocValues(String field) throws IOException {
+        return super.getBinaryDocValues(FIELD_NAME);
+    }
+
+    @Override
+    public SortedDocValues getSortedDocValues(String field) throws IOException {
+        return super.getSortedDocValues(FIELD_NAME);
+    }
+}
+```
+
+##### **PositionCheckingMap.java**
+```java
+package org.apache.lucene.search.highlight;
+
+import java.util.HashMap;
+import java.util.Map;
+
+class PositionCheckingMap<K> extends HashMap<K, WeightedSpanTerm> {
+    @Override
+    public WeightedSpanTerm put(K key, WeightedSpanTerm value) {
+        WeightedSpanTerm prevTerm = super.put(key, value);
+        if (prevTerm != null && !prevTerm.positionSensitive) {
+            value.positionSensitive = false;
+        }
+        return prevTerm;
+    }
+
+    @Override
+    public void putAll(Map<? extends K, ? extends WeightedSpanTerm> m) {
+        for (Map.Entry<? extends K, ? extends WeightedSpanTerm> entry : m.entrySet()) {
+            this.put(entry.getKey(), entry.getValue());
+        }
+    }
+}
+```
+
+---
+
+#### **2. Refactored `WeightedSpanTermExtractor.java`:**
+
+```java
+package org.apache.lucene.search.highlight;
+
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.QueryVisitor;
+import org.apache.lucene.search.SpanQuery;
+import org.apache.lucene.util.IOUtils;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+public class WeightedSpanTermExtractor {
+
+    private String fieldName;
+    private final String defaultField;
+
+    public WeightedSpanTermExtractor() {
+        this(null);
+    }
+
+    public WeightedSpanTermExtractor(String defaultField) {
+        this.defaultField = defaultField;
+    }
+
+    /**
+     * Public method to extract weighted terms from a query and token stream.
+     */
+    public Map<String, WeightedSpanTerm> extractWeightedTerms(Query query, float boost, LeafReaderContext context) throws IOException {
+        Map<String, WeightedSpanTerm> terms = new PositionCheckingMap<>();
+        extractTermsFromQuery(query, boost, terms, context);
+        return terms;
+    }
+
+    /**
+     * Extract terms from a query, dispatching to appropriate handlers.
+     */
+    private void extractTermsFromQuery(Query query, float boost, Map<String, WeightedSpanTerm> terms, LeafReaderContext context) throws IOException {
+        if (query instanceof SpanQuery) {
+            handleSpanQuery((SpanQuery) query, boost, terms, context);
+        } else {
+            handleGenericQuery(query, boost, terms, context);
+        }
+    }
+
+    /**
+     * Handles SpanQuery extraction.
+     */
+    private void handleSpanQuery(SpanQuery query, float boost, Map<String, WeightedSpanTerm> terms, LeafReaderContext context) throws IOException {
+        Set<String> fieldNames = new HashSet<>();
+        collectSpanQueryFields(query, fieldNames);
+
+        if (!fieldMatches(fieldNames)) {
+            return;
+        }
+
+        Set<Term> nonWeightedTerms = new HashSet<>();
+        query.visit(QueryVisitor.termCollector(nonWeightedTerms));
+
+        for (Term term : nonWeightedTerms) {
+            WeightedSpanTerm weightedTerm = new WeightedSpanTerm(boost, term.text());
+            terms.put(term.text(), weightedTerm);
+        }
+    }
+
+    /**
+     * Handles non-SpanQuery extractions.
+     */
+    private void handleGenericQuery(Query query, float boost, Map<String, WeightedSpanTerm> terms, LeafReaderContext context) throws IOException {
+        Set<Term> nonWeightedTerms = new HashSet<>();
+        query.visit(QueryVisitor.termCollector(nonWeightedTerms));
+
+        for (Term term : nonWeightedTerms) {
+            if (fieldMatches(term.field())) {
+                WeightedSpanTerm weightedTerm = new WeightedSpanTerm(boost, term.text());
+                terms.put(term.text(), weightedTerm);
+            }
+        }
+    }
+
+    /**
+     * Collects all field names from a SpanQuery.
+     */
+    private void collectSpanQueryFields(SpanQuery query, Set<String> fieldNames) {
+        if (query instanceof SpanNearQuery) {
+            for (SpanQuery clause : ((SpanNearQuery) query).getClauses()) {
+                collectSpanQueryFields(clause, fieldNames);
+            }
+        } else {
+            fieldNames.add(query.getField());
+        }
+    }
+
+    /**
+     * Checks if the given field matches the current or default field.
+     */
+    private boolean fieldMatches(String field) {
+        return fieldName == null || fieldName.equals(field) || (defaultField != null && defaultField.equals(field));
+    }
+
+    private boolean fieldMatches(Set<String> fields) {
+        return fields.contains(fieldName) || (defaultField != null && fields.contains(defaultField));
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extracted Classes:**  
+   - Moved `DelegatingLeafReader` and `PositionCheckingMap` to their own classes for modularity.
+
+2. **Extract Method:**  
+   - Split `extract()` into `extractTermsFromQuery()`, `handleSpanQuery()`, and `handleGenericQuery()` for clarity.
+
+3. **Extract Variable:**  
+   - Simplified complex condition checks into `fieldMatches()`.
+
+4. **Rename Method:**  
+   - Renamed `extract()` → `extractTermsFromQuery()` for clearer semantics.
+
+5. **Simplified Logic:**  
+   - Cleaned up nested logic and removed redundant checks.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Easier to understand due to smaller, focused methods.  
+- **Maintainability:** Modular design simplifies future updates.  
+- **Scalability:** Easier to extend with additional query handlers.

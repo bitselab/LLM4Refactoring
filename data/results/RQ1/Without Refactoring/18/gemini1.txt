@@ -1,0 +1,83 @@
+## Refactoring Opportunities and Implementation
+
+The provided code snippet presents a good structure and utilizes the Caffeine library effectively for caching `ApplicationHandler` instances. However, there are a few minor refactoring opportunities that could enhance its readability and maintainability.
+
+### 1. Rename `computeIfAbsent` to `getOrCreate`
+
+The method `computeIfAbsent` accurately reflects its functionality, but using a more descriptive name like `getOrCreate` would improve clarity. This change aligns better with the common naming convention for methods that retrieve or create an object if it doesn't exist.
+
+**Refactored code:**
+
+```java
+public ApplicationHandler getOrCreate(
+    String effectiveSolrConfigId, Supplier<ApplicationHandler> createApplicationHandler) {
+  return applicationByConfigSetId.get(effectiveSolrConfigId, k -> createApplicationHandler.get());
+}
+```
+
+### 2. Use a dedicated interface for the cache key
+
+Currently, the cache key is a `String` representing the `effectiveSolrConfigId`. While this approach works, it would be more type-safe and readable to define a dedicated interface or class specifically for representing the cache key. This would also make the code more adaptable if the key structure needs to change in the future.
+
+**Refactored code:**
+
+```java
+public interface SolrConfigCacheKey {
+  // Add methods for generating and comparing keys based on SolrConfig information
+}
+
+private final Cache<SolrConfigCacheKey, ApplicationHandler> applicationByConfigSet =
+    Caffeine.newBuilder().weakValues().build();
+
+public ApplicationHandler getOrCreate(
+    SolrConfigCacheKey key, Supplier<ApplicationHandler> createApplicationHandler) {
+  return applicationByConfigSet.get(key, k -> createApplicationHandler.get());
+}
+```
+
+### 3. Consider using a dedicated builder for the cache
+
+While the current approach of using `Caffeine.newBuilder()` is concise, creating a dedicated builder class for the `JerseyAppHandlerCache` could improve readability and maintainability. This builder could encapsulate the logic for configuring the cache, including setting the maximum size, eviction policies, and other relevant parameters.
+
+**Refactored code:**
+
+```java
+public class JerseyAppHandlerCacheBuilder {
+  private int maxSize;
+  private WeakValues weakValues;
+  // Add other configuration options
+
+  public JerseyAppHandlerCacheBuilder setMaxSize(int maxSize) {
+    this.maxSize = maxSize;
+    return this;
+  }
+
+  public JerseyAppHandlerCacheBuilder setWeakValues(boolean weakValues) {
+    this.weakValues = weakValues;
+    return this;
+  }
+
+  public JerseyAppHandlerCache build() {
+    Caffeine<Object, Object> builder = Caffeine.newBuilder();
+    if (maxSize > 0) {
+      builder.maximumSize(maxSize);
+    }
+    if (weakValues) {
+      builder.weakValues();
+    }
+    return new JerseyAppHandlerCache(builder);
+  }
+}
+
+public class JerseyAppHandlerCache {
+  private final Cache<SolrConfigCacheKey, ApplicationHandler> applicationByConfigSet;
+
+  private JerseyAppHandlerCache(Caffeine<Object, Object> builder) {
+    this.applicationByConfigSet = builder.build();
+  }
+
+  // ... existing methods ...
+}
+```
+
+These refactoring suggestions aim to improve the code's readability, maintainability, and adaptability without altering its core functionality. Implementing these changes would make the code easier to understand, modify, and extend in the future.

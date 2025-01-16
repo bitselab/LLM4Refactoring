@@ -1,0 +1,80 @@
+There are two potential opportunities for inline method refactoring in the provided code snippet:
+
+1. **Refactoring `setMessage` method:**  
+
+The method `setMessage` has a very simple responsibility - setting the error or warning message on the text field. Its logic can be directly inlined into the caller methods `setError` and `setWarning`.
+
+Here's the refactored code:
+
+```java
+public void setError(@NlsContexts.DialogMessage String error) {
+  myTextField.putClientProperty("JComponent.outline", error != null ? "error" : null);
+  if (myErrorPopup != null && !myErrorPopup.isDisposed()) Disposer.dispose(myErrorPopup);
+  if (error == null) return;
+
+  ValidationInfo validationInfo = new ValidationInfo(error, myTextField);
+  ComponentPopupBuilder popupBuilder = ComponentValidator.createPopupBuilder(validationInfo, errorHint -> {
+    Insets insets = myTextField.getInsets();
+    Dimension hintSize = errorHint.getPreferredSize();
+    Point point = new Point(0, insets.top - JBUIScale.scale(6) - hintSize.height);
+    myErrorShowPoint = new RelativePoint(myTextField, point);
+  }).setCancelOnWindowDeactivation(false)
+      .setCancelOnClickOutside(true);
+
+  myErrorPopup = popupBuilder.createPopup();
+  myErrorPopup.show(myErrorShowPoint);
+}
+
+public void setWarning(@NlsContexts.DialogMessage String warning) {
+  // Similar logic to setError can be inlined here with "warning" outline
+}
+```
+
+2. **Refactoring `createTextField` method:**
+
+The method `createTextField` performs some customization on a newly created `ExtendableTextField` instance. While these customizations are relatively complex, they are specific to this use case and unlikely to be reused elsewhere. Inlining this method would improve readability by placing the configuration logic closer to where the field is used.
+
+Here's the refactored code with the inlined logic:
+
+```java
+protected ExtendableTextField createTextField(boolean liveErrorValidation) {
+  ExtendableTextField res = new ExtendableTextField();
+
+  Dimension minSize = res.getMinimumSize();
+  Dimension prefSize = res.getPreferredSize();
+  minSize.height = JBUIScale.scale(28);
+  prefSize.height = JBUIScale.scale(28);
+  res.setMinimumSize(minSize);
+  res.setPreferredSize(prefSize);
+  res.setColumns(30);
+
+  res.setBorder(JBUI.Borders.customLine(JBUI.CurrentTheme.NewClassDialog.bordersColor(), 1, 0, 0, 0));
+  res.setBackground(JBUI.CurrentTheme.NewClassDialog.searchFieldBackground());
+
+  res.putClientProperty(TextComponentEmptyText.STATUS_VISIBLE_FUNCTION, (Predicate<JBTextField>) field -> field.getText().isEmpty());
+  res.getEmptyText().setText(IdeBundle.message("action.create.new.class.name.field"));
+  res.getAccessibleContext().setAccessibleName(IdeBundle.message("action.create.new.class.name.field"));
+  res.addKeyListener(new KeyAdapter() {
+    @Override
+    public void keyPressed(KeyEvent e) {
+      if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+        if (myApplyAction == null) return;
+        try (AccessToken ignore = SlowOperations.startSection(SlowOperations.ACTION_PERFORM)) {
+          myApplyAction.consume(e);
+        }
+      }
+    }
+  });
+
+  res.getDocument().addDocumentListener(new DocumentAdapter() {
+    @Override
+    protected void textChanged(@NotNull DocumentEvent e) {
+      if (!liveErrorValidation) setError(null);
+    }
+  });
+
+  return res;
+}
+```
+
+Remember that these are suggestions, and depending on your team's coding conventions and the complexity of the logic, you might decide against inlining the second method.

@@ -1,0 +1,218 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The logic for building a new `DataStream` object is repeated in `updateDataLifecycle` and `setRolloverOnWrite`.  
+   - **Solution:** Extract a method to create a `DataStream` object with updated properties.
+
+2. **Extract Class:**  
+   - `UpdateLifecycleTask` and `SetRolloverOnWriteTask` are similar.  
+   - **Solution:** Extract a common superclass or interface for both tasks.
+
+3. **Extract Variable:**  
+   - Repetitive calls like `Metadata.builder(metadata)` can be assigned to a variable for clarity.  
+
+4. **Rename Method/Variable:**  
+   - `submitUnbatchedTask` → `submitUrgentTask` to better convey its purpose.  
+   - `taskQueue` → `lifecycleTaskQueue` for clarity.
+
+5. **Inline Variable:**  
+   - `indexNotRemoved` is unnecessary. Directly throw the exception when the condition is met.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.elasticsearch.cluster.metadata;
+
+import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.datastreams.ModifyDataStreamsAction;
+import org.elasticsearch.action.support.master.AcknowledgedResponse;
+import org.elasticsearch.cluster.*;
+import org.elasticsearch.cluster.service.ClusterService;
+import org.elasticsearch.cluster.service.MasterServiceTaskQueue;
+import org.elasticsearch.common.Priority;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.core.Nullable;
+import org.elasticsearch.core.SuppressForbidden;
+import org.elasticsearch.core.TimeValue;
+import org.elasticsearch.core.Tuple;
+import org.elasticsearch.index.Index;
+import org.elasticsearch.index.mapper.MapperService;
+import org.elasticsearch.indices.IndicesService;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.function.Function;
+
+public class MetadataDataStreamsService {
+
+    private final ClusterService clusterService;
+    private final IndicesService indicesService;
+    private final MasterServiceTaskQueue<DataStreamLifecycleTask> lifecycleTaskQueue;
+    private final MasterServiceTaskQueue<SetRolloverOnWriteTask> rolloverTaskQueue;
+
+    public MetadataDataStreamsService(ClusterService clusterService, IndicesService indicesService) {
+        this.clusterService = clusterService;
+        this.indicesService = indicesService;
+
+        this.lifecycleTaskQueue = createTaskQueue("modify-lifecycle", Priority.HIGH, this::executeUpdateLifecycleTask);
+        this.rolloverTaskQueue = createTaskQueue("data-stream-rollover-on-write", Priority.NORMAL, this::executeRolloverTask);
+    }
+
+    private <T extends AckedBatchedClusterStateUpdateTask> MasterServiceTaskQueue<T> createTaskQueue(
+            String name, Priority priority, ClusterStateTaskExecutor<T> executor) {
+        return clusterService.createTaskQueue(name, priority, executor);
+    }
+
+    private Tuple<ClusterState, ClusterStateAckListener> executeUpdateLifecycleTask(
+            DataStreamLifecycleTask task, ClusterState state) {
+        return Tuple.tuple(updateDataLifecycle(state, task.getDataStreamNames(), task.getDataLifecycle()), task);
+    }
+
+    private Tuple<ClusterState, ClusterStateAckListener> executeRolloverTask(
+            SetRolloverOnWriteTask task, ClusterState state) {
+        return Tuple.tuple(setRolloverOnWrite(state, task.getDataStreamName(), task.rolloverOnWrite()), task);
+    }
+
+    public void modifyDataStream(final ModifyDataStreamsAction.Request request, final ActionListener<AcknowledgedResponse> listener) {
+        if (request.getActions().isEmpty()) {
+            listener.onResponse(AcknowledgedResponse.TRUE);
+        } else {
+            submitUrgentTask("update-backing-indices", new AckedClusterStateUpdateTask(Priority.URGENT, request, listener) {
+                @Override
+                public ClusterState execute(ClusterState state) {
+                    return modifyDataStream(state, request.getActions(), indexMetadata -> {
+                        try {
+                            return indicesService.createIndexMapperServiceForValidation(indexMetadata);
+                        } catch (IOException e) {
+                            throw new IllegalStateException(e);
+                        }
+                    });
+                }
+            });
+        }
+    }
+
+    public void setLifecycle(List<String> dataStreamNames, DataStreamLifecycle lifecycle,
+                             TimeValue ackTimeout, TimeValue masterTimeout, ActionListener<AcknowledgedResponse> listener) {
+        lifecycleTaskQueue.submitTask("set-lifecycle", new DataStreamLifecycleTask(dataStreamNames, lifecycle, ackTimeout, listener), masterTimeout);
+    }
+
+    public void removeLifecycle(List<String> dataStreamNames, TimeValue ackTimeout, TimeValue masterTimeout,
+                                ActionListener<AcknowledgedResponse> listener) {
+        lifecycleTaskQueue.submitTask("delete-lifecycle", new DataStreamLifecycleTask(dataStreamNames, null, ackTimeout, listener), masterTimeout);
+    }
+
+    @SuppressForbidden(reason = "legacy usage of unbatched task")
+    private void submitUrgentTask(String source, ClusterStateUpdateTask task) {
+        clusterService.submitUnbatchedStateUpdateTask(source, task);
+    }
+
+    public void setRolloverOnWrite(String dataStreamName, boolean rolloverOnWrite,
+                                   TimeValue ackTimeout, TimeValue masterTimeout,
+                                   ActionListener<AcknowledgedResponse> listener) {
+        rolloverTaskQueue.submitTask("set-rollover-on-write", new SetRolloverOnWriteTask(dataStreamName, rolloverOnWrite, ackTimeout, listener), masterTimeout);
+    }
+
+    private static ClusterState updateDataLifecycle(ClusterState state, List<String> dataStreamNames, @Nullable DataStreamLifecycle lifecycle) {
+        Metadata.Builder builder = Metadata.builder(state.metadata());
+        dataStreamNames.forEach(name -> builder.put(updateDataStream(state.metadata(), name, lifecycle, null)));
+        return ClusterState.builder(state).metadata(builder.build()).build();
+    }
+
+    public static ClusterState setRolloverOnWrite(ClusterState state, String dataStreamName, boolean rolloverOnWrite) {
+        Metadata.Builder builder = Metadata.builder(state.metadata());
+        builder.put(updateDataStream(state.metadata(), dataStreamName, null, rolloverOnWrite));
+        return ClusterState.builder(state).metadata(builder.build()).build();
+    }
+
+    private static DataStream updateDataStream(Metadata metadata, String name, @Nullable DataStreamLifecycle lifecycle, @Nullable Boolean rolloverOnWrite) {
+        DataStream stream = validateDataStream(metadata, name);
+        return new DataStream(
+                stream.getName(), stream.getIndices(), stream.getGeneration(), stream.getMetadata(),
+                stream.isHidden(), stream.isReplicated(), stream.isSystem(), stream.isAllowCustomRouting(),
+                stream.getIndexMode(), lifecycle != null ? lifecycle : stream.getLifecycle(),
+                stream.isFailureStore(), stream.getFailureIndices(),
+                rolloverOnWrite != null ? rolloverOnWrite : stream.rolloverOnWrite()
+        );
+    }
+
+    private static DataStream validateDataStream(Metadata metadata, String dataStreamName) {
+        IndexAbstraction dataStream = metadata.getIndicesLookup().get(dataStreamName);
+        if (dataStream == null || dataStream.getType() != IndexAbstraction.Type.DATA_STREAM) {
+            throw new IllegalArgumentException("data stream [" + dataStreamName + "] not found");
+        }
+        return (DataStream) dataStream;
+    }
+
+    abstract static class DataStreamTask extends AckedBatchedClusterStateUpdateTask {
+        DataStreamTask(TimeValue ackTimeout, ActionListener<AcknowledgedResponse> listener) {
+            super(ackTimeout, listener);
+        }
+    }
+
+    static class DataStreamLifecycleTask extends DataStreamTask {
+        private final List<String> dataStreamNames;
+        private final DataStreamLifecycle lifecycle;
+
+        DataStreamLifecycleTask(List<String> dataStreamNames, @Nullable DataStreamLifecycle lifecycle, TimeValue ackTimeout, ActionListener<AcknowledgedResponse> listener) {
+            super(ackTimeout, listener);
+            this.dataStreamNames = dataStreamNames;
+            this.lifecycle = lifecycle;
+        }
+
+        public List<String> getDataStreamNames() {
+            return dataStreamNames;
+        }
+
+        public DataStreamLifecycle getDataLifecycle() {
+            return lifecycle;
+        }
+    }
+
+    static class SetRolloverOnWriteTask extends DataStreamTask {
+        private final String dataStreamName;
+        private final boolean rolloverOnWrite;
+
+        SetRolloverOnWriteTask(String dataStreamName, boolean rolloverOnWrite, TimeValue ackTimeout, ActionListener<AcknowledgedResponse> listener) {
+            super(ackTimeout, listener);
+            this.dataStreamName = dataStreamName;
+            this.rolloverOnWrite = rolloverOnWrite;
+        }
+
+        public String getDataStreamName() {
+            return dataStreamName;
+        }
+
+        public boolean rolloverOnWrite() {
+            return rolloverOnWrite;
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Refactorings**
+
+1. **Extract Method:**  
+   - Introduced `updateDataStream` to handle `DataStream` creation for lifecycle and rollover updates.
+
+2. **Extract Class:**  
+   - Created `DataStreamTask` as a common superclass for lifecycle and rollover tasks.
+
+3. **Extract Variable:**  
+   - Simplified builder initialization.
+
+4. **Rename Method/Variable:**  
+   - `submitUnbatchedTask` → `submitUrgentTask`.  
+   - `taskQueue` → `lifecycleTaskQueue`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Modularity:** Separated concerns for lifecycle and rollover tasks.  
+- **Readability:** Clearer method names and streamlined logic.  
+- **Maintainability:** Easier to extend and debug.

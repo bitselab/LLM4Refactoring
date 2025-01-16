@@ -1,0 +1,56 @@
+There are a couple of opportunities for inline variable refactoring in the provided code snippet:
+
+1. **getUnderlyingFile method:**  
+The `getUnderlyingFile` method simply retrieves the absolute file using a conditional statement and returns it. This logic can be directly inlined where the `getUnderlyingFile` method is called.
+
+Here's the refactored code for this section:
+
+```java
+private File getAbsoluteFile(Resource resource) throws IOException {
+  if (resource instanceof ClassPathResource || resource instanceof FileSystemResource
+      || resource instanceof FileUrlResource) {
+    return resource.getFile().getAbsoluteFile();
+  }
+  return null;
+}
+
+// ... rest of the code
+
+public String toString() {
+  File file = getAbsoluteFile(this.resource); // Inline getUnderlyingFile
+  if (file != null) {
+    return "file [" + file + "]";
+  }
+  return this.resource.toString();
+}
+
+// ... rest of the code
+
+public boolean isSameUnderlyingResource(Resource ours, Resource other) {
+  return ours.equals(other) || isSameFile(getAbsoluteFile(ours), getAbsoluteFile(other)); // Inline getUnderlyingFile
+}
+
+// ... rest of the code
+```
+
+2. **isSameUnderlyingResource method (optional):**
+
+Similarly, the `isSameUnderlyingResource` method calls `getUnderlyingFile` twice. This can also be inlined for potentially better readability. However, this might be a trade-off depending on developer preference.
+
+Here's the code with the additional inline refactoring:
+
+```java
+private File getAbsoluteFile(Resource resource) throws IOException {
+  // ... same as before
+}
+
+// ... rest of the code
+
+public boolean isSameUnderlyingResource(Resource ours, Resource other) {
+  return ours.equals(other) || isSameFile(getAbsoluteFile(ours), getAbsoluteFile(other)); // Inline getUnderlyingFile
+}
+
+// ... rest of the code
+```
+
+Remember, inlining the second method call might slightly increase code duplication, so use your judgment based on readability and maintainability.

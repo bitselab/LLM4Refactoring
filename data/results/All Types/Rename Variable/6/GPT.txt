@@ -1,0 +1,172 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class**  
+   - Move file creation and configuration setup logic into a separate utility class (`AbfsTestUtils`).
+
+2. **Extract Method**  
+   - Simplify repetitive code blocks, especially in `testNumBackendCalls` and `testSeekAndReadWithConf`.
+
+3. **Extract Variable**  
+   - Introduce meaningful variables for magic numbers (`4`, `2`, etc.).
+
+4. **Rename Method**  
+   - Rename vague method names for better clarity (e.g., `testNumBackendCalls` → `verifyBackendCallCount`).
+
+5. **Inline Method**  
+   - Inline simple wrapper methods that do not enhance readability.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.hadoop.fs.azurebfs.services;
+
+import org.apache.hadoop.fs.FutureDataInputStreamBuilder;
+import org.apache.hadoop.fs.azurebfs.AzureBlobFileSystem;
+import org.apache.hadoop.fs.azurebfs.AzureBlobFileSystemStore;
+import org.apache.hadoop.fs.azurebfs.AbfsConfiguration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.Path;
+
+import org.junit.Test;
+
+import java.util.Map;
+
+import static org.junit.Assert.assertEquals;
+import static org.apache.hadoop.fs.azurebfs.AbfsStatistic.CONNECTIONS_MADE;
+import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.ONE_KB;
+
+public class ITestAbfsInputStreamReadFooter extends ITestAbfsInputStream {
+
+    private static final int TEN = 10;
+    private static final int TWENTY = 20;
+    private static final int MAX_FILE_SIZE_FACTOR = 4;
+    private static final int MAX_BUFFER_SIZE_FACTOR = 2;
+
+    public ITestAbfsInputStreamReadFooter() throws Exception {}
+
+    @Test
+    public void testSingleServerCallWithOptimizationEnabled() throws Exception {
+        verifyBackendCallCount(true, 1);
+    }
+
+    @Test
+    public void testMultipleServerCallsWithoutOptimization() throws Exception {
+        verifyBackendCallCount(false, 3);
+    }
+
+    private void verifyBackendCallCount(boolean optimizeFooterRead, int expectedCalls) throws Exception {
+        for (int i = 0; i <= MAX_FILE_SIZE_FACTOR; i++) {
+            for (int j = 0; j <= MAX_BUFFER_SIZE_FACTOR; j++) {
+                int fileSize = AbfsTestUtils.calculateSize(i);
+                int bufferSize = AbfsTestUtils.calculateSize(j);
+
+                AzureBlobFileSystem fs = AbfsTestUtils.configureFileSystem(optimizeFooterRead, fileSize);
+                Path testFilePath = AbfsTestUtils.createTestFile(fs, fileSize);
+
+                try (FSDataInputStream stream = AbfsTestUtils.buildInputStream(fs, testFilePath, bufferSize)) {
+                    performSeekReads(stream, fileSize);
+
+                    long callsBefore = AbfsTestUtils.getMetric(fs, CONNECTIONS_MADE);
+                    performSeekReads(stream, fileSize);
+                    long callsAfter = AbfsTestUtils.getMetric(fs, CONNECTIONS_MADE);
+
+                    assertEquals(expectedCalls, callsAfter - callsBefore);
+                }
+            }
+        }
+    }
+
+    private void performSeekReads(FSDataInputStream stream, int fileSize) throws Exception {
+        byte[] buffer = new byte[AbfsInputStream.FOOTER_SIZE];
+        stream.seek(fileSize - 8);
+        stream.read(buffer);
+        stream.seek(fileSize - (TEN * ONE_KB));
+        stream.read(buffer);
+        stream.seek(fileSize - (TWENTY * ONE_KB));
+        stream.read(buffer);
+    }
+}
+```
+
+---
+
+### **Utility Class (Extracted)**
+
+```java
+package org.apache.hadoop.fs.azurebfs.utils;
+
+import org.apache.hadoop.fs.FutureDataInputStreamBuilder;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azurebfs.AzureBlobFileSystem;
+import org.apache.hadoop.fs.azurebfs.AzureBlobFileSystemStore;
+import org.apache.hadoop.fs.azurebfs.AbfsConfiguration;
+import org.apache.hadoop.fs.FSDataInputStream;
+
+import java.util.Map;
+
+import static org.apache.hadoop.fs.azurebfs.AbfsStatistic.CONNECTIONS_MADE;
+import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.ONE_KB;
+
+public class AbfsTestUtils {
+
+    public static int calculateSize(int factor) {
+        return (int) Math.pow(2, factor) * 256 * ONE_KB;
+    }
+
+    public static AzureBlobFileSystem configureFileSystem(boolean optimizeFooterRead, int fileSize) throws Exception {
+        AzureBlobFileSystem fs = new AzureBlobFileSystem();
+        AzureBlobFileSystemStore store = fs.getAbfsStore();
+        AbfsConfiguration config = store.getAbfsConfiguration();
+        config.setOptimizeFooterRead(optimizeFooterRead);
+        if (fileSize <= config.getReadBufferSize()) {
+            config.setReadSmallFilesCompletely(false);
+        }
+        return fs;
+    }
+
+    public static Path createTestFile(AzureBlobFileSystem fs, int fileSize) throws Exception {
+        String fileName = "testFile_" + System.currentTimeMillis();
+        byte[] content = new byte[fileSize];
+        Path path = new Path("/" + fileName);
+        fs.create(path, content, true);
+        return path;
+    }
+
+    public static FSDataInputStream buildInputStream(AzureBlobFileSystem fs, Path path, int bufferSize) throws Exception {
+        FutureDataInputStreamBuilder builder = fs.openFile(path);
+        builder.opt("azure.footer.read.buffer.size", bufferSize);
+        return builder.build().get();
+    }
+
+    public static long getMetric(AzureBlobFileSystem fs, Object metricKey) {
+        Map<String, Long> metrics = fs.getInstrumentation().toMap();
+        return metrics.getOrDefault(metricKey.toString(), 0L);
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Class:**  
+   - Moved reusable logic (file creation, configuration, metric retrieval) to `AbfsTestUtils`.
+
+2. **Extract Method:**  
+   - Created `performSeekReads` for repeated seek-read operations.
+
+3. **Extract Variable:**  
+   - Introduced constants like `MAX_FILE_SIZE_FACTOR` and `MAX_BUFFER_SIZE_FACTOR`.
+
+4. **Rename Method:**  
+   - `testNumBackendCalls` → `verifyBackendCallCount` for clarity.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Simplified main test logic, focusing on testing rather than setup.  
+- **Reusability:** Utility methods streamline file system operations.  
+- **Maintainability:** Easier to modify test behavior without altering core test logic.

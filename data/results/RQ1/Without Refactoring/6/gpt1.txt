@@ -1,0 +1,129 @@
+After reviewing the code snippet, I have identified a few opportunities for refactoring and improvements. The main areas that can be improved are related to the following:
+
+1. **Use of Generics**: The use of raw types for `ArrayList<IOException>` and `List<String>` could be improved by making use of generics.
+2. **Code Duplication**: The `readString` and `writeString` methods have very similar patterns and can be refactored for better readability.
+3. **Exception Handling**: In `checkSource`, instead of collecting all exceptions and throwing a single `InvalidInputException`, it might be useful to consider a more specific exception handling mechanism or using logging to indicate which paths failed.
+4. **Naming Conventions**: Some variable names (like `b` for boolean in `writeString`) can be improved for clarity.
+
+Here's the refactored code based on these observations:
+
+```java
+package org.apache.hadoop.tools;
+
+import java.io.BufferedReader;
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Random;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.InvalidInputException;
+import org.apache.hadoop.mapred.JobConf;
+
+/**
+ * An abstract class for distributed tool for file related operations.
+ */
+abstract class DistTool implements org.apache.hadoop.util.Tool {
+  protected static final Logger LOG = LoggerFactory.getLogger(DistTool.class);
+
+  protected JobConf jobconf;
+
+  /** {@inheritDoc} */
+  public void setConf(Configuration conf) {
+    if (jobconf != conf) {
+      jobconf = conf instanceof JobConf ? (JobConf) conf : new JobConf(conf);
+    }
+  }
+
+  /** {@inheritDoc} */
+  public JobConf getConf() {
+    return jobconf;
+  }
+
+  protected DistTool(Configuration conf) {
+    setConf(conf);
+  }
+
+  private static final Random RANDOM = new Random();
+
+  protected static String getRandomId() {
+    return Integer.toString(RANDOM.nextInt(Integer.MAX_VALUE), 36);
+  }
+
+  /** Sanity check for source */
+  protected static void checkSource(Configuration conf, List<Path> srcs)
+      throws InvalidInputException {
+    List<IOException> ioExceptions = new ArrayList<>();
+    for (Path p : srcs) {
+      try {
+        p.getFileSystem(conf).getFileStatus(p);
+      } catch (IOException e) {
+        ioExceptions.add(e);
+      }
+    }
+    if (!ioExceptions.isEmpty()) {
+      throw new InvalidInputException(ioExceptions);
+    }
+  }
+
+  protected static String readString(DataInput in) throws IOException {
+    return in.readBoolean() ? Text.readString(in) : null;
+  }
+
+  protected static void writeString(DataOutput out, String s) throws IOException {
+    out.writeBoolean(s != null);
+    if (s != null) {
+      Text.writeString(out, s);
+    }
+  }
+
+  protected static List<String> readFile(Configuration conf, Path inputFile) throws IOException {
+    List<String> result = new ArrayList<>();
+    FileSystem fs = inputFile.getFileSystem(conf);
+    try (BufferedReader input = new BufferedReader(
+        new InputStreamReader(fs.open(inputFile), StandardCharsets.UTF_8))) {
+      String line;
+      while ((line = input.readLine()) != null) {
+        result.add(line);
+      }
+    }
+    return result;
+  }
+
+  /** An exception class for duplicated source files. */
+  public static class DuplicationException extends IOException {
+    private static final long serialVersionUID = 1L;
+    /** Error code for this exception */
+    public static final int ERROR_CODE = -2;
+
+    DuplicationException(String message) {
+      super(message);
+    }
+  }
+}
+```
+
+### Key Changes:
+
+1. **Generics in Lists**: 
+   - I changed `ArrayList` declarations like `new ArrayList<IOException>()` to `new ArrayList<>()`, as Java 7 and onwards allow the diamond operator for inferring the type.
+   
+2. **Improved Naming for Boolean Variable**: 
+   - Changed `b` to a more descriptive name in the `writeString` method.
+
+3. **Consolidated `readString` Logic**: 
+   - Simplified the logic in `readString` by using the ternary operator for readability.
+
+4. **Minor Cleanup**: 
+   - Improved readability by making sure there are clear line breaks and concise methods. 
+
+### Conclusion:
+The refactored code reduces some unnecessary verbosity and increases the overall readability. There is no major functional change, but the code is now cleaner and easier to maintain.

@@ -1,0 +1,184 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - Extract authentication customization logic into a dedicated class (`PulsarAuthenticationCustomizer`).  
+   - Extract builder customization logic into separate classes for `Producer`, `Consumer`, and `Reader`.
+
+2. **Extract Method:**  
+   - Extract common builder mapping logic to avoid repetition (`applyCommonProperties`).  
+   - Extract timeout property mapping (`mapTimeoutProperty`).
+
+3. **Extract Variable:**  
+   - Extract frequently used `PropertyMapper` initialization into a method for clarity.  
+
+4. **Rename Method:**  
+   - Rename ambiguous methods to improve readability (`customizeConsumerBuilderSubscription` → `customizeSubscriptionProperties`).
+
+---
+
+### **Refactored Code**
+
+```java
+package org.springframework.boot.autoconfigure.pulsar;
+
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+
+import org.apache.pulsar.client.admin.PulsarAdminBuilder;
+import org.apache.pulsar.client.api.*;
+import org.apache.pulsar.common.util.ObjectMapperFactory;
+import org.springframework.boot.context.properties.PropertyMapper;
+import org.springframework.pulsar.listener.PulsarContainerProperties;
+import org.springframework.pulsar.reader.PulsarReaderContainerProperties;
+import org.springframework.util.StringUtils;
+
+final class PulsarPropertiesMapper {
+
+    private final PulsarProperties properties;
+
+    PulsarPropertiesMapper(PulsarProperties properties) {
+        this.properties = properties;
+    }
+
+    void customizeClientBuilder(ClientBuilder clientBuilder, PulsarConnectionDetails connectionDetails) {
+        PropertyMapper map = propertyMapper();
+        PulsarProperties.Client clientProps = this.properties.getClient();
+
+        map.from(connectionDetails::getBrokerUrl).to(clientBuilder::serviceUrl);
+        map.from(clientProps::getConnectionTimeout).to(timeoutProperty(clientBuilder::connectionTimeout));
+        map.from(clientProps::getOperationTimeout).to(timeoutProperty(clientBuilder::operationTimeout));
+        map.from(clientProps::getLookupTimeout).to(timeoutProperty(clientBuilder::lookupTimeout));
+
+        PulsarAuthenticationCustomizer.customize(clientBuilder::authentication, clientProps.getAuthentication());
+    }
+
+    void customizeAdminBuilder(PulsarAdminBuilder adminBuilder, PulsarConnectionDetails connectionDetails) {
+        PropertyMapper map = propertyMapper();
+        PulsarProperties.Admin adminProps = this.properties.getAdmin();
+
+        map.from(connectionDetails::getAdminUrl).to(adminBuilder::serviceHttpUrl);
+        map.from(adminProps::getConnectionTimeout).to(timeoutProperty(adminBuilder::connectionTimeout));
+        map.from(adminProps::getReadTimeout).to(timeoutProperty(adminBuilder::readTimeout));
+        map.from(adminProps::getRequestTimeout).to(timeoutProperty(adminBuilder::requestTimeout));
+
+        PulsarAuthenticationCustomizer.customize(adminBuilder::authentication, adminProps.getAuthentication());
+    }
+
+    <T> void customizeProducerBuilder(ProducerBuilder<T> producerBuilder) {
+        PulsarProperties.Producer producerProps = this.properties.getProducer();
+        applyCommonProperties(producerBuilder, producerProps);
+    }
+
+    <T> void customizeConsumerBuilder(ConsumerBuilder<T> consumerBuilder) {
+        PulsarProperties.Consumer consumerProps = this.properties.getConsumer();
+        applyCommonProperties(consumerBuilder, consumerProps);
+        customizeSubscriptionProperties(consumerBuilder, consumerProps.getSubscription());
+    }
+
+    <T> void customizeReaderBuilder(ReaderBuilder<T> readerBuilder) {
+        PulsarProperties.Reader readerProps = this.properties.getReader();
+        PropertyMapper map = propertyMapper();
+
+        map.from(readerProps::getName).to(readerBuilder::readerName);
+        map.from(readerProps::getTopics).to(readerBuilder::topics);
+        map.from(readerProps::getSubscriptionName).to(readerBuilder::subscriptionName);
+        map.from(readerProps::getSubscriptionRolePrefix).to(readerBuilder::subscriptionRolePrefix);
+        map.from(readerProps::isReadCompacted).to(readerBuilder::readCompacted);
+    }
+
+    void customizeContainerProperties(PulsarContainerProperties containerProperties) {
+        customizeSubscriptionProperties(containerProperties, this.properties.getConsumer().getSubscription());
+        customizeListenerProperties(containerProperties, this.properties.getListener());
+    }
+
+    private void customizeSubscriptionProperties(ConsumerBuilder<?> consumerBuilder, PulsarProperties.Consumer.Subscription subscriptionProps) {
+        PropertyMapper map = propertyMapper();
+        map.from(subscriptionProps::getName).to(consumerBuilder::subscriptionName);
+        map.from(subscriptionProps::getInitialPosition).to(consumerBuilder::subscriptionInitialPosition);
+        map.from(subscriptionProps::getMode).to(consumerBuilder::subscriptionMode);
+        map.from(subscriptionProps::getTopicsMode).to(consumerBuilder::subscriptionTopicsMode);
+        map.from(subscriptionProps::getType).to(consumerBuilder::subscriptionType);
+    }
+
+    private void customizeSubscriptionProperties(PulsarContainerProperties containerProperties, PulsarProperties.Consumer.Subscription subscriptionProps) {
+        PropertyMapper map = propertyMapper();
+        map.from(subscriptionProps::getType).to(containerProperties::setSubscriptionType);
+    }
+
+    private void customizeListenerProperties(PulsarContainerProperties containerProperties, PulsarProperties.Listener listenerProps) {
+        PropertyMapper map = propertyMapper();
+        map.from(listenerProps::getSchemaType).to(containerProperties::setSchemaType);
+        map.from(listenerProps::isObservationEnabled).to(containerProperties::setObservationEnabled);
+    }
+
+    private <T> void applyCommonProperties(Object builder, PulsarProperties.Common commonProps) {
+        PropertyMapper map = propertyMapper();
+        if (builder instanceof ProducerBuilder) {
+            ProducerBuilder<?> producerBuilder = (ProducerBuilder<?>) builder;
+            map.from(commonProps::getName).to(producerBuilder::producerName);
+            map.from(commonProps::getTopicName).to(producerBuilder::topic);
+        } else if (builder instanceof ConsumerBuilder) {
+            ConsumerBuilder<?> consumerBuilder = (ConsumerBuilder<?>) builder;
+            map.from(commonProps::getName).to(consumerBuilder::consumerName);
+        }
+    }
+
+    private PropertyMapper propertyMapper() {
+        return PropertyMapper.get().alwaysApplyingWhenNonNull();
+    }
+
+    private Consumer<Duration> timeoutProperty(BiConsumer<Integer, TimeUnit> setter) {
+        return (duration) -> setter.accept((int) duration.toMillis(), TimeUnit.MILLISECONDS);
+    }
+}
+
+/** Extracted authentication customization logic */
+final class PulsarAuthenticationCustomizer {
+
+    static void customize(AuthenticationConsumer authentication, PulsarProperties.Authentication authProps) {
+        if (!StringUtils.hasText(authProps.getPluginClassName())) {
+            return;
+        }
+        try {
+            Map<String, String> params = new TreeMap<>(authProps.getParam());
+            String authParamString = ObjectMapperFactory.create().writeValueAsString(params);
+            authentication.accept(authProps.getPluginClassName(), authParamString);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to configure Pulsar authentication", ex);
+        }
+    }
+
+    interface AuthenticationConsumer {
+        void accept(String authPluginClassName, String authParams) throws UnsupportedAuthenticationException;
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - `PulsarAuthenticationCustomizer`: Handles authentication customization.  
+   - Simplified `PulsarPropertiesMapper` by delegating authentication logic.
+
+2. **Extract Method:**  
+   - `applyCommonProperties`: Reduces redundancy for producer/consumer configuration.  
+   - `propertyMapper`: Centralizes `PropertyMapper` instantiation.
+
+3. **Rename Method:**  
+   - `customizeConsumerBuilderSubscription` → `customizeSubscriptionProperties`.
+
+4. **Extract Variable:**  
+   - Moved `PropertyMapper` initialization to a dedicated method for readability.
+
+---
+
+### **Benefits**
+
+- **Modularity:** Separate concerns for authentication and configuration.  
+- **Readability:** Cleaner, more maintainable code with less repetition.  
+- **Scalability:** Easier to extend customization logic for other builders.

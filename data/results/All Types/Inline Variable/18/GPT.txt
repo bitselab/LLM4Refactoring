@@ -1,0 +1,201 @@
+### **Refactoring Analysis**
+
+The `RequestUtil` class is quite complex, handling various layers of request parameter processing, JSON merging, and macro expansion. Several refactoring opportunities exist to improve the code's readability, modularity, and maintainability.
+
+---
+
+### **Identified Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem:** The class handles multiple responsibilities (JSON processing, macro expansion, parameter merging).  
+   - **Solution:** Extract classes for:
+     - `JsonParamProcessor`: Handles JSON-specific parsing and merging.  
+     - `ParamMerger`: Handles merging of `defaults`, `appends`, and `invariants`.  
+
+2. **Extract Method**  
+   - **Problem:** Long and complex methods like `processParams` hinder readability.  
+   - **Solution:** Break down into smaller, well-defined methods (e.g., `processJsonContent`, `mergeParams`).
+
+3. **Extract Variable**  
+   - **Problem:** Complex expressions and repeated logic (e.g., `MultiMapSolrParams.asMultiMap`).  
+   - **Solution:** Introduce descriptive variables.
+
+4. **Rename Method/Variable**  
+   - **Problem:** Generic names like `jsonS` and `newMap` lack clarity.  
+   - **Solution:** Rename to `jsonParams` and `mergedParams`.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.solr.request.json;
+
+import static org.apache.solr.common.params.CommonParams.JSON;
+import static org.apache.solr.common.params.CommonParams.SORT;
+
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.MultiMapSolrParams;
+import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.ContentStream;
+import org.apache.solr.common.util.StrUtils;
+import org.apache.solr.handler.component.SearchHandler;
+import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.request.SolrRequestHandler;
+import org.apache.solr.request.macro.MacroExpander;
+import org.apache.solr.search.QueryParsing;
+import org.noggit.JSONParser;
+import org.noggit.ObjectBuilder;
+
+public class RequestUtil {
+
+    public static void processParams(
+            SolrRequestHandler handler,
+            SolrQueryRequest req,
+            SolrParams defaults,
+            SolrParams appends,
+            SolrParams invariants) {
+
+        boolean isSearchHandler = handler instanceof SearchHandler;
+        SolrParams originalParams = req.getParams();
+
+        Map<String, String[]> mergedParams = ParamMerger.mergeParams(originalParams, defaults, appends, invariants);
+
+        if (isSearchHandler && req.getContentStreams() != null) {
+            JsonParamProcessor.processJsonContent(req, mergedParams);
+        }
+
+        if (!mergedParams.containsKey("expandMacros") || Boolean.parseBoolean(mergedParams.get("expandMacros")[0])) {
+            mergedParams = MacroExpander.expand(mergedParams);
+        }
+
+        req.setParams(new MultiMapSolrParams(mergedParams));
+
+        if (isSearchHandler) {
+            JsonParamProcessor.handleJsonConversion(req, mergedParams);
+        }
+    }
+}
+
+// --- Extracted Class: Handles Parameter Merging ---
+class ParamMerger {
+
+    static Map<String, String[]> mergeParams(SolrParams originalParams, SolrParams defaults, SolrParams appends, SolrParams invariants) {
+        Map<String, String[]> mergedParams = MultiMapSolrParams.asMultiMap(originalParams, true);
+
+        if (defaults != null) {
+            applyDefaults(mergedParams, defaults);
+        }
+
+        if (appends != null) {
+            applyAppends(mergedParams, appends);
+        }
+
+        if (invariants != null) {
+            mergedParams.putAll(MultiMapSolrParams.asMultiMap(invariants));
+        }
+
+        return mergedParams;
+    }
+
+    private static void applyDefaults(Map<String, String[]> mergedParams, SolrParams defaults) {
+        Map<String, String[]> defaultsMap = MultiMapSolrParams.asMultiMap(defaults);
+        defaultsMap.forEach((key, value) -> mergedParams.putIfAbsent(key, value));
+    }
+
+    private static void applyAppends(Map<String, String[]> mergedParams, SolrParams appends) {
+        Map<String, String[]> appendsMap = MultiMapSolrParams.asMultiMap(appends);
+
+        for (Map.Entry<String, String[]> entry : appendsMap.entrySet()) {
+            String key = entry.getKey();
+            String[] existingValues = mergedParams.get(key);
+            mergedParams.put(key, mergeArrays(existingValues, entry.getValue()));
+        }
+    }
+
+    private static String[] mergeArrays(String[] original, String[] additional) {
+        if (original == null) return additional;
+
+        String[] merged = new String[original.length + additional.length];
+        System.arraycopy(original, 0, merged, 0, original.length);
+        System.arraycopy(additional, 0, merged, original.length, additional.length);
+        return merged;
+    }
+}
+
+// --- Extracted Class: Handles JSON Processing ---
+class JsonParamProcessor {
+
+    static void processJsonContent(SolrQueryRequest req, Map<String, String[]> mergedParams) {
+        for (ContentStream cs : req.getContentStreams()) {
+            String contentType = cs.getContentType();
+            if (contentType == null || !contentType.contains("/json")) {
+                throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Invalid content type: " + contentType);
+            }
+
+            try {
+                String jsonString = StrUtils.stringFromReader(cs.getReader());
+                MultiMapSolrParams.addParam(JSON, jsonString, mergedParams);
+            } catch (IOException e) {
+                throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Error reading JSON content", e);
+            }
+        }
+    }
+
+    static void handleJsonConversion(SolrQueryRequest req, Map<String, String[]> mergedParams) {
+        String[] jsonParams = mergedParams.get(JSON);
+
+        if (jsonParams == null) return;
+
+        Map<String, Object> jsonMap = new LinkedHashMap<>();
+        for (String json : jsonParams) {
+            mergeJsonIntoMap(jsonMap, json);
+        }
+
+        req.setJSON(jsonMap);
+    }
+
+    private static void mergeJsonIntoMap(Map<String, Object> target, String json) {
+        try {
+            Object parsedJson = ObjectBuilder.fromJSON(json);
+            if (parsedJson instanceof Map) {
+                target.putAll((Map<String, Object>) parsedJson);
+            }
+        } catch (Exception e) {
+            throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Invalid JSON input", e);
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - `ParamMerger`: Handles merging of `defaults`, `appends`, and `invariants`.  
+   - `JsonParamProcessor`: Handles JSON parsing, content processing, and merging.
+
+2. **Extract Method:**  
+   - Broke down `processParams` into `processJsonContent` and `handleJsonConversion`.
+
+3. **Extract Variable:**  
+   - Introduced `mergedParams` for clarity.  
+
+4. **Rename Method/Variable:**  
+   - `jsonS` → `jsonParams`  
+   - `newMap` → `mergedParams`
+
+---
+
+### **Refactoring Benefits**
+
+- **Readability:** Simplified and modularized complex logic.  
+- **Maintainability:** Easier to modify or extend individual components.  
+- **Reusability:** Decoupled logic allows for better unit testing and reuse.

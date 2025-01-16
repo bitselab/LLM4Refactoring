@@ -1,0 +1,134 @@
+## Refactoring Opportunities in ObjectToStringComparator
+
+After reviewing the provided code for `ObjectToStringComparator`, I've identified a few potential refactoring opportunities:
+
+**1. Use Optional for null checks:**
+
+The current code uses multiple null checks with if statements. This can be simplified by using `Optional`. Here's an example:
+
+```java
+@Override
+public int compare(final Object o1, final Object o2) {
+    return Optional.ofNullable(o1)
+        .map(Object::toString)
+        .compareTo(Optional.ofNullable(o2).map(Object::toString));
+}
+```
+
+This approach reduces code duplication and improves readability.
+
+**2. Use String.compareToIgnoreCase for case-insensitive comparison:**
+
+If case-insensitive comparison is desired, the code can be modified to use `String.compareToIgnoreCase`:
+
+```java
+@Override
+public int compare(final Object o1, final Object o2) {
+    return Optional.ofNullable(o1)
+        .map(Object::toString)
+        .map(String::toLowerCase)
+        .compareTo(Optional.ofNullable(o2).map(Object::toString).map(String::toLowerCase));
+}
+```
+
+This ensures consistent comparison regardless of letter case.
+
+**3. Extract null handling logic to a separate method:**
+
+The null handling logic is repetitive. It can be extracted to a separate method for better organization:
+
+```java
+private static String nullSafeToString(Object object) {
+    return Optional.ofNullable(object).map(Object::toString).orElse(null);
+}
+
+@Override
+public int compare(final Object o1, final Object o2) {
+    return nullSafeToString(o1).compareTo(nullSafeToString(o2));
+}
+```
+
+This improves code modularity and reduces redundancy.
+
+**4. Leverage Comparator.nullsFirst/nullsLast:**
+
+Instead of manually handling nulls, you can utilize `Comparator.nullsFirst` or `Comparator.nullsLast` depending on the desired null ordering:
+
+```java
+public static final Comparator<Object> NULLS_FIRST = Comparator.nullsFirst(INSTANCE);
+public static final Comparator<Object> NULLS_LAST = Comparator.nullsLast(INSTANCE);
+```
+
+This simplifies the comparison logic and provides flexibility for null handling.
+
+**5. Consider using a lambda expression for the Comparator:**
+
+If brevity is preferred, the entire `compare` method can be replaced with a lambda expression:
+
+```java
+public static final Comparator<Object> INSTANCE = 
+    (o1, o2) -> Optional.ofNullable(o1)
+        .map(Object::toString)
+        .compareTo(Optional.ofNullable(o2).map(Object::toString));
+```
+
+This approach is concise but might be less readable for some developers.
+
+**Refactored Code:**
+
+```java
+package org.apache.commons.lang3.compare;
+
+import java.io.Serializable;
+import java.util.Comparator;
+import java.util.Optional;
+
+/**
+ * Compares Object's {@link Object#toString()} values.
+ *
+ * This class is stateless.
+ *
+ * @since 3.10
+ */
+public final class ObjectToStringComparator implements Comparator<Object>, Serializable {
+
+    /**
+     * Singleton instance.
+     *
+     * This class is stateless.
+     */
+    public static final Comparator<Object> INSTANCE = 
+        (o1, o2) -> Optional.ofNullable(o1)
+            .map(Object::toString)
+            .compareTo(Optional.ofNullable(o2).map(Object::toString));
+
+    /**
+     * Singleton instance for case-insensitive comparison.
+     */
+    public static final Comparator<Object> INSTANCE_IGNORE_CASE = 
+        (o1, o2) -> Optional.ofNullable(o1)
+            .map(Object::toString)
+            .map(String::toLowerCase)
+            .compareTo(Optional.ofNullable(o2).map(Object::toString).map(String::toLowerCase));
+
+    /**
+     * Singleton instance that puts nulls first.
+     */
+    public static final Comparator<Object> NULLS_FIRST = Comparator.nullsFirst(INSTANCE);
+
+    /**
+     * Singleton instance that puts nulls last.
+     */
+    public static final Comparator<Object> NULLS_LAST = Comparator.nullsLast(INSTANCE);
+
+    /**
+     * For {@link Serializable}.
+     */
+    private static final long serialVersionUID = 1L;
+
+    private ObjectToStringComparator() {
+    }
+}
+```
+
+**Note:** The choice of which refactoring to apply depends on the specific needs and preferences of your project.

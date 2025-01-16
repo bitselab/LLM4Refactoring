@@ -24,15 +24,15 @@ import net.sourceforge.pmd.lang.document.TextRegion;
 import net.sourceforge.pmd.lang.impl.SimpleLanguageModuleBase;
 
 /**
- * A dummy language implementation whose parser produces a single node.
- * This is provided for cases where a non-null language is required, but
- * the parser is not useful. This is useful eg to mock rules when no other
- * language is on the classpath. This language is not exposed by {@link LanguageRegistry}
- * and can only be used explicitly with {@link #getInstance()}.
- *
- * @author Clément Fournier
- * @since 6.48.0
- */
+ * A dummy language implementation whose parser produces a single node.
+  This is provided for cases where a non-null language is required, but
+ * the parser is not useful. This is useful eg to mock rules when no other
+ * language is on the classpath. This language is not exposed by {@link LanguageRegistry}
+ * and can only be used explicitly with {@link #getInstance()}.
+ *
+ * @author Clément Fournier
+ * @since 6.48.0
+ */
 @Experimental
 public final class PlainTextLanguage extends SimpleLanguageModuleBase implements CpdCapableLanguage {
 
@@ -48,8 +48,8 @@ public final class PlainTextLanguage extends SimpleLanguageModuleBase implements
     }
 
     /**
-     * Returns the singleton instance of this language.
-     */
+     * Returns the singleton instance of this language.
+     */
     public static PlainTextLanguage getInstance() {
         return PLAIN_TEXT_LANGUAGE_INSTANCE; // note: this language is _not_ exposed via LanguageRegistry (no entry in META-INF/services)
     }
@@ -67,8 +67,8 @@ public final class PlainTextLanguage extends SimpleLanguageModuleBase implements
     }
 
     /**
-     * The only node produced by the parser of {@link PlainTextLanguage}.
-     */
+     * The only node produced by the parser of {@link PlainTextLanguage}.
+     */
     public static class PlainTextFile extends AbstractNode<PlainTextFile, PlainTextFile> implements RootNode {
 
         private final AstInfo<PlainTextFile> astInfo;

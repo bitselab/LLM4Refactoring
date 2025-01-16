@@ -1,0 +1,222 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method**  
+   - The `asyncReq()` method is too large and complex. The retry logic and request initiation can be extracted.  
+   - The `doRequest()` method has deeply nested exception handling, which can be modularized.
+
+2. **Extract Variable**  
+   - Repeated calls to `MDC.put("LBSolrClient.url", url)` and `MDC.remove("LBSolrClient.url")` can be encapsulated.  
+   - `req.request instanceof IsUpdateRequest || ADMIN_PATHS.contains(req.request.getPath())` can be extracted into a descriptive variable.
+
+3. **Rename Method**  
+   - `doRequest()` is vague; it can be renamed to `executeAsyncRequest()` for clarity.  
+   - `Rsp rsp` and `Req req` are not descriptive. Renaming them improves readability.
+
+4. **Inline Method**  
+   - The `getClient()` method simply returns `solrClient`. It can be inlined.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.solr.client.solrj.impl;
+
+import static org.apache.solr.common.params.CommonParams.ADMIN_PATHS;
+
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import org.apache.solr.client.solrj.ResponseParser;
+import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.request.IsUpdateRequest;
+import org.apache.solr.client.solrj.request.RequestWriter;
+import org.apache.solr.client.solrj.util.AsyncListener;
+import org.apache.solr.client.solrj.util.Cancellable;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.util.NamedList;
+import org.slf4j.MDC;
+
+public class LBHttp2SolrClient extends LBSolrClient {
+    private final Http2SolrClient solrClient;
+
+    private LBHttp2SolrClient(Builder builder) {
+        super(Arrays.asList(builder.baseSolrUrls));
+        this.solrClient = builder.http2SolrClient;
+        this.aliveCheckIntervalMillis = builder.aliveCheckIntervalMillis;
+        this.defaultCollection = builder.defaultDataStore;
+    }
+
+    @Override
+    public ResponseParser getParser() {
+        return solrClient.getParser();
+    }
+
+    @Override
+    public RequestWriter getRequestWriter() {
+        return solrClient.getRequestWriter();
+    }
+
+    public Set<String> getUrlParamNames() {
+        return solrClient.getUrlParamNames();
+    }
+
+    public Cancellable asyncReq(Req request, AsyncListener<Rsp> asyncListener) {
+        Rsp response = new Rsp();
+        boolean isNonRetryable = isNonRetryableRequest(request);
+
+        ServerIterator serverIterator = new ServerIterator(request, zombieServers);
+        asyncListener.onStart();
+
+        AtomicBoolean isCancelled = new AtomicBoolean(false);
+        AtomicReference<Cancellable> currentRequest = new AtomicReference<>();
+
+        RetryListener retryListener = createRetryListener(request, response, asyncListener, isNonRetryable, serverIterator, isCancelled, currentRequest);
+
+        initiateAsyncRequest(serverIterator, request, response, isNonRetryable, retryListener, asyncListener, currentRequest);
+
+        return () -> cancelRequest(isCancelled, currentRequest);
+    }
+
+    private boolean isNonRetryableRequest(Req request) {
+        return request.request instanceof IsUpdateRequest || ADMIN_PATHS.contains(request.request.getPath());
+    }
+
+    private RetryListener createRetryListener(Req request, Rsp response, AsyncListener<Rsp> asyncListener, boolean isNonRetryable, ServerIterator serverIterator, AtomicBoolean isCancelled, AtomicReference<Cancellable> currentRequest) {
+        return new RetryListener() {
+            @Override
+            public void onSuccess(Rsp response) {
+                asyncListener.onSuccess(response);
+            }
+
+            @Override
+            public void onFailure(Exception e, boolean shouldRetry) {
+                if (shouldRetry) {
+                    retryRequest(serverIterator, request, response, isNonRetryable, this, isCancelled, currentRequest, asyncListener);
+                } else {
+                    asyncListener.onFailure(e);
+                }
+            }
+        };
+    }
+
+    private void initiateAsyncRequest(ServerIterator serverIterator, Req request, Rsp response, boolean isNonRetryable, RetryListener retryListener, AsyncListener<Rsp> asyncListener, AtomicReference<Cancellable> currentRequest) {
+        try {
+            String nextServerUrl = serverIterator.nextOrError();
+            Cancellable cancellable = executeAsyncRequest(nextServerUrl, request, response, isNonRetryable, serverIterator.isServingZombieServer(), retryListener);
+            currentRequest.set(cancellable);
+        } catch (SolrServerException e) {
+            asyncListener.onFailure(e);
+        }
+    }
+
+    private void retryRequest(ServerIterator serverIterator, Req request, Rsp response, boolean isNonRetryable, RetryListener retryListener, AtomicBoolean isCancelled, AtomicReference<Cancellable> currentRequest, AsyncListener<Rsp> asyncListener) {
+        try {
+            String retryUrl = serverIterator.nextOrError();
+            withMdcContext("LBSolrClient.url", retryUrl, () -> {
+                synchronized (isCancelled) {
+                    if (!isCancelled.get()) {
+                        Cancellable cancellable = executeAsyncRequest(retryUrl, request, response, isNonRetryable, serverIterator.isServingZombieServer(), retryListener);
+                        currentRequest.set(cancellable);
+                    }
+                }
+            });
+        } catch (SolrServerException e) {
+            asyncListener.onFailure(e);
+        }
+    }
+
+    private Cancellable executeAsyncRequest(String baseUrl, Req request, Rsp response, boolean isNonRetryable, boolean isZombie, RetryListener listener) {
+        response.server = baseUrl;
+        request.getRequest().setBasePath(baseUrl);
+        return solrClient.asyncRequest(request.getRequest(), null, new AsyncListener<>() {
+            @Override
+            public void onSuccess(NamedList<Object> result) {
+                response.rsp = result;
+                if (isZombie) zombieServers.remove(baseUrl);
+                listener.onSuccess(response);
+            }
+
+            @Override
+            public void onFailure(Throwable throwable) {
+                handleFailure(throwable, baseUrl, isNonRetryable, isZombie, listener);
+            }
+        });
+    }
+
+    private void handleFailure(Throwable throwable, String baseUrl, boolean isNonRetryable, boolean isZombie, RetryListener listener) {
+        if (shouldRetry(throwable, isNonRetryable)) {
+            listener.onFailure((!isZombie) ? addZombie(baseUrl, throwable) : throwable, true);
+        } else {
+            listener.onFailure(new SolrServerException(throwable), false);
+        }
+    }
+
+    private boolean shouldRetry(Throwable throwable, boolean isNonRetryable) {
+        return (!isNonRetryable && RETRY_CODES.contains(((SolrException) throwable).code())) ||
+               (throwable instanceof SocketException) ||
+               (throwable instanceof SocketTimeoutException);
+    }
+
+    private void withMdcContext(String key, String value, Runnable task) {
+        try {
+            MDC.put(key, value);
+            task.run();
+        } finally {
+            MDC.remove(key);
+        }
+    }
+
+    private void cancelRequest(AtomicBoolean isCancelled, AtomicReference<Cancellable> currentRequest) {
+        synchronized (isCancelled) {
+            isCancelled.set(true);
+            if (currentRequest.get() != null) {
+                currentRequest.get().cancel();
+            }
+        }
+    }
+
+    public static class Builder {
+        private final Http2SolrClient http2SolrClient;
+        private final String[] baseSolrUrls;
+        private long aliveCheckIntervalMillis = TimeUnit.MILLISECONDS.convert(60, TimeUnit.SECONDS);
+        protected String defaultDataStore;
+
+        public Builder(Http2SolrClient http2Client, String... baseSolrUrls) {
+            this.http2SolrClient = http2Client;
+            this.baseSolrUrls = baseSolrUrls;
+        }
+
+        public Builder setAliveCheckInterval(int interval, TimeUnit unit) {
+            if (interval <= 0) throw new IllegalArgumentException("Alive check interval must be positive");
+            this.aliveCheckIntervalMillis = TimeUnit.MILLISECONDS.convert(interval, unit);
+            return this;
+        }
+
+        public Builder withDefaultCollection(String collection) {
+            this.defaultDataStore = collection;
+            return this;
+        }
+
+        public LBHttp2SolrClient build() {
+            return new LBHttp2SolrClient(this);
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extracted Methods:** Simplified `asyncReq()` by delegating retry and execution logic to dedicated methods.  
+2. **Extracted Variable:** Moved complex expressions into descriptive methods (`isNonRetryableRequest`).  
+3. **Renamed Methods:** `doRequest()` → `executeAsyncRequest`.  
+4. **Encapsulated MDC Handling:** Introduced `withMdcContext()` for cleaner context handling.

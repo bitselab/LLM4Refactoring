@@ -1,0 +1,103 @@
+Here are some refactoring opportunities for the provided AggregatorImplementer class:
+
+1. **Reduce code duplication:** There is some code duplication in the  `combineRawInput` methods for primitive and void return types. This can be refactored by creating a helper method to handle the logic of calling the `combine` method from the aggregating class (`declarationType`).
+
+2. **Extract logic for primitive state access:** The `primitiveStateMethod` method retrieves the primitive value from the state object based on its type. This logic can be extracted into a separate method to improve readability and maintainability.
+
+3. **Simplify null checks for intermediate blocks:** In the `addIntermediateInput` method, there are null checks for each intermediate state block. This can be simplified by using a loop to iterate through the intermediate states and performing the null check and processing within the loop.
+
+Here's the refactored code with the suggested changes:
+
+```java
+public class AggregatorImplementer {
+
+  // ... existing code ...
+
+  private void combineRawInput(MethodSpec.Builder builder, String blockVariable) {
+    if (valuesIsBytesRef) {
+      combineRawInputForBytesRef(builder, blockVariable);
+      return;
+    }
+    TypeName returnType = TypeName.get(combine.getReturnType());
+    builder.addStatement(combineRawInputStatement(returnType, blockVariable));
+  }
+
+  private CodeBlock combineRawInputStatement(TypeName returnType, String blockVariable) {
+    if (returnType.isPrimitive()) {
+      return CodeBlock.builder()
+          .addStatement(
+              "state.$TValue($T.combine(state.$TValue(), $L.get$L(i)))",
+              returnType,
+              declarationType,
+              returnType,
+              blockVariable,
+              firstUpper(combine.getParameters().get(1).asType().toString())
+          )
+          .build();
+    } else if (returnType == TypeName.VOID) {
+      return CodeBlock.builder()
+          .addStatement(
+              "$T.combine(state, $L.get$L(i))",
+              declarationType,
+              blockVariable,
+              firstUpper(combine.getParameters().get(1).asType().toString())
+          )
+          .build();
+    }
+    throw new IllegalArgumentException("combine must return void or a primitive");
+  }
+
+  private String getPrimitiveStateValue(String stateType) {
+    switch (stateType) {
+      case "org.elasticsearch.compute.aggregation.IntState":
+        return "intValue";
+      case "org.elasticsearch.compute.aggregation.LongState":
+        return "longValue";
+      case "org.elasticsearch.compute.aggregation.DoubleState":
+        return "doubleValue";
+      default:
+        throw new IllegalArgumentException(
+            "don't know how to fetch primitive values from " + stateType + ". define combineIntermediate."
+        );
+    }
+  }
+
+  private MethodSpec addIntermediateInput() {
+    MethodSpec.Builder builder = MethodSpec.methodBuilder("addIntermediateInput");
+    // ... existing code ...
+    for (int i = 0; i < intermediateState.size(); i++) {
+      var interState = intermediateState.get(i);
+      // ... existing code ...
+      builder.beginControlFlow("if (" + interState.name() + "Uncast.areAllValuesNull())");
+      {
+        builder.addStatement("return");
+        builder.endControlFlow();
+      }
+      // ... existing code ...
+    }
+    if (combineIntermediate != null) {
+      // ... existing code ...
+    } else if (hasPrimitiveState()) {
+      assert intermediateState.size() == 2;
+      assert intermediateState.get(1).name().equals("seen");
+      builder.beginControlFlow("if (seen.getBoolean(0))");
+      {
+        var state = intermediateState.get(0);
+        String stateValueAccess = getPrimitiveStateValue(stateType.toString());
+        builder.addStatement(
+            "state.$T($T.combine(state.$T(), " + state.name() + "." + vectorAccessorName(state.elementType()) + "(0)))",
+            primitiveStateMethod(), declarationType, stateValueAccess);
+        builder.addStatement("state.seen(true)");
+        builder.endControlFlow();
+      }
+    } else {
+      throw new IllegalArgumentException("Don't know how to combine intermediate input. Define combineIntermediate");
+    }
+    return builder.build();
+  }
+
+  // ... other methods ...
+}
+```
+
+These changes improve code readability and maintainability by reducing redundancy and

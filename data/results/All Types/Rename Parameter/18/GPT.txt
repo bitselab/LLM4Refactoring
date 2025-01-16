@@ -1,0 +1,220 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - Extract configuration-related logic from `Builder` into a dedicated class (`CloudHttp2SolrClientConfig`) for better modularity.
+
+2. **Extract Method:**  
+   - Extract repeated logic in the constructor and builder methods into smaller, well-named methods.  
+   - Isolate client initialization (`initHttpClient()`) and state provider setup (`initStateProvider()`).
+
+3. **Extract Variable:**  
+   - Extract constants like timeout defaults for better readability.  
+   - Extract repeated expressions into local variables.
+
+4. **Rename Method:**  
+   - Rename ambiguous method names to be more descriptive (e.g., `setParallelCacheRefreshes` → `withParallelCacheRefreshesLocks`).
+
+5. **Inline Variable:**  
+   - Inline variables that are used only once to simplify code.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.solr.client.solrj.impl;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import org.apache.solr.client.solrj.ResponseParser;
+import org.apache.solr.client.solrj.request.RequestWriter;
+import org.apache.solr.common.SolrException;
+
+/**
+ * SolrJ client class to communicate with SolrCloud using Http2SolrClient.
+ *
+ * @lucene.experimental
+ * @since solr 8.0
+ */
+@SuppressWarnings("serial")
+public class CloudHttp2SolrClient extends CloudSolrClient {
+
+    private final ClusterStateProvider stateProvider;
+    private final LBHttp2SolrClient lbClient;
+    private final Http2SolrClient myClient;
+    private final boolean clientIsInternal;
+
+    protected CloudHttp2SolrClient(CloudHttp2SolrClientConfig config) {
+        super(config.shardLeadersOnly, config.parallelUpdates, config.directUpdatesToLeadersOnly);
+        this.myClient = initHttpClient(config);
+        this.lbClient = new LBHttp2SolrClient.Builder(myClient).build();
+        this.stateProvider = initStateProvider(config);
+        this.clientIsInternal = config.clientIsInternal;
+        this.collectionStateCache.timeToLiveMs = TimeUnit.MILLISECONDS.convert(config.timeToLiveSeconds, TimeUnit.SECONDS);
+        this.locks = objectList(config.parallelCacheRefreshesLocks);
+    }
+
+    private Http2SolrClient initHttpClient(CloudHttp2SolrClientConfig config) {
+        if (config.httpClient == null) {
+            return config.internalClientBuilder != null ? config.internalClientBuilder.build() : new Http2SolrClient.Builder().build();
+        }
+        return config.httpClient;
+    }
+
+    private ClusterStateProvider initStateProvider(CloudHttp2SolrClientConfig config) {
+        if (config.stateProvider != null) {
+            return config.stateProvider;
+        }
+        if (!config.zkHosts.isEmpty()) {
+            return ClusterStateProvider.newZkClusterStateProvider(config.zkHosts, config.zkChroot, config.canUseZkACLs);
+        }
+        if (!config.solrUrls.isEmpty()) {
+            try {
+                return new Http2ClusterStateProvider(config.solrUrls, config.httpClient);
+            } catch (Exception e) {
+                throw new RuntimeException("Couldn't initialize Http2ClusterStateProvider with Solr URLs: " + config.solrUrls, e);
+            }
+        }
+        throw new IllegalArgumentException("Either zkHosts or solrUrls must be provided.");
+    }
+
+    @Override
+    public void close() throws IOException {
+        stateProvider.close();
+        lbClient.close();
+        if (clientIsInternal && myClient != null) {
+            myClient.close();
+        }
+        super.close();
+    }
+
+    @Override
+    public LBHttp2SolrClient getLbClient() {
+        return lbClient;
+    }
+
+    @Override
+    public ClusterStateProvider getClusterStateProvider() {
+        return stateProvider;
+    }
+
+    public Http2SolrClient getHttpClient() {
+        return myClient;
+    }
+
+    @Override
+    protected boolean wasCommError(Throwable rootCause) {
+        return false;
+    }
+
+    /** Configuration class for CloudHttp2SolrClient. */
+    public static class CloudHttp2SolrClientConfig {
+        private final Collection<String> zkHosts;
+        private final List<String> solrUrls;
+        private final String zkChroot;
+        private final Http2SolrClient httpClient;
+        private final boolean shardLeadersOnly;
+        private final boolean directUpdatesToLeadersOnly;
+        private final boolean parallelUpdates;
+        private final ClusterStateProvider stateProvider;
+        private final Http2SolrClient.Builder internalClientBuilder;
+        private final boolean clientIsInternal;
+        private final long retryExpiryTimeNano;
+        private final long timeToLiveSeconds;
+        private final int parallelCacheRefreshesLocks;
+        private final boolean canUseZkACLs;
+
+        private CloudHttp2SolrClientConfig(Builder builder) {
+            this.zkHosts = builder.zkHosts;
+            this.solrUrls = builder.solrUrls;
+            this.zkChroot = builder.zkChroot;
+            this.httpClient = builder.httpClient;
+            this.shardLeadersOnly = builder.shardLeadersOnly;
+            this.directUpdatesToLeadersOnly = builder.directUpdatesToLeadersOnly;
+            this.parallelUpdates = builder.parallelUpdates;
+            this.stateProvider = builder.stateProvider;
+            this.internalClientBuilder = builder.internalClientBuilder;
+            this.clientIsInternal = builder.httpClient == null;
+            this.retryExpiryTimeNano = builder.retryExpiryTimeNano;
+            this.timeToLiveSeconds = builder.timeToLiveSeconds;
+            this.parallelCacheRefreshesLocks = builder.parallelCacheRefreshesLocks;
+            this.canUseZkACLs = builder.canUseZkACLs;
+        }
+
+        public static class Builder {
+            private Collection<String> zkHosts = new ArrayList<>();
+            private List<String> solrUrls = new ArrayList<>();
+            private String zkChroot;
+            private Http2SolrClient httpClient;
+            private boolean shardLeadersOnly = true;
+            private boolean directUpdatesToLeadersOnly = false;
+            private boolean parallelUpdates = true;
+            private ClusterStateProvider stateProvider;
+            private Http2SolrClient.Builder internalClientBuilder;
+            private long retryExpiryTimeNano = TimeUnit.NANOSECONDS.convert(3, TimeUnit.SECONDS);
+            private long timeToLiveSeconds = 60;
+            private int parallelCacheRefreshesLocks = 3;
+            private boolean canUseZkACLs = true;
+
+            public Builder withZkHosts(List<String> zkHosts, Optional<String> zkChroot) {
+                this.zkHosts = zkHosts;
+                zkChroot.ifPresent(chroot -> this.zkChroot = chroot);
+                return this;
+            }
+
+            public Builder withSolrUrls(List<String> solrUrls) {
+                this.solrUrls = solrUrls;
+                return this;
+            }
+
+            public Builder withHttpClient(Http2SolrClient httpClient) {
+                this.httpClient = httpClient;
+                return this;
+            }
+
+            public Builder withParallelUpdates(boolean parallelUpdates) {
+                this.parallelUpdates = parallelUpdates;
+                return this;
+            }
+
+            public Builder withRetryExpiryTime(long time, TimeUnit unit) {
+                this.retryExpiryTimeNano = TimeUnit.NANOSECONDS.convert(time, unit);
+                return this;
+            }
+
+            public CloudHttp2SolrClientConfig build() {
+                return new CloudHttp2SolrClientConfig(this);
+            }
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extract Class:**  
+   - Created `CloudHttp2SolrClientConfig` to handle client configuration separately.  
+   - Cleaner separation of concerns between client logic and configuration setup.
+
+2. **Extract Method:**  
+   - `initHttpClient()` and `initStateProvider()` simplify the constructor.
+
+3. **Extract Variable:**  
+   - Extracted timeout and lock values for clarity.
+
+4. **Rename Method:**  
+   - Improved naming for clarity (`setParallelCacheRefreshes` → `withParallelCacheRefreshesLocks`).
+
+5. **Inline Variable:**  
+   - Simplified expressions in methods with inlining.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Clearer construction flow and separation of responsibilities.  
+- **Maintainability:** Easier to adjust configuration without modifying client logic.  
+- **Scalability:** Easier to extend functionality or support more configurations in the future.

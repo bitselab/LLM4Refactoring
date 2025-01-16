@@ -1,0 +1,144 @@
+## Refactoring Opportunities
+
+There are two methods in the code snippet that could benefit from rename refactoring:
+
+1. **getNameButDelegateToMethodThatThrows**: This method name is quite long and descriptive. It can be refactored to a shorter and more concise name that still conveys the meaning.
+
+Here's a possible refactoring:
+
+```java
+public String getNameWithException() {
+  throwSomeException();
+  return guessName().name;
+}
+```
+
+The new name, "getNameWithException", clearly indicates that the method throws an exception.
+
+2. **throwSomeException**: This method name is generic and doesn't provide much information about the specific exception being thrown. 
+
+Here's a possible refactoring:
+
+```java
+private void throwNameLookupException() {
+  throw new RuntimeException("boo");
+}
+```
+
+The new name, "throwNameLookupException", is more specific and reflects the context of the exception being thrown (related to name lookup).
+
+
+## Refactored Code
+
+Here's the refactored code with the suggested changes:
+
+```java
+package org.mockitousage.spies;
+
+import static net.bytebuddy.ClassFileVersion.JAVA_V21;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.not;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockitoutil.Conditions.methodsInStackTrace;
+
+import net.bytebuddy.ClassFileVersion;
+import org.assertj.core.api.Assertions;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.internal.configuration.plugins.Plugins;
+import org.mockito.internal.creation.bytebuddy.InlineByteBuddyMockMaker;
+import org.mockito.internal.util.reflection.ReflectionMemberAccessor;
+import org.mockitoutil.TestBase;
+
+@SuppressWarnings("unchecked")
+public class PartialMockingWithSpiesTest extends TestBase {
+
+  @Before
+  public void pleaseMakeStackTracesClean() {
+    makeStackTracesClean();
+  }
+
+  class InheritMe {
+    private String inherited = "100$";
+
+    protected String getInherited() {
+      return inherited;
+    }
+  }
+
+  class Person extends InheritMe {
+    private final Name defaultName = new Name("Default name");
+
+    public String getName() {
+      return guessName().name;
+    }
+
+    Name guessName() {
+      return defaultName;
+    }
+
+    public String getNameWithException() {
+      throwNameLookupException();
+      return guessName().name;
+    }
+
+    private void throwNameLookupException() {
+      throw new RuntimeException("boo");
+    }
+  }
+
+  class Name {
+    private final String name;
+
+    public Name(String name) {
+      this.name = name;
+    }
+  }
+
+  Person spy = spy(new Person());
+
+  @Test
+  public void shouldCallRealMethdsEvenDelegatedToOtherSelfMethod() {
+    // when
+    String name = spy.getName();
+
+    // then
+    assertEquals("Default name", name);
+  }
+
+  @Test
+  public void shouldAllowStubbingOfMethodsThatDelegateToOtherMethods() {
+    // when
+    when(spy.getName()).thenReturn("foo");
+
+    // then
+    assertEquals("foo", spy.getName());
+  }
+
+  @Test
+  public void shouldAllowStubbingWithThrowablesMethodsThatDelegateToOtherMethods() {
+    // when
+    doThrow(new RuntimeException("appetite for destruction"))
+        .when(spy)
+        .getNameWithException();
+
+    // then
+    try {
+      spy.getNameWithException();
+      fail();
+    } catch (Exception e) {
+      assertEquals("appetite for destruction", e.getMessage());
+    }
+  }
+
+  // ... (rest of the tests remain unchanged)
+}
+```
+
+These refactorings improve the readability and maintainability of the code by using more descriptive method names.

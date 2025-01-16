@@ -1,0 +1,212 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Extract common logic for encoding/decoding points to reduce duplication between `GEO` and `CARTESIAN`.
+
+2. **Extract Class:**  
+   - Move WKB/WKT conversion methods into a separate utility class (`GeometryUtils`) for better separation of concerns.
+
+3. **Extract Variable:**  
+   - Extract magic numbers like `0xFFFFFFFFL` into meaningful constants for readability.
+
+4. **Rename Method:**  
+   - Rename ambiguous methods like `wkbAsLong` to `convertWkbToLong` for better clarity.
+
+5. **Inline Method:**  
+   - Inline small one-off methods like `checkCoordinate` if used only once.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.elasticsearch.xpack.ql.util;
+
+import org.apache.lucene.geo.GeoEncodingUtils;
+import org.apache.lucene.geo.XYEncodingUtils;
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.geometry.Geometry;
+import org.elasticsearch.geometry.Point;
+import org.elasticsearch.geometry.utils.GeometryValidator;
+
+import static org.apache.lucene.geo.GeoEncodingUtils.encodeLatitude;
+import static org.apache.lucene.geo.GeoEncodingUtils.encodeLongitude;
+
+/**
+ * Refactored SpatialCoordinateTypes with improved readability and maintainability.
+ */
+public enum SpatialCoordinateTypes {
+    
+    GEO {
+        @Override
+        public Point longAsPoint(long encoded) {
+            return decodeGeoPoint(encoded);
+        }
+
+        @Override
+        public long pointAsLong(double x, double y) {
+            return encodeGeoPoint(x, y);
+        }
+    },
+
+    CARTESIAN {
+        private static final int MAX_VAL_ENCODED = XYEncodingUtils.encode((float) XYEncodingUtils.MAX_VAL_INCL);
+        private static final int MIN_VAL_ENCODED = XYEncodingUtils.encode((float) XYEncodingUtils.MIN_VAL_INCL);
+
+        @Override
+        public Point longAsPoint(long encoded) {
+            int x = (int) (encoded >>> 32);
+            int y = (int) (encoded & MASK_32BIT);
+            validateCartesianCoordinate(x);
+            validateCartesianCoordinate(y);
+            return new Point(XYEncodingUtils.decode(x), XYEncodingUtils.decode(y));
+        }
+
+        @Override
+        public long pointAsLong(double x, double y) {
+            return encodeCartesianPoint(x, y);
+        }
+
+        private void validateCartesianCoordinate(int coordinate) {
+            if (coordinate > MAX_VAL_ENCODED || coordinate < MIN_VAL_ENCODED) {
+                throw new IllegalArgumentException("Invalid encoded cartesian coordinate: " + coordinate);
+            }
+        }
+    };
+
+    private static final long MASK_32BIT = 0xFFFFFFFFL;
+
+    public abstract Point longAsPoint(long encoded);
+    public abstract long pointAsLong(double x, double y);
+
+    /* ======= Shared Encoding/Decoding Methods ======= */
+
+    protected static long encodeGeoPoint(double longitude, double latitude) {
+        int encodedLat = encodeLatitude(latitude);
+        int encodedLon = encodeLongitude(longitude);
+        return (((long) encodedLat) << 32) | (encodedLon & MASK_32BIT);
+    }
+
+    protected static Point decodeGeoPoint(long encoded) {
+        int lon = (int) encoded;
+        int lat = (int) (encoded >>> 32);
+        return new Point(GeoEncodingUtils.decodeLongitude(lon), GeoEncodingUtils.decodeLatitude(lat));
+    }
+
+    protected static long encodeCartesianPoint(double x, double y) {
+        long encodedX = XYEncodingUtils.encode((float) x);
+        long encodedY = XYEncodingUtils.encode((float) y);
+        return (encodedY & MASK_32BIT) | (encodedX << 32);
+    }
+
+    /* ======= Delegated WKB/WKT Operations ======= */
+
+    public long convertWkbToLong(BytesRef wkb) {
+        return GeometryUtils.convertWkbToLong(this, wkb);
+    }
+
+    public BytesRef convertLongToWkb(long encoded) {
+        return GeometryUtils.convertLongToWkb(this, encoded);
+    }
+
+    public String geometryToWkt(Geometry geometry) {
+        return GeometryUtils.geometryToWkt(geometry);
+    }
+
+    public BytesRef geometryToWkb(Geometry geometry) {
+        return GeometryUtils.geometryToWkb(geometry);
+    }
+
+    public BytesRef wktToWkb(String wkt) {
+        return GeometryUtils.wktToWkb(wkt);
+    }
+
+    public String wkbToWkt(BytesRef wkb) {
+        return GeometryUtils.wkbToWkt(wkb);
+    }
+}
+```
+
+---
+
+### **New Utility Class for WKB/WKT Operations**
+
+```java
+package org.elasticsearch.xpack.ql.util;
+
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.geometry.Geometry;
+import org.elasticsearch.geometry.Point;
+import org.elasticsearch.geometry.utils.GeometryValidator;
+import org.elasticsearch.geometry.utils.WellKnownBinary;
+import org.elasticsearch.geometry.utils.WellKnownText;
+
+import java.nio.ByteOrder;
+
+/**
+ * Utility class for WKB/WKT conversions.
+ */
+public final class GeometryUtils {
+
+    private GeometryUtils() {
+        // Utility class, prevent instantiation.
+    }
+
+    public static long convertWkbToLong(SpatialCoordinateTypes type, BytesRef wkb) {
+        Geometry geometry = WellKnownBinary.fromWKB(GeometryValidator.NOOP, false, wkb.bytes, wkb.offset, wkb.length);
+        if (geometry instanceof Point point) {
+            return type.pointAsLong(point.getX(), point.getY());
+        }
+        throw new IllegalArgumentException("Unsupported geometry: " + geometry.type());
+    }
+
+    public static BytesRef convertLongToWkb(SpatialCoordinateTypes type, long encoded) {
+        return new BytesRef(WellKnownBinary.toWKB(type.longAsPoint(encoded), ByteOrder.LITTLE_ENDIAN));
+    }
+
+    public static String geometryToWkt(Geometry geometry) {
+        return WellKnownText.toWKT(geometry);
+    }
+
+    public static BytesRef geometryToWkb(Geometry geometry) {
+        return new BytesRef(WellKnownBinary.toWKB(geometry, ByteOrder.LITTLE_ENDIAN));
+    }
+
+    public static BytesRef wktToWkb(String wkt) {
+        try {
+            Geometry geometry = WellKnownText.fromWKT(GeometryValidator.NOOP, false, wkt);
+            return geometryToWkb(geometry);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to parse WKT: " + e.getMessage(), e);
+        }
+    }
+
+    public static String wkbToWkt(BytesRef wkb) {
+        return WellKnownText.fromWKB(wkb.bytes, wkb.offset, wkb.length);
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extract Method:**  
+   - Introduced shared methods for encoding/decoding (`encodeGeoPoint`, `decodeGeoPoint`, `encodeCartesianPoint`).
+
+2. **Extract Class:**  
+   - Moved WKB/WKT conversion logic to `GeometryUtils` for better modularity.
+
+3. **Extract Variable:**  
+   - Extracted `0xFFFFFFFFL` into a meaningful constant `MASK_32BIT`.
+
+4. **Rename Method:**  
+   - Renamed `wkbAsLong` → `convertWkbToLong` and `longAsWkb` → `convertLongToWkb` for better clarity.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Simplified core logic by separating encoding/decoding from WKB/WKT handling.  
+- **Maintainability:** Clearer, modular structure with utility classes managing conversions.  
+- **Reusability:** Shared methods avoid code duplication between `GEO` and `CARTESIAN` types.

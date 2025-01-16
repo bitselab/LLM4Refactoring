@@ -1,0 +1,243 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - Extract the `Tick` and `TickHolder` classes into separate nested or standalone classes for better readability.
+
+2. **Extract Method:**  
+   - Extract logic for handling sub-second formatting and formatter creation into separate methods for clarity.
+
+3. **Rename Attribute:**  
+   - Rename `_tzFormat1` and `_tzFormat2` to more descriptive names like `_primaryFormatter` and `_secondaryFormatter`.
+
+4. **Inline Method:**  
+   - Inline the deprecated `formatNow` and `now` methods as they simply delegate to `format(long)`.
+
+5. **Extract Variable:**  
+   - Extract magic strings like `"SSS"` and `"000"` into constants for better maintainability.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.eclipse.jetty.util;
+
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
+
+/**
+ * Computes String representations of Dates then caches the results so
+ * that subsequent requests within the same second will be fast.
+ *
+ * @see DateTimeFormatter for date formatting patterns.
+ */
+public class DateCache {
+    private static final String DEFAULT_FORMAT = "EEE MMM dd HH:mm:ss zzz yyyy";
+    private static final String MILLISECOND_PATTERN = "SSS";
+    private static final String ZERO_MILLISECONDS = "000";
+
+    private final String formatString;
+    private final DateTimeFormatter primaryFormatter;
+    private final DateTimeFormatter secondaryFormatter;
+    private final ZoneId zoneId;
+
+    private volatile TickHolder tickHolder;
+
+    // --- Constructors ---
+
+    public DateCache() {
+        this(DEFAULT_FORMAT);
+    }
+
+    public DateCache(String format) {
+        this(format, null, TimeZone.getDefault());
+    }
+
+    public DateCache(String format, Locale locale) {
+        this(format, locale, TimeZone.getDefault());
+    }
+
+    public DateCache(String format, Locale locale, String timezone) {
+        this(format, locale, TimeZone.getTimeZone(timezone));
+    }
+
+    public DateCache(String format, Locale locale, TimeZone timezone) {
+        this(format, locale, timezone, true);
+    }
+
+    public DateCache(String format, Locale locale, TimeZone timezone, boolean subSecondPrecision) {
+        this.zoneId = timezone.toZoneId();
+        this.formatString = format.replaceFirst(MILLISECOND_PATTERN + "+", MILLISECOND_PATTERN);
+        FormatterPair formatterPair = createFormatters(formatString, locale, subSecondPrecision);
+        this.primaryFormatter = formatterPair.primaryFormatter;
+        this.secondaryFormatter = formatterPair.secondaryFormatter;
+    }
+
+    // --- Public Methods ---
+
+    public String format(Date date) {
+        return format(date.getTime());
+    }
+
+    public String format(long timestamp) {
+        return getTick(timestamp).format(timestamp);
+    }
+
+    public TimeZone getTimeZone() {
+        return TimeZone.getTimeZone(zoneId);
+    }
+
+    public String getFormatString() {
+        return formatString;
+    }
+
+    public void releaseCache() {
+        tickHolder = null;
+    }
+
+    // --- Internal Methods ---
+
+    private Tick getTick(long timestamp) {
+        long seconds = timestamp / 1000;
+        TickHolder holder = tickHolder;
+
+        if (holder != null) {
+            if (holder.firstTick != null && holder.firstTick.getSeconds() == seconds) {
+                return holder.firstTick;
+            }
+            if (holder.secondTick != null && holder.secondTick.getSeconds() == seconds) {
+                return holder.secondTick;
+            }
+        }
+
+        String prefix = formatTime(timestamp, primaryFormatter);
+        String suffix = formatTime(timestamp, secondaryFormatter);
+        Tick newTick = new Tick(seconds, prefix, suffix);
+
+        tickHolder = new TickHolder(newTick, holder == null ? null : holder.firstTick);
+        return newTick;
+    }
+
+    private String formatTime(long timestamp, DateTimeFormatter formatter) {
+        return formatter == null ? "" : formatter.format(Instant.ofEpochMilli(timestamp));
+    }
+
+    private FormatterPair createFormatters(String format, Locale locale, boolean subSecondPrecision) {
+        String mainFormat = format;
+        String subFormat = null;
+
+        if (subSecondPrecision) {
+            int milliIndex = format.indexOf(MILLISECOND_PATTERN);
+            if (milliIndex >= 0) {
+                mainFormat = format.substring(0, milliIndex);
+                subFormat = format.substring(milliIndex + MILLISECOND_PATTERN.length());
+            }
+        } else {
+            mainFormat = format.replace(MILLISECOND_PATTERN, ZERO_MILLISECONDS);
+        }
+
+        DateTimeFormatter mainFormatter = createFormatter(mainFormat, locale);
+        DateTimeFormatter subFormatter = subFormat != null ? createFormatter(subFormat, locale) : null;
+
+        return new FormatterPair(mainFormatter, subFormatter);
+    }
+
+    private DateTimeFormatter createFormatter(String pattern, Locale locale) {
+        return locale == null
+                ? DateTimeFormatter.ofPattern(pattern).withZone(zoneId)
+                : DateTimeFormatter.ofPattern(pattern, locale).withZone(zoneId);
+    }
+
+    // --- Inner Classes ---
+
+    private static class FormatterPair {
+        final DateTimeFormatter primaryFormatter;
+        final DateTimeFormatter secondaryFormatter;
+
+        FormatterPair(DateTimeFormatter primary, DateTimeFormatter secondary) {
+            this.primaryFormatter = primary;
+            this.secondaryFormatter = secondary;
+        }
+    }
+
+    private static class TickHolder {
+        final Tick firstTick;
+        final Tick secondTick;
+
+        TickHolder(Tick current, Tick previous) {
+            this.firstTick = current;
+            this.secondTick = previous;
+        }
+    }
+
+    private static class Tick {
+        private final long seconds;
+        private final String prefix;
+        private final String suffix;
+
+        Tick(long seconds, String prefix, String suffix) {
+            this.seconds = seconds;
+            this.prefix = prefix;
+            this.suffix = suffix;
+        }
+
+        long getSeconds() {
+            return seconds;
+        }
+
+        String format(long timestamp) {
+            if (suffix == null) {
+                return prefix;
+            }
+
+            long millis = timestamp % 1000;
+            StringBuilder result = new StringBuilder(prefix);
+
+            if (millis < 10) {
+                result.append("00").append(millis);
+            } else if (millis < 100) {
+                result.append('0').append(millis);
+            } else {
+                result.append(millis);
+            }
+
+            result.append(suffix);
+            return result.toString();
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - Introduced `FormatterPair` for pairing the primary and secondary formatters.
+
+2. **Extract Method:**  
+   - Moved sub-second formatting logic into `createFormatters`.  
+   - Moved formatter creation into `createFormatter`.
+
+3. **Rename Attribute:**  
+   - `_tzFormat1` → `primaryFormatter`  
+   - `_tzFormat2` → `secondaryFormatter`
+
+4. **Inline Method:**  
+   - Removed deprecated `formatNow` and `now` methods in favor of using `format(long)` directly.
+
+5. **Extract Variable:**  
+   - Extracted `"SSS"` and `"000"` into constants `MILLISECOND_PATTERN` and `ZERO_MILLISECONDS`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Clear separation of responsibilities across methods and classes.  
+- **Maintainability:** Constants eliminate magic strings, making changes easier.  
+- **Reusability:** Formatter logic is now more modular and can be reused.  
+- **Performance:** Cache handling remains efficient while code is cleaner.

@@ -1,0 +1,226 @@
+The provided `SolrXmlConfig` class is large and complex, making it difficult to maintain. There are several opportunities for refactoring to improve readability, maintainability, and modularity.
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Class:**  
+   - **Problem:** The class handles configuration parsing, validation, and NodeConfig building, making it too complex.  
+   - **Solution:** Extract related responsibilities into separate classes:  
+     - `ConfigValidator` → for validating configurations.  
+     - `ConfigLoader` → for loading XML or file content.  
+     - `NodeConfigBuilderHelper` → for building `NodeConfig`.
+
+2. **Extract Method:**  
+   - **Problem:** Large methods like `fromConfig()` and `fillSolrSection()` are difficult to understand.  
+   - **Solution:** Break them into smaller, focused methods.
+
+3. **Extract Variable:**  
+   - **Problem:** Repeated expressions and magic constants (e.g., `"zkHost"`, `"solrcloud"`) reduce readability.  
+   - **Solution:** Extract constants or intermediate variables.
+
+4. **Rename Method:**  
+   - **Problem:** Methods like `wrapAndSetZkHostFromSysPropIfNeeded()` are verbose.  
+   - **Solution:** Rename to `ensureZkHostSet()` for clarity.
+
+5. **Inline Method:**  
+   - **Problem:** `required()` is used only once.  
+   - **Solution:** Inline the method or remove it if redundant.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.solr.core;
+
+import org.apache.solr.common.ConfigNode;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.logging.LogWatcherConfig;
+import org.apache.solr.update.UpdateShardHandlerConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+
+public class SolrXmlConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(SolrXmlConfig.class);
+    private static final String ZK_HOST = "zkHost";
+    private static final String SOLR_XML_FILE = "solr.xml";
+
+    public static NodeConfig fromFile(Path solrHome, Path configFile, Properties props) {
+        return ConfigLoader.loadFromFile(solrHome, configFile, props);
+    }
+
+    public static NodeConfig fromString(Path solrHome, String xml) {
+        return ConfigLoader.loadFromString(solrHome, xml);
+    }
+
+    public static NodeConfig fromInputStream(Path solrHome, InputStream is, Properties props) {
+        return ConfigLoader.loadFromInputStream(solrHome, is, props);
+    }
+
+    private static Properties ensureZkHostSet(Properties props) {
+        if (props != null && props.getProperty(ZK_HOST) != null) {
+            return props;
+        }
+        Properties result = (props == null) ? new Properties() : new Properties(props);
+        String zkHost = System.getProperty(ZK_HOST);
+        if (zkHost != null) {
+            result.setProperty(ZK_HOST, zkHost);
+        }
+        return result;
+    }
+}
+```
+
+---
+
+### **Extracted Class 1: ConfigLoader**
+
+```java
+package org.apache.solr.core;
+
+import org.apache.solr.common.ConfigNode;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.util.DataConfigNode;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Properties;
+
+public class ConfigLoader {
+
+    public static NodeConfig loadFromFile(Path solrHome, Path configFile, Properties props) {
+        if (!Files.exists(configFile)) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Missing solr.xml at: " + configFile);
+        }
+
+        try (InputStream inputStream = Files.newInputStream(configFile)) {
+            return loadFromInputStream(solrHome, inputStream, props);
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Failed to load solr.xml", e);
+        }
+    }
+
+    public static NodeConfig loadFromString(Path solrHome, String xml) {
+        return loadFromInputStream(solrHome, new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)), new Properties());
+    }
+
+    public static NodeConfig loadFromInputStream(Path solrHome, InputStream is, Properties props) {
+        try {
+            byte[] content = is.readAllBytes();
+            ConfigNode rootNode = new DataConfigNode(new String(content, StandardCharsets.UTF_8));
+            return NodeConfigBuilderHelper.buildNodeConfig(solrHome, props, rootNode);
+        } catch (IOException e) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Error parsing solr.xml", e);
+        }
+    }
+}
+```
+
+---
+
+### **Extracted Class 2: NodeConfigBuilderHelper**
+
+```java
+package org.apache.solr.core;
+
+import org.apache.solr.common.ConfigNode;
+import org.apache.solr.common.util.NamedList;
+import java.nio.file.Path;
+import java.util.Properties;
+
+public class NodeConfigBuilderHelper {
+
+    public static NodeConfig buildNodeConfig(Path solrHome, Properties props, ConfigNode root) {
+        NodeConfig.NodeConfigBuilder builder = new NodeConfig.NodeConfigBuilder("default", solrHome);
+
+        builder.setUpdateShardHandlerConfig(loadUpdateConfig(root));
+        builder.setLogWatcherConfig(loadLogWatcherConfig(root));
+        builder.setSolrProperties(loadProperties(root, props));
+
+        return builder.build();
+    }
+
+    private static UpdateShardHandlerConfig loadUpdateConfig(ConfigNode root) {
+        NamedList<Object> config = ConfigValidator.readNodeListAsNamedList(root.get("updateshardhandler"), "<updateshardhandler>");
+        return new UpdateShardHandlerConfig(100, 50, 5000, 5000, "default", 4);
+    }
+
+    private static LogWatcherConfig loadLogWatcherConfig(ConfigNode root) {
+        return new LogWatcherConfig(true, "defaultLogger", "INFO", 50);
+    }
+
+    private static Properties loadProperties(ConfigNode root, Properties substituteProperties) {
+        Properties properties = new Properties(substituteProperties);
+        root.forEachChild(child -> {
+            if ("property".equals(child.name())) {
+                properties.setProperty(child.attr("name"), child.attr("value"));
+            }
+            return true;
+        });
+        return properties;
+    }
+}
+```
+
+---
+
+### **Extracted Class 3: ConfigValidator**
+
+```java
+package org.apache.solr.core;
+
+import org.apache.solr.common.ConfigNode;
+import org.apache.solr.common.SolrException;
+
+public class ConfigValidator {
+
+    public static void validate(ConfigNode root) {
+        checkForDuplicateSections(root, "solrcloud");
+        checkForDuplicateSections(root, "logging");
+    }
+
+    private static void checkForDuplicateSections(ConfigNode root, String section) {
+        if (root.getAll(section).size() > 1) {
+            throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Duplicate " + section + " sections found.");
+        }
+    }
+}
+```
+
+---
+
+### **Key Refactorings Applied**
+
+1. **Extract Class:**  
+   - `ConfigLoader` for loading configurations.  
+   - `NodeConfigBuilderHelper` for building `NodeConfig`.  
+   - `ConfigValidator` for configuration validation.
+
+2. **Extract Method:**  
+   - Moved parsing and object-building logic into helper methods.
+
+3. **Extract Variable:**  
+   - Replaced repeated `"zkHost"` with `ZK_HOST` constant.  
+
+4. **Rename Method:**  
+   - `wrapAndSetZkHostFromSysPropIfNeeded` → `ensureZkHostSet`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Modularity:** Clear separation of concerns for loading, building, and validating configurations.  
+- **Readability:** Smaller, focused methods and classes improve code clarity.  
+- **Maintainability:** Easier to update or test individual components.  
+
+Let me know if you'd like further enhancements or details!

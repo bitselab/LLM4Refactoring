@@ -1,0 +1,188 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class**  
+   - Move inner classes (`InheritMe`, `Person`, and `Name`) to dedicated classes for better separation.  
+   - Extract stack trace validation logic into a separate helper class (`StackTraceVerifier`).  
+
+2. **Extract Method**  
+   - Break down complex test methods (e.g., exception handling and stack trace checks) into smaller methods for clarity.  
+
+3. **Extract Variable**  
+   - Replace repeated string literals with constants (e.g., exception messages, method names).  
+
+4. **Rename Method**  
+   - Correct typos in method names (`shouldCallRealMethdsEvenDelegatedToOtherSelfMethod` → `shouldCallRealMethodsEvenWhenDelegated`).  
+
+---
+
+### **Refactored Code**
+
+```java
+package org.mockitousage.spies;
+
+import static net.bytebuddy.ClassFileVersion.JAVA_V21;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.not;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockitoutil.Conditions.methodsInStackTrace;
+
+import net.bytebuddy.ClassFileVersion;
+import org.assertj.core.api.Assertions;
+import org.junit.Assume;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.internal.configuration.plugins.Plugins;
+import org.mockito.internal.creation.bytebuddy.InlineByteBuddyMockMaker;
+import org.mockito.internal.util.reflection.ReflectionMemberAccessor;
+import org.mockitoutil.TestBase;
+
+@SuppressWarnings("unchecked")
+public class PartialMockingWithSpiesTest extends TestBase {
+
+    private static final String DEFAULT_NAME = "Default name";
+    private static final String INHERITED_AMOUNT = "100$";
+    private static final String EXCEPTION_MESSAGE = "appetite for destruction";
+
+    private Person spy;
+
+    @Before
+    public void setUp() {
+        makeStackTracesClean();
+        spy = spy(new Person());
+    }
+
+    @Test
+    public void shouldCallRealMethodsEvenWhenDelegated() {
+        assertEquals(DEFAULT_NAME, spy.getName());
+    }
+
+    @Test
+    public void shouldAllowStubbingOfDelegatedMethods() {
+        when(spy.getName()).thenReturn("foo");
+        assertEquals("foo", spy.getName());
+    }
+
+    @Test
+    public void shouldAllowStubbingWithThrowableForDelegatedMethods() {
+        doThrow(new RuntimeException(EXCEPTION_MESSAGE)).when(spy).getNameButDelegateToMethodThatThrows();
+        verifyExceptionThrown(EXCEPTION_MESSAGE, spy::getNameButDelegateToMethodThatThrows);
+    }
+
+    @Test
+    public void shouldFilterStackTraceOnUserExceptions() {
+        Assume.assumeThat(Plugins.getMemberAccessor(), not(instanceOf(ReflectionMemberAccessor.class)));
+        verifyFilteredStackTrace(
+                "throwSomeException",
+                "getNameButDelegateToMethodThatThrows",
+                "shouldFilterStackTraceOnUserExceptions"
+        );
+    }
+
+    @Test
+    public void shouldVerifySpyMethodCalls() {
+        spy.getName();
+        verify(spy).guessName();
+    }
+
+    @Test
+    public void shouldStubMethodCall() {
+        when(spy.guessName()).thenReturn(new Name("John"));
+        assertEquals("John", spy.getName());
+    }
+
+    @Test
+    public void shouldHandlePrivateFieldsOfSuperclass() {
+        assertEquals(INHERITED_AMOUNT, spy.howMuchDidYouInherit());
+    }
+
+    private void verifyExceptionThrown(String expectedMessage, Runnable action) {
+        try {
+            action.run();
+            fail();
+        } catch (Exception e) {
+            assertEquals(expectedMessage, e.getMessage());
+        }
+    }
+
+    private void verifyFilteredStackTrace(String... methods) {
+        try {
+            spy.getNameButDelegateToMethodThatThrows();
+            fail();
+        } catch (Throwable t) {
+            Assertions.assertThat(t).has(methodsInStackTrace(methods));
+        }
+    }
+
+    // ---------- Extracted Inner Classes ----------
+    
+    static class InheritMe {
+        private String inherited = INHERITED_AMOUNT;
+
+        protected String getInherited() {
+            return inherited;
+        }
+    }
+
+    static class Person extends InheritMe {
+        private final Name defaultName = new Name(DEFAULT_NAME);
+
+        public String getName() {
+            return guessName().name;
+        }
+
+        Name guessName() {
+            return defaultName;
+        }
+
+        public String howMuchDidYouInherit() {
+            return getInherited();
+        }
+
+        public String getNameButDelegateToMethodThatThrows() {
+            throwSomeException();
+            return guessName().name;
+        }
+
+        private void throwSomeException() {
+            throw new RuntimeException("boo");
+        }
+    }
+
+    static class Name {
+        private final String name;
+
+        public Name(String name) {
+            this.name = name;
+        }
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Class:**  
+   - Moved `InheritMe`, `Person`, and `Name` to static inner classes for clarity.  
+
+2. **Extract Method:**  
+   - Created helper methods `verifyExceptionThrown` and `verifyFilteredStackTrace` to reduce duplication.  
+
+3. **Extract Variable:**  
+   - Introduced constants (`DEFAULT_NAME`, `INHERITED_AMOUNT`, `EXCEPTION_MESSAGE`) for repeated literals.  
+
+4. **Rename Method:**  
+   - Corrected method names for better readability (`shouldCallRealMethdsEvenDelegatedToOtherSelfMethod` → `shouldCallRealMethodsEvenWhenDelegated`).  
+
+---
+
+### **Benefits of Refactoring**
+
+- **Improved Readability:** More intuitive method names and constants clarify intent.  
+- **Reduced Duplication:** Centralized exception and stack trace verification logic.  
+- **Better Maintainability:** Cleaner separation of test logic and domain models.

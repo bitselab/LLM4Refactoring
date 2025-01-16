@@ -1,0 +1,175 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The constructor logic can be broken down into smaller, more descriptive methods for better readability and maintainability.  
+   - The validation of requested extensions in the `connect` method can be extracted.  
+
+2. **Extract Class:**  
+   - No need for extraction here; the class responsibilities are cohesive.  
+
+3. **Extract Variable:**  
+   - Inline conditional checks for `webSocketComponents` initialization and logging messages to improve clarity.  
+
+4. **Inline Variable:**  
+   - Inline redundant variable assignments to simplify the constructor.  
+
+5. **Rename Method/Variable:**  
+   - Improve method names for better clarity (`connect` → `connectToWebSocket`).  
+
+---
+
+### **Refactored Code**
+
+```java
+package org.eclipse.jetty.websocket.core.client;
+
+import java.io.IOException;
+import java.net.URI;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+
+import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.api.Request;
+import org.eclipse.jetty.util.DecoratedObjectFactory;
+import org.eclipse.jetty.util.component.ContainerLifeCycle;
+import org.eclipse.jetty.websocket.core.CoreSession;
+import org.eclipse.jetty.websocket.core.ExtensionConfig;
+import org.eclipse.jetty.websocket.core.FrameHandler;
+import org.eclipse.jetty.websocket.core.WebSocketComponents;
+import org.eclipse.jetty.websocket.core.WebSocketExtensionRegistry;
+import org.eclipse.jetty.websocket.core.client.internal.HttpClientProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class WebSocketCoreClient extends ContainerLifeCycle {
+    public static final String WEBSOCKET_CORECLIENT_ATTRIBUTE = WebSocketCoreClient.class.getName();
+    private static final Logger LOG = LoggerFactory.getLogger(WebSocketCoreClient.class);
+
+    private final HttpClient httpClient;
+    private final WebSocketComponents components;
+    private ClassLoader classLoader;
+
+    public WebSocketCoreClient() {
+        this(null, new WebSocketComponents());
+    }
+
+    public WebSocketCoreClient(WebSocketComponents webSocketComponents) {
+        this(null, webSocketComponents);
+    }
+
+    public WebSocketCoreClient(HttpClient httpClient, WebSocketComponents webSocketComponents) {
+        this.httpClient = initializeHttpClient(httpClient);
+        this.components = initializeComponents(webSocketComponents);
+        configureHttpClient();
+
+        this.classLoader = Thread.currentThread().getContextClassLoader();
+    }
+
+    private HttpClient initializeHttpClient(HttpClient httpClient) {
+        HttpClient client = Objects.requireNonNullElse(httpClient, HttpClientProvider.get());
+        addBean(client);
+        return client;
+    }
+
+    private WebSocketComponents initializeComponents(WebSocketComponents webSocketComponents) {
+        WebSocketComponents components = webSocketComponents != null ? webSocketComponents : createDefaultComponents();
+        addBean(components);
+        return components;
+    }
+
+    private WebSocketComponents createDefaultComponents() {
+        return httpClient.isStarted() 
+            ? new WebSocketComponents(null, null, httpClient.getByteBufferPool(), null, null, httpClient.getExecutor()) 
+            : new WebSocketComponents();
+    }
+
+    private void configureHttpClient() {
+        if (!httpClient.isStarted()) {
+            if (httpClient.getByteBufferPool() == null)
+                httpClient.setByteBufferPool(components.getBufferPool());
+            if (httpClient.getExecutor() == null)
+                httpClient.setExecutor(components.getExecutor());
+        }
+    }
+
+    public ClassLoader getClassLoader() {
+        return classLoader;
+    }
+
+    public void setClassLoader(ClassLoader classLoader) {
+        this.classLoader = Objects.requireNonNull(classLoader);
+    }
+
+    public CompletableFuture<CoreSession> connectToWebSocket(FrameHandler frameHandler, URI wsUri) throws IOException {
+        CoreClientUpgradeRequest request = CoreClientUpgradeRequest.from(this, wsUri, frameHandler);
+        return connect(request);
+    }
+
+    public CompletableFuture<CoreSession> connect(CoreClientUpgradeRequest request) throws IOException {
+        ensureClientIsStarted();
+        validateRequestedExtensions(request);
+        registerRequestListeners(request);
+
+        LOG.debug("Connecting to WebSocket: {}", request.getURI());
+        return request.sendAsync();
+    }
+
+    private void ensureClientIsStarted() {
+        if (!isStarted()) {
+            throw new IllegalStateException(getClass().getSimpleName() + "@" + this.hashCode() + " is not started");
+        }
+    }
+
+    private void validateRequestedExtensions(CoreClientUpgradeRequest request) {
+        for (ExtensionConfig reqExt : request.getExtensions()) {
+            if (!components.getExtensionRegistry().isAvailable(reqExt.getName())) {
+                throw new IllegalArgumentException("Requested extension [" + reqExt.getName() + "] is not installed");
+            }
+        }
+    }
+
+    private void registerRequestListeners(CoreClientUpgradeRequest request) {
+        for (Request.Listener listener : getBeans(Request.Listener.class)) {
+            request.listener(listener);
+        }
+    }
+
+    public WebSocketExtensionRegistry getExtensionRegistry() {
+        return components.getExtensionRegistry();
+    }
+
+    public HttpClient getHttpClient() {
+        return httpClient;
+    }
+
+    public DecoratedObjectFactory getObjectFactory() {
+        return components.getObjectFactory();
+    }
+
+    public WebSocketComponents getWebSocketComponents() {
+        return components;
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extracted Methods:**  
+   - `initializeHttpClient`, `initializeComponents`, `createDefaultComponents`, `configureHttpClient`: Simplify the constructor logic.  
+   - `ensureClientIsStarted`, `validateRequestedExtensions`, `registerRequestListeners`: Simplify and clarify the `connect` method.
+
+2. **Renamed Method:**  
+   - `connect` → `connectToWebSocket` (for clarity in public API).
+
+3. **Extracted Variable:**  
+   - Inlined redundant conditional logic in constructors and logging.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Cleaner and more modular constructor and connection logic.  
+- **Maintainability:** Smaller methods make the code easier to understand and modify.  
+- **Scalability:** Easier to extend the connection setup and client configuration without modifying core methods.

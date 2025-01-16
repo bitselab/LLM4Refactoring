@@ -1,0 +1,61 @@
+Certainly! There is an opportunity to refactor the code in the test method `testDifferentStateTtlForDifferentOneInputOperator` of the class `ConfigureOperatorLevelStateTtlJsonITCase` by extracting a method to encapsulate the logic of setting the state TTL for a specific JSON node in the compiled JSON plan.
+
+Here's the refactored code:
+
+```java
+package org.apache.flink.table.planner.runtime.stream.jsonplan;
+
+// ... other imports
+
+class ConfigureOperatorLevelStateTtlJsonITCase extends JsonPlanTestBase {
+
+  // ... other test methods
+
+  @Test
+  void testDifferentStateTtlForDifferentOneInputOperator() throws Exception {
+    String dataId =
+        TestValuesTableFactory.registerRowData(
+            Arrays.asList(
+                GenericRowData.of(1, StringData.fromString("Tom"), 1, 199.9d),
+                GenericRowData.of(2, StringData.fromString("Jerry"), 2, 99.9d),
+                // ... other rows
+            ));
+    createTestSourceTable(
+        "Orders",
+        new String[] {"`order_id` INT", "`buyer` STRING", "`quantity` INT", "`amount` DOUBLE"},
+        null,
+        getProperties(dataId, 1, "2s"));
+
+    // ... other table creation and SQL statement
+
+    compileSqlAndExecutePlan(sql, json -> {
+      try {
+        JsonNode target = JsonTestUtils.readFromString(json);
+        setExecNodeStateTtl(target, "stream-exec-deduplicate", 0, 6000L);
+        setExecNodeStateTtl(target, "stream-exec-group-aggregate", 0, 9000L);
+        return JsonTestUtils.writeToString(target);
+      } catch (IOException e) {
+        throw new TableException("Cannot modify compiled json plan.", e);
+      }
+    }).await();
+
+    // ... other assertions
+
+  }
+
+  private void setExecNodeStateTtl(JsonNode jsonNode, String execNodeName, int inputIndex, long ttl) throws IOException {
+    JsonTestUtils.setExecNodeStateMetadata(jsonNode, execNodeName, inputIndex, ttl);
+  }
+
+  // ... other methods
+}
+```
+
+The new method `setExecNodeStateTtl` takes the following arguments:
+
+* `jsonNode`: The root node of the compiled JSON plan.
+* `execNodeName`: The name of the operator (e.g., "stream-exec-deduplicate").
+* `inputIndex`: The index of the input for which the state TTL should be set (0-based).
+* `ttl`: The time-to-live value for the state in milliseconds.
+
+This refactoring improves code readability and maintainability by separating the concerns of JSON manipulation and state TTL configuration. It also reduces code duplication and makes it easier to test the logic of setting state TTL in isolation.

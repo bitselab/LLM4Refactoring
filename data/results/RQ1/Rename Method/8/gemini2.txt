@@ -1,0 +1,65 @@
+## Refactoring Opportunities in OrmSetupHelperCleaner
+
+Here are some refactoring opportunities in the provided code for `OrmSetupHelperCleaner`:
+
+1. **Method Rename:**
+    * `clearAllData`: This method name doesn't clearly indicate that it performs selective clearing based on configuration. A better name could be `clearDataAccordingToConfig`.
+
+2. **Extract Method:**
+    * The logic for creating queries based on `QueryType` (SELECT or DELETE) can be extracted into a separate method to improve readability and potentially reduce redundancy. This method could be named `createSelectOrDeleteQuery`.
+
+3. **Simplify Nested Ternary Operator:**
+    * In the `createSelectOrDeleteAllOfSpecificTypeQuery` method, there's a nested ternary operator for setting the query type. This can be simplified using an if-else statement.
+
+Here's the refactored code with the suggested changes:
+
+```java
+class OrmSetupHelperCleaner {
+  // ... other fields and methods
+
+  private void clearDataAccordingToConfig(SessionFactoryImplementor sessionFactory) {
+    if (!(config.clearDatabaseData || config.clearIndexData)) {
+      return;
+    }
+    log.info("Clearing data and reusing the same session factory.");
+    try {
+      clearAllData(sessionFactory);
+    } catch (RuntimeException e) {
+      // ... error handling logic
+    }
+  }
+
+  private void clearAllData(SessionFactoryImplementor sessionFactory) {
+    HibernateOrmMapping mapping;
+    try {
+      mapping = ((HibernateOrmMapping) Search.mapping(sessionFactory));
+    } catch (SearchException e) {
+      // ... handle exception
+    }
+
+    if (config.clearDatabaseData) {
+      sessionFactory.getCache().evictAllRegions();
+      clearDatabase(sessionFactory, mapping);
+      sessionFactory.getCache().evictAllRegions();
+    }
+
+    if (mapping != null && config.clearIndexData) {
+      Search.mapping(sessionFactory).scope(Object.class).schemaManager().dropAndCreate();
+    }
+  }
+
+  private void clearDatabase(SessionFactoryImplementor sessionFactory, HibernateOrmMapping mapping) {
+    // ... existing logic
+  }
+
+  private static Query<?> createSelectOrDeleteQuery(EntityType<?> entityType, Session session, QueryType queryType) {
+    StringBuilder builder = new StringBuilder(queryType == QueryType.SELECT ? "select e " : "delete ");
+    builder.append("from ").append(entityType.getName()).append(" e");
+    // ... rest of the logic from createSelectOrDeleteAllOfSpecificTypeQuery
+  }
+
+  // ... other methods
+}
+```
+
+These are just some suggestions, and you might identify further improvements based on your specific coding standards and preferences.

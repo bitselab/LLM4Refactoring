@@ -1,0 +1,233 @@
+### **Refactoring Analysis**
+
+Upon reviewing the `Docs` class, several refactoring opportunities were identified to improve code readability, maintainability, and reduce duplication.
+
+---
+
+### **Identified Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem:** The `Docs` class manages document generation, threading, and field handling.  
+   - **Solution:** Extract classes for:
+     - `FieldGenerator`: Handles field generation logic.
+     - `DocumentGenerator`: Handles document creation.
+
+2. **Extract Method**  
+   - **Problem:** The `preGenerate` and `field(SolrGen<?> generator)` methods are too complex.  
+   - **Solution:** Extract smaller, focused methods.
+
+3. **Extract Variable**  
+   - **Problem:** Complex expressions in `field` method reduce readability.  
+   - **Solution:** Introduce descriptive variables.
+
+4. **Rename Attribute/Method/Variable**  
+   - **Problem:** Generic names like `docs`, `field`, and `random` reduce clarity.  
+   - **Solution:** Use descriptive names like `generatedDocs`, `addFieldGenerator`, and `randomSource`.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.solr.bench;
+
+import static org.apache.solr.bench.BaseBenchState.log;
+
+import java.util.*;
+import java.util.concurrent.*;
+
+import org.apache.lucene.util.RamUsageEstimator;
+import org.apache.solr.bench.generators.MultiString;
+import org.apache.solr.bench.generators.SolrGen;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.util.CollectionUtil;
+import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.apache.solr.common.util.SuppressForbidden;
+import org.quicktheories.core.Gen;
+import org.quicktheories.impl.BenchmarkRandomSource;
+
+public class Docs {
+
+    private final ThreadLocal<SolrRandomnessSource> randomSource;
+    private final Queue<SolrInputDocument> generatedDocs = new ConcurrentLinkedQueue<>();
+    private final FieldGenerator fieldGenerator = new FieldGenerator();
+
+    private ExecutorService executorService;
+
+    public static Docs create() {
+        return new Docs(BaseBenchState.getRandomSeed());
+    }
+
+    public static Docs create(Long seed) {
+        return new Docs(seed);
+    }
+
+    private Docs(Long seed) {
+        this.randomSource = ThreadLocal.withInitial(() -> new BenchmarkRandomSource(new SplittableRandomGenerator(seed)));
+    }
+
+    @SuppressForbidden(reason = "This module does not need to deal with logging context")
+    public Iterator<SolrInputDocument> preGenerate(int numDocs) throws InterruptedException {
+        log("Pre-generating " + numDocs + " documents...");
+        generatedDocs.clear();
+        initializeExecutor();
+
+        submitDocumentGenerationTasks(numDocs);
+
+        awaitCompletion();
+
+        log("Finished generating " + generatedDocs.size() + " docs, RAM usage: " +
+                RamUsageEstimator.humanReadableUnits(RamUsageEstimator.sizeOfObject(generatedDocs)));
+
+        if (numDocs != generatedDocs.size()) {
+            throw new IllegalStateException("Expected " + numDocs + " but got " + generatedDocs.size());
+        }
+
+        return generatedDocs.iterator();
+    }
+
+    public Iterator<SolrInputDocument> generatedDocsIterator() {
+        return generatedDocs.iterator();
+    }
+
+    public CircularIterator<SolrInputDocument> generatedDocsCircularIterator() {
+        return new CircularIterator<>(generatedDocs);
+    }
+
+    public SolrInputDocument createInputDocument() {
+        return DocumentGenerator.createSolrInputDocument(fieldGenerator, randomSource.get());
+    }
+
+    public SolrDocument createSolrDocument() {
+        return DocumentGenerator.createSolrDocument(fieldGenerator, randomSource.get());
+    }
+
+    public Docs addFieldGenerator(String fieldName, Gen<?> generator) {
+        fieldGenerator.addField(fieldName, generator);
+        return this;
+    }
+
+    public Docs addFieldGenerator(SolrGen<?> generator) {
+        fieldGenerator.addTypedField(generator);
+        return this;
+    }
+
+    public void clearGeneratedDocs() {
+        generatedDocs.clear();
+    }
+
+    private void initializeExecutor() {
+        executorService = Executors.newFixedThreadPool(
+                Runtime.getRuntime().availableProcessors() + 1,
+                new SolrNamedThreadFactory("SolrJMH-DocGen"));
+    }
+
+    private void submitDocumentGenerationTasks(int numDocs) {
+        for (int i = 0; i < numDocs; i++) {
+            executorService.submit(() -> generatedDocs.add(createInputDocument()));
+        }
+    }
+
+    private void awaitCompletion() throws InterruptedException {
+        executorService.shutdown();
+        if (!executorService.awaitTermination(10, TimeUnit.MINUTES)) {
+            throw new RuntimeException("Timeout during document generation");
+        }
+    }
+}
+
+// --- Extracted Class: Handles Field Generation ---
+class FieldGenerator {
+
+    private final Map<String, Gen<?>> fields = Collections.synchronizedMap(CollectionUtil.newHashMap(16));
+    private final Map<Class<?>, String> fieldPrefixes = Map.of(
+            String.class, "string",
+            MultiString.class, "text",
+            Integer.class, "int",
+            Long.class, "long",
+            Boolean.class, "boolean",
+            Float.class, "float",
+            Double.class, "double",
+            Date.class, "date"
+    );
+    private final Map<Class<?>, Integer> fieldCounters = new HashMap<>();
+
+    public void addField(String name, Gen<?> generator) {
+        fields.put(name, generator);
+    }
+
+    public void addTypedField(SolrGen<?> generator) {
+        Class<?> type = generator.type();
+        String prefix = fieldPrefixes.getOrDefault(type, "unknown");
+        int count = fieldCounters.merge(type, 1, Integer::sum);
+        fields.put(prefix + (count > 1 ? count : "") + getSuffix(type), generator);
+    }
+
+    private String getSuffix(Class<?> type) {
+        return switch (type.getSimpleName()) {
+            case "String" -> "_s";
+            case "MultiString" -> "_t";
+            case "Integer" -> "_i";
+            case "Long" -> "_l";
+            case "Boolean" -> "_b";
+            case "Float" -> "_f";
+            case "Double" -> "_d";
+            case "Date" -> "_dt";
+            default -> "_unknown";
+        };
+    }
+
+    public Map<String, Gen<?>> getFields() {
+        return fields;
+    }
+}
+
+// --- Extracted Class: Handles Document Creation ---
+class DocumentGenerator {
+
+    public static SolrInputDocument createSolrInputDocument(FieldGenerator fieldGenerator, SolrRandomnessSource randomSource) {
+        SolrInputDocument document = new SolrInputDocument();
+        fieldGenerator.getFields().forEach((key, generator) ->
+                document.addField(key, generator.generate(randomSource))
+        );
+        return document;
+    }
+
+    public static SolrDocument createSolrDocument(FieldGenerator fieldGenerator, SolrRandomnessSource randomSource) {
+        SolrDocument document = new SolrDocument();
+        fieldGenerator.getFields().forEach((key, generator) ->
+                document.addField(key, generator.generate(randomSource))
+        );
+        return document;
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - **`FieldGenerator`**: Handles field definitions and type-based field name generation.  
+   - **`DocumentGenerator`**: Manages the creation of `SolrInputDocument` and `SolrDocument`.
+
+2. **Extract Method:**  
+   - Broke down `preGenerate` into smaller methods (`initializeExecutor`, `submitDocumentGenerationTasks`, `awaitCompletion`).
+
+3. **Extract Variable:**  
+   - Simplified field name construction with `fieldPrefixes` and `fieldCounters`.
+
+4. **Rename Attribute/Method/Variable:**  
+   - `docs` → `generatedDocs`  
+   - `random` → `randomSource`  
+   - `field` → `addFieldGenerator`  
+   - `inputDocument` → `createInputDocument`
+
+---
+
+### **Refactoring Benefits**
+
+- **Readability:** Cleaner, more modular structure.  
+- **Maintainability:** Easier to modify and extend document generation logic.  
+- **Reusability:** Decoupled logic enables isolated testing and reuse.

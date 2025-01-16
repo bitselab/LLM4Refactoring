@@ -1,0 +1,120 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Simplify the constructor by extracting certificate and private key supplier initialization into dedicated methods.  
+   - Extract the null-checking and loading logic into helper methods for clarity.  
+
+2. **Extract Variable:**  
+   - Extract magic strings (e.g., `"Details must not be null"`, `"Loaded certificates are empty"`) into constants.  
+
+3. **Rename Method:**  
+   - Rename `supplier()` to `createSingletonSupplier()` to better convey its purpose.  
+
+4. **Inline Method:**  
+   - Inline `asUncheckedIOException()` into the supplier to simplify error handling.  
+
+---
+
+### **Refactored Code**
+
+```java
+package org.springframework.boot.ssl.pem;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+import java.util.List;
+import java.util.function.Supplier;
+
+import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.function.SingletonSupplier;
+import org.springframework.util.function.ThrowingSupplier;
+
+/**
+ * {@link PemSslStore} loaded from {@link PemSslStoreDetails}.
+ *
+ * @see PemSslStore#load(PemSslStoreDetails)
+ */
+final class LoadedPemSslStore implements PemSslStore {
+
+    private static final String DETAILS_MUST_NOT_BE_NULL = "Details must not be null";
+    private static final String EMPTY_CERTIFICATES_ERROR = "Loaded certificates are empty";
+
+    private final PemSslStoreDetails details;
+    private final Supplier<List<X509Certificate>> certificateSupplier;
+    private final Supplier<PrivateKey> privateKeySupplier;
+
+    LoadedPemSslStore(PemSslStoreDetails details) {
+        Assert.notNull(details, DETAILS_MUST_NOT_BE_NULL);
+        this.details = details;
+        this.certificateSupplier = createSingletonSupplier(() -> loadCertificates(details));
+        this.privateKeySupplier = createSingletonSupplier(() -> loadPrivateKey(details));
+    }
+
+    private static <T> Supplier<T> createSingletonSupplier(ThrowingSupplier<T> supplier) {
+        return SingletonSupplier.of(supplier.throwing((msg, ex) -> new UncheckedIOException(msg, (IOException) ex)));
+    }
+
+    private static List<X509Certificate> loadCertificates(PemSslStoreDetails details) throws IOException {
+        PemContent pemContent = PemContent.load(details.certificates());
+        Assert.state(pemContent != null && !CollectionUtils.isEmpty(pemContent.getCertificates()), EMPTY_CERTIFICATES_ERROR);
+        return pemContent.getCertificates();
+    }
+
+    private static PrivateKey loadPrivateKey(PemSslStoreDetails details) throws IOException {
+        PemContent pemContent = PemContent.load(details.privateKey());
+        return (pemContent != null) ? pemContent.getPrivateKey(details.privateKeyPassword()) : null;
+    }
+
+    @Override
+    public String type() {
+        return this.details.type();
+    }
+
+    @Override
+    public String alias() {
+        return this.details.alias();
+    }
+
+    @Override
+    public String password() {
+        return this.details.password();
+    }
+
+    @Override
+    public List<X509Certificate> certificates() {
+        return this.certificateSupplier.get();
+    }
+
+    @Override
+    public PrivateKey privateKey() {
+        return this.privateKeySupplier.get();
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Method:**  
+   - Moved supplier initialization to `createSingletonSupplier()` for clarity.  
+
+2. **Extract Variable:**  
+   - Introduced constants `DETAILS_MUST_NOT_BE_NULL` and `EMPTY_CERTIFICATES_ERROR` for better maintainability.  
+
+3. **Rename Method:**  
+   - Renamed `supplier()` to `createSingletonSupplier()` for clarity.  
+
+4. **Inline Method:**  
+   - Removed `asUncheckedIOException()` by directly handling the exception inline in the supplier.  
+
+---
+
+### **Benefits**
+
+- **Readability:** Simplified constructor and clearer method names improve understanding.  
+- **Maintainability:** Centralized error messages make updates easier.  
+- **Clean Code:** Reduced nesting and improved error handling make the code easier to follow.

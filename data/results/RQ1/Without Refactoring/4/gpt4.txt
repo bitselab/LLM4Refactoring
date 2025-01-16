@@ -1,0 +1,194 @@
+The provided code is generally well-organized, but there are a few opportunities for refactoring to enhance readability, maintainability, and reusability. Below, I will review the code based on the specified nine types of refactoring and suggest the necessary changes.
+
+### Refactoring Opportunities
+
+1. **Extract Method:**
+   The `maybeLogRequest` method has a block of code for logging and handling the request body that could be extracted into a separate method to improve readability and reuse.
+
+2. **Extract Variable:**
+   In the `maybeLogRequest` method, the expression for formatting the log message can be extracted into a separate variable to make the method more readable.
+
+3. **Rename Method:**
+   The method `setTracerLogInclude` and `setTracerLogExclude` are fairly generic names, and we can rename them to something more descriptive like `updateTracerLogIncludePatterns` and `updateTracerLogExcludePatterns`, respectively.
+
+4. **Rename Parameter:**
+   The `e` parameter in the `maybeLogRequest` method is too generic. A more descriptive name like `exception` would make it clearer.
+
+5. **Extract Class:**
+   Although the class is focused on logging, extracting the logic for request body tracing (i.e., `HttpBodyTracer`) could make sense if it’s a reusable concern across different parts of the application. However, this depends on how often `HttpBodyTracer` is used. It might be premature to extract it unless the usage expands.
+
+### Refactored Code
+
+Here’s the refactored version of the code incorporating the above suggestions:
+
+```java
+package org.elasticsearch.http;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.settings.ClusterSettings;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.core.Nullable;
+import org.elasticsearch.rest.RestRequest;
+import org.elasticsearch.rest.RestResponse;
+import org.elasticsearch.rest.RestUtils;
+import org.elasticsearch.tasks.Task;
+import org.elasticsearch.transport.TransportService;
+
+import java.io.OutputStream;
+import java.util.List;
+
+import static org.elasticsearch.core.Strings.format;
+
+/**
+ * Http request trace logger. See {@link #maybeLogRequest(RestRequest, Exception)} for details.
+ */
+class HttpTracer {
+
+    private static final Logger logger = LogManager.getLogger(HttpTracer.class);
+
+    private volatile String[] tracerLogInclude;
+    private volatile String[] tracerLogExclude;
+
+    // for testing
+    HttpTracer() {
+        tracerLogInclude = tracerLogExclude = new String[0];
+    }
+
+    HttpTracer(Settings settings, ClusterSettings clusterSettings) {
+        updateTracerLogIncludePatterns(HttpTransportSettings.SETTING_HTTP_TRACE_LOG_INCLUDE.get(settings));
+        updateTracerLogExcludePatterns(HttpTransportSettings.SETTING_HTTP_TRACE_LOG_EXCLUDE.get(settings));
+
+        clusterSettings.addSettingsUpdateConsumer(HttpTransportSettings.SETTING_HTTP_TRACE_LOG_INCLUDE, this::updateTracerLogIncludePatterns);
+        clusterSettings.addSettingsUpdateConsumer(HttpTransportSettings.SETTING_HTTP_TRACE_LOG_EXCLUDE, this::updateTracerLogExcludePatterns);
+    }
+
+    /**
+     * Logs the given request if request tracing is enabled and the request uri matches the current include and exclude patterns defined
+     * in {@link HttpTransportSettings#SETTING_HTTP_TRACE_LOG_INCLUDE} and {@link HttpTransportSettings#SETTING_HTTP_TRACE_LOG_EXCLUDE}.
+     * If the request was logged returns a logger to log sending the response with or {@code null} otherwise.
+     *
+     * @param restRequest Rest request to trace
+     * @param exception   Exception when handling the request or {@code null} if none
+     * @return            This instance to use for logging the response via {@link #logResponse} to this request if it was logged or
+     *                    {@code null} if the request wasn't logged
+     */
+    @Nullable
+    HttpTracer maybeLogRequest(RestRequest restRequest, @Nullable Exception exception) {
+        if (logger.isTraceEnabled() && TransportService.shouldTraceAction(restRequest.uri(), tracerLogInclude, tracerLogExclude)) {
+            String logMessage = createLogMessage(restRequest);
+            logger.trace(() -> logMessage, exception);
+
+            logRequestBody(restRequest);
+
+            return this;
+        }
+        return null;
+    }
+
+    boolean isBodyTracerEnabled() {
+        return HttpBodyTracer.isEnabled();
+    }
+
+    /**
+     * Logs the response to a request that was logged by {@link #maybeLogRequest(RestRequest, Exception)}.
+     *
+     * @param restResponse  RestResponse
+     * @param httpChannel   HttpChannel the response was sent on
+     * @param contentLength Value of the response content length header
+     * @param opaqueHeader  Value of HTTP header {@link Task#X_OPAQUE_ID_HTTP_HEADER}
+     * @param requestId     Request id as returned by {@link RestRequest#getRequestId()}
+     * @param success       Whether the response was successfully sent
+     */
+    void logResponse(
+        RestResponse restResponse,
+        HttpChannel httpChannel,
+        String contentLength,
+        String opaqueHeader,
+        long requestId,
+        boolean success
+    ) {
+        String logMessage = createResponseLogMessage(restResponse, httpChannel, contentLength, opaqueHeader, requestId, success);
+        logger.trace(() -> logMessage);
+    }
+
+    private void updateTracerLogIncludePatterns(List<String> tracerLogInclude) {
+        this.tracerLogInclude = tracerLogInclude.toArray(Strings.EMPTY_ARRAY);
+    }
+
+    private void updateTracerLogExcludePatterns(List<String> tracerLogExclude) {
+        this.tracerLogExclude = tracerLogExclude.toArray(Strings.EMPTY_ARRAY);
+    }
+
+    OutputStream openResponseBodyLoggingStream(long requestId) {
+        return HttpBodyTracer.getBodyOutputStream(requestId, HttpBodyTracer.Type.RESPONSE);
+    }
+
+    // Helper method to create the log message for the request
+    private String createLogMessage(RestRequest restRequest) {
+        return format(
+            "[%s][%s][%s][%s] received request from [%s]%s",
+            restRequest.getRequestId(),
+            restRequest.header(Task.X_OPAQUE_ID_HTTP_HEADER),
+            restRequest.method(),
+            restRequest.uri(),
+            restRequest.getHttpChannel(),
+            RestUtils.extractTraceId(restRequest.header(Task.TRACE_PARENT_HTTP_HEADER))
+                .map(t -> " trace.id: " + t)
+                .orElse("")
+        );
+    }
+
+    // Helper method to log the request body
+    private void logRequestBody(RestRequest restRequest) {
+        if (isBodyTracerEnabled()) {
+            try (var stream = HttpBodyTracer.getBodyOutputStream(restRequest.getRequestId(), HttpBodyTracer.Type.REQUEST)) {
+                restRequest.content().writeTo(stream);
+            } catch (Exception e) {
+                assert false : e; // no real IO here
+            }
+        }
+    }
+
+    // Helper method to create the log message for the response
+    private String createResponseLogMessage(
+        RestResponse restResponse,
+        HttpChannel httpChannel,
+        String contentLength,
+        String opaqueHeader,
+        long requestId,
+        boolean success
+    ) {
+        return format(
+            "[%s][%s][%s][%s][%s] sent response to [%s] success [%s]",
+            requestId,
+            opaqueHeader,
+            restResponse.status(),
+            restResponse.contentType(),
+            contentLength,
+            httpChannel,
+            success
+        );
+    }
+}
+```
+
+### Key Changes:
+1. **Extracted Method:**
+   - `createLogMessage` to handle the log message creation for the request.
+   - `createResponseLogMessage` to handle the log message creation for the response.
+   - `logRequestBody` to handle the logic for logging the request body.
+
+2. **Extracted Variable:**
+   - In the `maybeLogRequest` method, the log message formatting logic is now extracted into the `createLogMessage` method.
+
+3. **Renamed Methods:**
+   - `setTracerLogInclude` → `updateTracerLogIncludePatterns`.
+   - `setTracerLogExclude` → `updateTracerLogExcludePatterns`.
+
+4. **Renamed Parameter:**
+   - `e` → `exception` in the `maybeLogRequest` method.
+
+### Conclusion:
+The refactored code is cleaner, with smaller, more focused methods, and more descriptive method and parameter names. These changes should improve readability and maintainability.

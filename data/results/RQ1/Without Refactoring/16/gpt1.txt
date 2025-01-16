@@ -1,0 +1,128 @@
+The code you provided is generally well-structured, but there are several opportunities to improve its clarity, maintainability, and efficiency. Below are the areas for potential refactoring:
+
+### 1. **Thread Management (Asynchronous Code)**
+   - The `Thread` is directly being created using an anonymous subclass, which is generally discouraged. It’s better to use `ExecutorService` for managing threads. This will provide better resource management, control over thread pooling, and improved readability.
+
+### 2. **Exception Handling**
+   - The current exception handling prints stack traces directly in the `streamPrimesToSinkAsynchronously` method. Instead, it is a good practice to log exceptions and handle them in a more robust manner, e.g., through a custom exception or rethrowing them.
+
+### 3. **Magic Numbers & Hardcoded Strings**
+   - The prime number limit (`997`) is hardcoded in the loop. This should ideally be extracted into a constant or configuration, so it can be easily adjusted.
+
+### 4. **Code Comments**
+   - The comments in the `PipeBody` class can be enhanced. While there's a description for the functionality, additional clarifications about the specific design decisions would improve maintainability.
+
+### 5. **Simplification of Thread Code**
+   - You can use `Runnable` or lambda expressions for simplicity when using the `ExecutorService` instead of a custom `Thread`.
+
+### Refactored Code
+
+```java
+package okhttp3.recipes;
+
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okio.BufferedSink;
+import okio.Okio;
+import okio.Pipe;
+
+public final class PostStreamingWithPipe {
+    public static final MediaType MEDIA_TYPE_MARKDOWN = MediaType.get("text/x-markdown; charset=utf-8");
+    private static final int MAX_PRIME = 997;
+    private final OkHttpClient client = new OkHttpClient();
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    public void run() throws Exception {
+        final PipeBody pipeBody = new PipeBody();
+
+        Request request = new Request.Builder()
+            .url("https://api.github.com/markdown/raw")
+            .post(pipeBody)
+            .build();
+
+        // Using ExecutorService to manage the async task
+        streamPrimesToSinkAsynchronously(pipeBody.sink());
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("Unexpected code " + response);
+            }
+            System.out.println(response.body().string());
+        }
+    }
+
+    private void streamPrimesToSinkAsynchronously(final BufferedSink sink) {
+        executor.submit(() -> {
+            try {
+                sink.writeUtf8("Numbers\n");
+                sink.writeUtf8("-------\n");
+                for (int i = 2; i <= MAX_PRIME; i++) {
+                    System.out.println(i);
+                    Thread.sleep(10);
+                    sink.writeUtf8(String.format(" * %s = %s\n", i, factor(i)));
+                }
+                sink.close();
+            } catch (IOException | InterruptedException e) {
+                // Logging the exception
+                System.err.println("Error while streaming primes: " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private String factor(int n) {
+        for (int i = 2; i < n; i++) {
+            int x = n / i;
+            if (x * i == n) return factor(x) + " × " + i;
+        }
+        return Integer.toString(n);
+    }
+
+    /**
+     * This request body makes it possible for another thread to stream data to the uploading request.
+     * This is potentially useful for posting live event streams like video capture.
+     * Callers should write to {@code sink()} and close it to complete the post.
+     */
+    static final class PipeBody extends RequestBody {
+        private final Pipe pipe = new Pipe(8192);
+        private final BufferedSink sink = Okio.buffer(pipe.sink());
+
+        public BufferedSink sink() {
+            return sink;
+        }
+
+        @Override
+        public MediaType contentType() {
+            return MEDIA_TYPE_MARKDOWN;
+        }
+
+        @Override
+        public void writeTo(BufferedSink sink) throws IOException {
+            sink.writeAll(pipe.source());
+        }
+    }
+
+    public static void main(String... args) throws Exception {
+        new PostStreamingWithPipe().run();
+    }
+}
+```
+
+### Refactoring Highlights:
+1. **Thread Management with ExecutorService**: The asynchronous code now uses `ExecutorService` instead of directly creating a `Thread`. This improves thread management and scalability.
+   
+2. **MAX_PRIME Constant**: The hardcoded `997` value has been replaced with a constant (`MAX_PRIME`), making the code more readable and easier to change.
+   
+3. **Improved Exception Handling**: Exceptions are now logged using `System.err`, which helps in better tracking of issues without cluttering standard output.
+   
+4. **Simplified Code**: The anonymous `Thread` is replaced by `executor.submit()`, making the code more concise and readable.
+
+5. **Comment Clarity**: The comment on the `PipeBody` class remains but can be enhanced with further details in a larger context, depending on the specific use case.
+
+This refactor improves readability, thread management, and overall maintainability while keeping the core functionality intact.

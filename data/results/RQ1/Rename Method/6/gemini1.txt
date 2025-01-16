@@ -1,0 +1,64 @@
+## Refactoring Opportunities
+
+The code snippet contains several areas that could be refactored to improve readability and maintainability. Here are some suggestions:
+
+1. **Reduce code duplication:** There is a significant amount of code duplication in the methods `testNumBackendCalls`, `testSeekAndReadWithConf`, `testPartialReadWithNoData`, and `testPartialReadWithSomeData`. These methods can be refactored into a single helper method that takes the necessary parameters and performs the common logic.
+
+2. **Extract helper methods:**  There are several other methods that could be extracted into helper methods to improve code readability. For example, the methods `createPathAndFileWithContent`, `getParameterizedBuilder`, `getFileSystem`, and `verifyConfigValueInStream` could all be refactored into separate helper methods.
+
+3. **Use descriptive variable names:** Some variable names are not very descriptive, such as `i`, `j`, and `length`. Using more descriptive names would improve code readability.
+
+4. **Simplify logic:**  The logic in some methods, such as `seekPos` and `assertContentReadCorrectly`,  can be simplified.
+
+Here's a refactored version of the code snippet incorporating these suggestions:
+
+```java
+public class ITestAbfsInputStreamReadFooter extends ITestAbfsInputStream {
+
+    private static final int TEN = 10;
+    private static final int TWENTY = 20;
+    private static final int ONE_KB = 1024;
+
+    public ITestAbfsInputStreamReadFooter() throws Exception {
+    }
+
+    @Test
+    public void testOptimizeFooterRead() throws Exception {
+        testNumBackendCalls(true);
+    }
+
+    @Test
+    public void testNoOptimizeFooterRead() throws Exception {
+        testNumBackendCalls(false);
+    }
+
+    private void testNumBackendCalls(boolean optimizeFooterRead) throws Exception {
+        for (int fileIdx = 0; fileIdx <= 4; fileIdx++) {
+            for (int fileSize = 256 * ONE_KB; fileSize <= 4 * ONE_KB; fileSize *= 2) {
+                for (int footerReadBufferSize = 256 * ONE_KB; footerReadBufferSize <= 1 * ONE_KB; footerReadBufferSize *= 2) {
+                    testBackendCalls(optimizeFooterRead, fileSize, footerReadBufferSize);
+                }
+            }
+        }
+    }
+
+    private void testBackendCalls(boolean optimizeFooterRead, int fileSize, int footerReadBufferSize) throws Exception {
+        final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+        Path testFilePath = createPathAndFileWithContent(fs, fileIdx++, fileSize);
+
+        try (FSDataInputStream iStream = getBuilder(fs, testFilePath, footerReadBufferSize).build().get()) {
+            verifyConfigValueInStream(iStream, footerReadBufferSize);
+            performSeekAndReadTests(fs, iStream, fileSize);
+        }
+    }
+
+    private void performSeekAndReadTests(final AzureBlobFileSystem fs, FSDataInputStream iStream, final int fileSize) throws Exception {
+        AbfsInputStream abfsInputStream = (AbfsInputStream) iStream.getWrappedStream();
+        for (SeekTo seekTo : SeekTo.values()) {
+            testSeekAndRead(fs, abfsInputStream, seekTo, fileSize);
+        }
+    }
+
+    // Other changes...
+
+}

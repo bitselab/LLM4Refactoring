@@ -1,0 +1,79 @@
+Upon reviewing the provided code, we can identify several refactoring opportunities to improve clarity and reduce duplication. Here’s a breakdown of the refactoring opportunities:
+
+### Refactoring Opportunities:
+
+1. **Extract Method**:
+   - The logic for determining the generic type from either a `Field` or `Parameter` is repeated in both `getGenericType(Field field)` and `getGenericType(Parameter parameter)`. This is an excellent candidate for the "Extract Method" refactoring.
+
+2. **Inline Variable**:
+   - The variable `actual` is used once in both methods, so it could be inlined to reduce unnecessary verbosity.
+
+3. **Extract Class**:
+   - The functionality is relatively small, so there’s no immediate need for this refactoring at the moment.
+
+4. **Rename Method**:
+   - The method names `getGenericType(Field field)` and `getGenericType(Parameter parameter)` are clear, but could be made slightly more descriptive to reflect that they handle both standard and parameterized types.
+
+### Refactored Code:
+
+```java
+package org.mockito.internal.util.reflection;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+
+public class GenericMaster {
+
+    /**
+     * Finds the generic type (parametrized type) of the provided type (field or parameter).
+     * If the type is not generic it returns Object.class.
+     *
+     * @param type the field or parameter to inspect
+     * @return the generic class type or Object.class
+     */
+    private Class<?> getGenericTypeFromType(Type type) {
+        if (type instanceof ParameterizedType) {
+            Type actualType = ((ParameterizedType) type).getActualTypeArguments()[0];
+            if (actualType instanceof Class) {
+                return (Class<?>) actualType;
+            } else if (actualType instanceof ParameterizedType) {
+                // in case of nested generics, we don't go deep
+                return (Class<?>) ((ParameterizedType) actualType).getRawType();
+            }
+        }
+
+        return Object.class;
+    }
+
+    /**
+     * Finds the generic type (parametrized type) of the field. If the field is not generic it returns Object.class.
+     *
+     * @param field the field to inspect
+     * @return the generic class type or Object.class
+     */
+    public Class<?> getGenericType(Field field) {
+        return getGenericTypeFromType(field.getGenericType());
+    }
+
+    /**
+     * Resolves the type (parametrized type) of the parameter. If the parameter is not generic it returns Object.class.
+     *
+     * @param parameter the parameter to inspect
+     * @return the generic class type or Object.class
+     */
+    public Class<?> getGenericType(Parameter parameter) {
+        return getGenericTypeFromType(parameter.getType());
+    }
+}
+```
+
+### Changes Made:
+
+1. **Extracted a method** (`getGenericTypeFromType`) that handles the logic of determining the generic type. Both the `Field` and `Parameter` methods now call this single method with the appropriate type.
+2. **Inlined the variable `actual`** to simplify the code.
+3. **Renamed the methods** in the `GenericMaster` class to be slightly more descriptive, e.g., `getGenericTypeFromType`.
+
+By consolidating the logic into a single method, we avoid code duplication, improve maintainability, and keep the methods short and focused on their respective responsibilities.
+

@@ -1,0 +1,213 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method**  
+   - Simplify repeated assertions for attribute mapping checks.
+
+2. **Extract Variable**  
+   - Replace hardcoded strings like `"locale"`, `"locales"`, `"countByLocale"` with constants.
+
+3. **Rename Method**  
+   - Improve method name clarity (`basicAssertions` → `testLocaleMappings`).
+
+4. **Inline Variable**  
+   - Inline variables that add no value.
+
+5. **Extract Class**  
+   - Move the entity class to a separate file if the project grows.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.hibernate.orm.test.mapping.type.java;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.sql.Types;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.metamodel.mapping.PluralAttributeMapping;
+import org.hibernate.metamodel.mapping.internal.BasicAttributeMapping;
+import org.hibernate.metamodel.mapping.internal.BasicValuedCollectionPart;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.type.descriptor.jdbc.spi.JdbcTypeRegistry;
+
+import org.hibernate.testing.orm.junit.DomainModel;
+import org.hibernate.testing.orm.junit.JiraKey;
+import org.hibernate.testing.orm.junit.SessionFactory;
+import org.hibernate.testing.orm.junit.SessionFactoryScope;
+import org.junit.jupiter.api.Test;
+
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.MapKeyColumn;
+import jakarta.persistence.Table;
+
+@DomainModel(annotatedClasses = LocaleMappingTests.LocaleMappingTestEntity.class)
+@SessionFactory
+@JiraKey("HHH-17466")
+public class LocaleMappingTests {
+
+    private static final String LOCALE = "locale";
+    private static final String LOCALES = "locales";
+    private static final String COUNT_BY_LOCALE = "countByLocale";
+
+    @Test
+    public void testLocaleMappings(SessionFactoryScope scope) {
+        SessionFactoryImplementor sessionFactory = scope.getSessionFactory();
+        JdbcTypeRegistry jdbcTypeRegistry = sessionFactory.getTypeConfiguration().getJdbcTypeRegistry();
+        EntityPersister entityDescriptor = sessionFactory.getMappingMetamodel().getEntityDescriptor(LocaleMappingTestEntity.class);
+
+        verifyAttributeMapping(entityDescriptor, LOCALE, Types.VARCHAR, Locale.class, jdbcTypeRegistry);
+        verifyPluralAttributeMapping(entityDescriptor, LOCALES, Types.VARCHAR, Locale.class, jdbcTypeRegistry, false);
+        verifyPluralAttributeMapping(entityDescriptor, COUNT_BY_LOCALE, Types.VARCHAR, Locale.class, jdbcTypeRegistry, true);
+    }
+
+    private void verifyAttributeMapping(EntityPersister entityDescriptor, String attributeName, int expectedSqlType,
+                                        Class<?> expectedJavaType, JdbcTypeRegistry jdbcTypeRegistry) {
+        BasicAttributeMapping attributeMapping = (BasicAttributeMapping) entityDescriptor.findAttributeMapping(attributeName);
+        assertThat(attributeMapping.getJdbcMapping().getJdbcType()).isEqualTo(jdbcTypeRegistry.getDescriptor(expectedSqlType));
+        assertThat(attributeMapping.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass()).isEqualTo(expectedJavaType);
+    }
+
+    private void verifyPluralAttributeMapping(EntityPersister entityDescriptor, String attributeName, int expectedSqlType,
+                                              Class<?> expectedJavaType, JdbcTypeRegistry jdbcTypeRegistry, boolean isMap) {
+        PluralAttributeMapping pluralAttribute = (PluralAttributeMapping) entityDescriptor.findAttributeMapping(attributeName);
+        BasicValuedCollectionPart descriptor = isMap
+                ? (BasicValuedCollectionPart) pluralAttribute.getIndexDescriptor()
+                : (BasicValuedCollectionPart) pluralAttribute.getElementDescriptor();
+
+        assertThat(descriptor.getJdbcMapping().getJdbcType()).isEqualTo(jdbcTypeRegistry.getDescriptor(expectedSqlType));
+        assertThat(descriptor.getJdbcMapping().getJavaTypeDescriptor().getJavaTypeClass()).isEqualTo(expectedJavaType);
+    }
+
+    @Test
+    public void testEntityPersistence(SessionFactoryScope scope) {
+        LocaleMappingTestEntity entity1 = new LocaleMappingTestEntity(1, Locale.ENGLISH, "Hello");
+        LocaleMappingTestEntity entity2 = new LocaleMappingTestEntity(2, Locale.FRENCH, "Salut");
+
+        scope.inTransaction(session -> {
+            session.save(entity1);
+            session.save(entity2);
+        });
+
+        scope.inTransaction(session -> {
+            assertThat(session.createQuery("from LocaleMappingTestEntity where locale = ?1", LocaleMappingTestEntity.class)
+                    .setParameter(1, Locale.FRENCH)
+                    .list())
+                    .extracting(LocaleMappingTestEntity::getId)
+                    .containsExactly(2);
+        });
+
+        scope.inTransaction(session -> {
+            session.delete(entity1);
+            session.delete(entity2);
+        });
+    }
+
+    @Entity(name = "LocaleMappingTestEntity")
+    @Table(name = "locale_map_test_entity")
+    public static class LocaleMappingTestEntity {
+        @Id
+        private Integer id;
+        private Locale locale;
+        private String name;
+
+        @ElementCollection
+        @CollectionTable(name = "entity_locale", joinColumns = @JoinColumn(name = "entity_id"))
+        @Column(name = "locales")
+        private Set<Locale> locales = new HashSet<>();
+
+        @ElementCollection
+        @CollectionTable(name = "count_by_locale", joinColumns = @JoinColumn(name = "entity_id"))
+        @MapKeyColumn(name = "locl")
+        @Column(name = "cnt")
+        private Map<Locale, Integer> countByLocale = new HashMap<>();
+
+        public LocaleMappingTestEntity() {}
+
+        public LocaleMappingTestEntity(Integer id, Locale locale, String name) {
+            this.id = id;
+            this.locale = locale;
+            this.name = name;
+        }
+
+        public Integer getId() {
+            return id;
+        }
+
+        public void setId(Integer id) {
+            this.id = id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public Locale getLocale() {
+            return locale;
+        }
+
+        public void setLocale(Locale locale) {
+            this.locale = locale;
+        }
+
+        public Set<Locale> getLocales() {
+            return locales;
+        }
+
+        public void setLocales(Set<Locale> locales) {
+            this.locales = locales;
+        }
+
+        public Map<Locale, Integer> getCountByLocale() {
+            return countByLocale;
+        }
+
+        public void setCountByLocale(Map<Locale, Integer> countByLocale) {
+            this.countByLocale = countByLocale;
+        }
+    }
+}
+```
+
+---
+
+### **Changes Made**
+
+1. **Extract Method:**  
+   - Introduced `verifyAttributeMapping` and `verifyPluralAttributeMapping` to simplify repetitive assertions.
+
+2. **Extract Variable:**  
+   - Declared constants (`LOCALE`, `LOCALES`, `COUNT_BY_LOCALE`) for repeated string literals.
+
+3. **Rename Method:**  
+   - Changed `basicAssertions` to `testLocaleMappings` for clarity.  
+   - Changed `testUsage` to `testEntityPersistence` for better context.
+
+4. **Inline Variable:**  
+   - Inlined the unnecessary scoping braces `{}` for better readability.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Simplified assertion logic improves code clarity.  
+- **Maintainability:** Centralized mapping checks make it easier to adapt future changes.  
+- **Scalability:** Cleaner structure supports adding more tests without clutter.
+
+No further refactoring is necessary beyond these improvements.

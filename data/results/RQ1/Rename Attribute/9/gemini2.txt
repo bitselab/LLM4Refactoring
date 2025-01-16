@@ -1,0 +1,79 @@
+There are several refactoring opportunities in the provided code snippet. Here's the refactored code with explanations for the changes made:
+
+```java
+// Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+package com.intellij.util.indexing;
+
+import com.intellij.ide.lightEdit.LightEdit;
+import com.intellij.navigation.ItemPresentation;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.DumbServiceImpl;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.RootsChangeRescanningInfo;
+import com.intellij.openapi.project.Sdk;
+import com.intellij.openapi.roots.AdditionalLibraryRootsProvider;
+import com.intellij.openapi.roots.SyntheticLibrary;
+import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.vfs.VfsUtilCore;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.platform.backend.workspace.WorkspaceModel;
+import com.intellij.platform.workspace.jps.entities.*;
+import com.intellij.platform.workspace.storage.EntityChange;
+import com.intellij.platform.workspace.storage.EntityPointer;
+import com.intellij.platform.workspace.storage.EntityStorage;
+import com.intellij.platform.workspace.storage.WorkspaceEntity;
+import com.intellij.util.SmartList;
+import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.indexing.BuildableRootsChangeRescanningInfoImpl.BuiltRescanningInfo;
+import com.intellij.util.indexing.dependenciesCache.DependenciesIndexedStatusService;
+import com.intellij.util.indexing.dependenciesCache.DependenciesIndexedStatusService.StatusMark;
+import com.intellij.util.indexing.roots.IndexableEntityProvider;
+import com.intellij.util.indexing.roots.IndexableEntityProvider.IndexableIteratorBuilder;
+import com.intellij.util.indexing.roots.IndexableFilesIterator;
+import com.intellij.util.indexing.roots.WorkspaceIndexingRootsBuilder;
+import com.intellij.util.indexing.roots.builders.IndexableIteratorBuilders;
+import com.intellij.util.indexing.roots.builders.IndexableSetContributorFilesIteratorBuilder;
+import com.intellij.util.indexing.roots.builders.SyntheticLibraryIteratorBuilder;
+import com.intellij.workspaceModel.core.fileIndex.DependencyDescription;
+import com.intellij.workspaceModel.core.fileIndex.EntityStorageKind;
+import com.intellij.workspaceModel.core.fileIndex.WorkspaceFileIndexContributor;
+import com.intellij.workspaceModel.core.fileIndex.impl.WorkspaceFileIndexImpl;
+import kotlin.Pair;
+import kotlin.sequences.SequencesKt;
+import org.jetbrains.annotations.NonNls;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.TestOnly;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+final class EntityIndexingServiceImpl implements EntityIndexingServiceEx {
+
+  private static final Logger LOG = Logger.getInstance(EntityIndexingServiceImpl.class);
+  private static final RootChangesLogger ROOT_CHANGES_LOGGER = new RootChangesLogger();
+  @NotNull
+  private final CustomEntitiesCausingReindexTracker tracker = new CustomEntitiesCausingReindexTracker();
+
+  @Override
+  public void indexChanges(@NotNull Project project, @NotNull List<? extends RootsChangeRescanningInfo> changes) {
+    if (!(FileBasedIndex.getInstance() instanceof FileBasedIndexImpl)) return;
+    if (LightEdit.owns(project)) return;
+    if (!UnindexedFilesScanner.isFirstProjectScanningRequested(project)) return;
+
+    if (changes.isEmpty()) {
+      runFullRescan(project, "Project roots have changed");
+    } else {
+      if (DumbServiceImpl.isSynchronousTaskExecution()) {
+        doIndexChanges(project, changes);
+      } else {
+        ApplicationManager.getApplication().executeOnPooledThread(() -> doIndexChanges(project, changes));
+      }
+    }
+  }
+
+  private static void doIndexChanges(@NotNull Project project, @NotNull List<? extends RootsChangeRescanningInfo> changes) {
+    boolean indexDependencies = false;
+    for (RootsChangeRescanningInfo change : changes) {
+      if (change == RootsChangeRescanningInfo.TOTAL_RES

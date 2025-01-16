@@ -1,0 +1,207 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Extract repeated setup and verification logic for indexing checks.  
+   - Extract repeated queries for finding indexed results.  
+
+2. **Extract Variable:**  
+   - Use constants for entity names and search fields.  
+
+3. **Inline Method:**  
+   - Inline trivial methods that are only used once (e.g., `getMainStepProgress` can be simplified).
+
+4. **Rename Method:**  
+   - Rename methods for better readability (`simple` → `testMassIndexingBasic`, etc.).
+
+---
+
+### **Refactored Code**
+
+```java
+package org.hibernate.search.integrationtest.jakarta.batch.massindexing;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assume.assumeTrue;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import jakarta.batch.runtime.JobExecution;
+import jakarta.batch.runtime.StepExecution;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Root;
+
+import org.hibernate.dialect.MySQLDialect;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.search.integrationtest.jakarta.batch.massindexing.entity.Company;
+import org.hibernate.search.integrationtest.jakarta.batch.massindexing.entity.CompanyGroup;
+import org.hibernate.search.integrationtest.jakarta.batch.massindexing.entity.Person;
+import org.hibernate.search.integrationtest.jakarta.batch.massindexing.entity.WhoAmI;
+import org.hibernate.search.integrationtest.jakarta.batch.util.BackendConfigurations;
+import org.hibernate.search.integrationtest.jakarta.batch.util.JobTestUtil;
+import org.hibernate.search.jakarta.batch.core.massindexing.MassIndexingJob;
+import org.hibernate.search.jakarta.batch.core.massindexing.step.impl.StepProgress;
+import org.hibernate.search.mapper.orm.Search;
+import org.hibernate.search.mapper.orm.cfg.HibernateOrmMapperSettings;
+import org.hibernate.search.mapper.orm.session.SearchSession;
+import org.hibernate.search.mapper.orm.work.SearchIndexingPlan;
+import org.hibernate.search.util.common.AssertionFailure;
+import org.hibernate.search.util.impl.integrationtest.mapper.orm.OrmSetupHelper;
+import org.hibernate.search.util.impl.integrationtest.mapper.orm.ReusableOrmSetupHolder;
+import org.hibernate.search.util.impl.test.annotation.TestForIssue;
+
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.MethodRule;
+
+public class MassIndexingJobIT {
+
+    private static final int INSTANCES_PER_DATA_TEMPLATE = 100;
+    private static final int INSTANCE_PER_ENTITY_TYPE = INSTANCES_PER_DATA_TEMPLATE * 3;
+    private static final int CHECKPOINT_INTERVAL = INSTANCES_PER_DATA_TEMPLATE / 2;
+    private static final String MAIN_STEP_NAME = "produceLuceneDoc";
+
+    @ClassRule
+    public static ReusableOrmSetupHolder setupHolder = ReusableOrmSetupHolder.withSingleBackend(BackendConfigurations.simple());
+
+    @Rule
+    public MethodRule setupHolderMethodRule = setupHolder.methodRule();
+
+    private EntityManagerFactory emf;
+
+    @ReusableOrmSetupHolder.Setup
+    public void setup(OrmSetupHelper.SetupContext setupContext, ReusableOrmSetupHolder.DataClearConfig dataClearConfig) {
+        setupContext.withAnnotatedTypes(Company.class, Person.class, WhoAmI.class, CompanyGroup.class)
+                .withProperty(HibernateOrmMapperSettings.INDEXING_LISTENERS_ENABLED, false);
+        dataClearConfig.clearOrder(CompanyGroup.class, Company.class);
+    }
+
+    @Before
+    public void initData() {
+        emf = setupHolder.entityManagerFactory();
+        setupEntities();
+    }
+
+    private void setupEntities() {
+        List<Company> companies = createCompanies();
+        List<Person> people = createPeople();
+        List<WhoAmI> whos = createWhoAmIs();
+
+        setupHolder.runInTransaction(session -> {
+            companies.forEach(session::persist);
+            people.forEach(session::persist);
+            whos.forEach(session::persist);
+        });
+    }
+
+    private List<Company> createCompanies() {
+        List<Company> companies = new ArrayList<>();
+        for (int i = 0; i < INSTANCE_PER_ENTITY_TYPE; i++) {
+            companies.add(new Company("Company " + i));
+        }
+        return companies;
+    }
+
+    private List<Person> createPeople() {
+        List<Person> people = new ArrayList<>();
+        for (int i = 0; i < INSTANCE_PER_ENTITY_TYPE; i++) {
+            people.add(new Person("P" + i, "First" + i, "Last" + i));
+        }
+        return people;
+    }
+
+    private List<WhoAmI> createWhoAmIs() {
+        List<WhoAmI> whos = new ArrayList<>();
+        for (int i = 0; i < INSTANCE_PER_ENTITY_TYPE; i++) {
+            whos.add(new WhoAmI("cid" + i, "id" + i, "uid" + i));
+        }
+        return whos;
+    }
+
+    @Test
+    public void testMassIndexingBasic() throws InterruptedException, IOException {
+        verifyInitialState(Company.class, "name", "Google");
+        runMassIndexingJob(Company.class, Person.class, WhoAmI.class);
+        verifyIndexedState(Company.class, "name", "Google");
+    }
+
+    @Test
+    public void testMassIndexingWithEmbeddedCollections() throws InterruptedException {
+        verifyInitialState(CompanyGroup.class, "companies.name", "Google");
+        runMassIndexingJob(CompanyGroup.class);
+        verifyIndexedState(CompanyGroup.class, "companies.name", "Google");
+    }
+
+    private void runMassIndexingJob(Class<?>... entityClasses) throws InterruptedException {
+        JobExecution execution = JobTestUtil.startJobAndWaitForSuccessNoRetry(
+                MassIndexingJob.parameters()
+                        .forEntities(entityClasses)
+                        .checkpointInterval(CHECKPOINT_INTERVAL)
+                        .build());
+        for (Class<?> entity : entityClasses) {
+            assertProgress(execution, entity, INSTANCE_PER_ENTITY_TYPE);
+        }
+    }
+
+    private void verifyInitialState(Class<?> entityType, String field, String value) {
+        List<?> results = JobTestUtil.findIndexedResults(emf, entityType, field, value);
+        assertEquals(0, results.size());
+    }
+
+    private void verifyIndexedState(Class<?> entityType, String field, String value) {
+        List<?> results = JobTestUtil.findIndexedResults(emf, entityType, field, value);
+        assertEquals(INSTANCES_PER_DATA_TEMPLATE, results.size());
+    }
+
+    private void assertProgress(JobExecution execution, Class<?> entityType, int expectedProgress) {
+        StepProgress progress = getStepProgress(execution);
+        assertEquals(Long.valueOf(expectedProgress),
+                progress.getEntityProgress().get(emf.getMetamodel().entity(entityType).getName()));
+    }
+
+    private StepProgress getStepProgress(JobExecution execution) {
+        return JobTestUtil.getOperator().getStepExecutions(execution.getExecutionId()).stream()
+                .filter(stepExecution -> MAIN_STEP_NAME.equals(stepExecution.getStepName()))
+                .map(stepExecution -> (StepProgress) stepExecution.getPersistentUserData())
+                .findFirst()
+                .orElseThrow(() -> new AssertionFailure("Missing step progress for step '" + MAIN_STEP_NAME + "'"));
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Method:**  
+   - `setupEntities()`, `createCompanies()`, `createPeople()`, and `createWhoAmIs()` handle repetitive entity creation logic.  
+   - `verifyInitialState()` and `verifyIndexedState()` abstract repeated assertions.  
+   - `runMassIndexingJob()` centralizes the mass indexing execution.
+
+2. **Extract Variable:**  
+   - Consolidated hardcoded entity field names into method parameters.
+
+3. **Rename Method:**  
+   - Improved test method names for clarity (e.g., `simple` → `testMassIndexingBasic`).
+
+4. **Inline Method:**  
+   - Simplified `getMainStepProgress` into a more readable stream-based method.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Simplified test logic and structure for better clarity.  
+- **Maintainability:** Reduced duplication and centralized commonly used logic.  
+- **Scalability:** Easier to add new entities or tests in the future.
+
+No further refactoring is necessary beyond these improvements.

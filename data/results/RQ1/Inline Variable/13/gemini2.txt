@@ -1,0 +1,96 @@
+## Inline Variable Refactoring Opportunities
+
+There are several opportunities for inline variable refactoring in the provided code snippet:
+
+1. **Test Instance per Method Classes:**
+    - In `InstancePerMethodTestCase`, the `staticClosable` and `nullStatic` fields can be refactored inline within the `@BeforeAll` method.
+
+    ```java
+    @BeforeAll
+    static void setup() {
+        recorder.add("InstancePerMethodTestCase.staticClosable.close()");
+        staticClosable = new AutoCloseSpy("staticClosable");
+    }
+    ```
+
+    Similarly, the `nullField` can be removed entirely as it has no value assigned.
+
+2. **FailingFieldsTestCase:**
+    - The static fields can be refactored inline within the `@BeforeAll` method similar to the previous example.
+
+3. **FailingFieldsEnclosingTestCase:**
+    - The same refactoring approach can be applied to the static fields within the `@BeforeAll` method of both the enclosing and nested test classes.
+
+**Refactored Code:**
+
+```java
+class AutoCloseTests extends AbstractJupiterTestEngineTests {
+
+  private static final List<String> recorder = new ArrayList<>();
+
+  @BeforeEach
+  @AfterEach
+  void resetTracking() {
+    InstancePerMethodTestCase.closed = false;
+    recorder.clear();
+  }
+
+  // ... other test methods
+
+  @TestInstance(PER_METHOD)
+  static class InstancePerMethodTestCase {
+
+    @AutoClose
+    private final AutoCloseable closable = new AutoCloseSpy("closable");
+
+    @AutoClose("  run   ") // intentionally contains extra whitespace.
+    private final Runnable runnable = new AutoCloseSpy("runnable");
+
+    @BeforeAll
+    static void setup() {
+      recorder.add("InstancePerMethodTestCase.staticClosable.close()");
+      staticClosable = new AutoCloseSpy("staticClosable");
+    }
+
+    @Test
+    void test1() {
+    }
+
+    @Test
+    void test2() {
+    }
+  }
+
+  // ... other test classes with similar refactorings
+
+  static class FailingFieldsTestCase {
+
+    @AutoClose
+    final AutoCloseable field1 = new AutoCloseSpy("field1", true);
+
+    @AutoClose
+    final AutoCloseable field2 = new AutoCloseSpy("field2", true);
+
+    @AutoClose
+    final AutoCloseable field3 = new AutoCloseSpy("field3", false);
+
+    @BeforeAll
+    static void setup() {
+      recorder.add("FailingFieldsTestCase.staticField1.close()");
+      staticField1 = new AutoCloseSpy("staticField1", true);
+      recorder.add("FailingFieldsTestCase.staticField2.close()");
+      staticField2 = new AutoCloseSpy("staticField2", true);
+      recorder.add("FailingFieldsTestCase.staticField3.close()");
+      staticField3 = new AutoCloseSpy("staticField3", false);
+    }
+
+    @Test
+    void test() {
+    }
+  }
+
+  // ... other test classes with similar refactorings
+}
+```
+
+These refactoring techniques improve code readability by eliminating unnecessary variable declarations, especially when the variable is only used within a specific method or block.

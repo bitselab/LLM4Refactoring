@@ -1,0 +1,148 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Repeated logic for loading and validating a class file (`loadEmptyClasspathWithParent`, `loadEmptyClasspathNoParent`, and `loadFromJava17`) can be extracted.  
+   - JAR creation logic in `loadFromJar` can be extracted for reuse.  
+
+2. **Extract Variable:**  
+   - Repeated use of `"java/lang/Object.class"` can be extracted into a constant.  
+
+3. **Rename Method:**  
+   - `assertClassFile()` can be renamed to `validateClassFile()` for clarity.  
+
+4. **Inline Variable:**  
+   - Inline single-use variables like `classpath` in `loadFromJar`.  
+
+---
+
+### **Refactored Code**
+
+```java
+package net.sourceforge.pmd.internal.util;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+class ClasspathClassLoaderTest {
+    @TempDir
+    private Path tempDir;
+
+    private static final String JAVA_OBJECT_CLASS = "java/lang/Object.class";
+
+    @Test
+    void loadEmptyClasspathWithParent() throws IOException {
+        validateClassLoadingWithClasspath("", ClasspathClassLoader.class.getClassLoader());
+    }
+
+    @Test
+    void loadEmptyClasspathNoParent() throws IOException {
+        validateClassLoadingWithClasspath("", null);
+    }
+
+    @Test
+    void loadFromJar() throws IOException {
+        final String resourceName = "net/sourceforge/pmd/Sample.txt";
+        final String testContent = "Test\n";
+
+        Path jarPath = createJarWithResource(resourceName, testContent);
+
+        try (ClasspathClassLoader loader = new ClasspathClassLoader(jarPath.toString(), null)) {
+            try (InputStream in = loader.getResourceAsStream(resourceName)) {
+                assertNotNull(in);
+                String content = IOUtil.readToString(in, StandardCharsets.UTF_8);
+                assertEquals(testContent, content);
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {11, 17, 21})
+    void loadFromJavaVersion(int javaVersion) throws IOException {
+        Path javaHome = Paths.get(System.getProperty("user.home"), "openjdk" + javaVersion);
+        assumeTrue(Files.isDirectory(javaHome), "Couldn't find java" + javaVersion + " installation at " + javaHome);
+
+        Path jrtfsPath = javaHome.resolve("lib/jrt-fs.jar");
+        assertTrue(Files.isRegularFile(jrtfsPath), "java" + javaVersion + " installation is incomplete. " + jrtfsPath + " not found!");
+
+        try (ClasspathClassLoader loader = new ClasspathClassLoader(jrtfsPath.toString(), null)) {
+            assertEquals(javaHome.toString(), loader.javaHome);
+            validateResourceLoading(loader, JAVA_OBJECT_CLASS, javaVersion);
+            assertNull(loader.getResourceAsStream("ClassInDefaultPackage.class"));
+        }
+    }
+
+    private void validateClassLoadingWithClasspath(String classpath, ClassLoader parent) throws IOException {
+        try (ClasspathClassLoader loader = new ClasspathClassLoader(classpath, parent)) {
+            validateResourceLoading(loader, JAVA_OBJECT_CLASS, Integer.parseInt(System.getProperty("java.specification.version")));
+        }
+    }
+
+    private void validateResourceLoading(ClasspathClassLoader loader, String resourceName, int javaVersion) throws IOException {
+        try (InputStream resource = loader.getResourceAsStream(resourceName)) {
+            assertNotNull(resource);
+            try (DataInputStream data = new DataInputStream(resource)) {
+                validateClassFile(data, javaVersion);
+            }
+        }
+    }
+
+    private Path createJarWithResource(String resourceName, String content) throws IOException {
+        Path jarPath = tempDir.resolve("custom.jar");
+        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jarPath))) {
+            out.putNextEntry(new ZipEntry(resourceName));
+            out.write(content.getBytes(StandardCharsets.UTF_8));
+        }
+        return jarPath;
+    }
+
+    private void validateClassFile(DataInputStream data, int javaVersion) throws IOException {
+        assertEquals(0xcafebabe, data.readInt());  // Magic number
+        data.readUnsignedShort();                 // Minor version (skip)
+        assertEquals(44 + javaVersion, data.readUnsignedShort());  // Major version
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Method:**  
+   - Created `validateClassLoadingWithClasspath()` to consolidate repeated class loader logic.  
+   - Created `validateResourceLoading()` to simplify class file validation.  
+   - Created `createJarWithResource()` to isolate JAR creation logic.  
+
+2. **Extract Variable:**  
+   - Extracted `"java/lang/Object.class"` into a constant `JAVA_OBJECT_CLASS`.  
+
+3. **Rename Method:**  
+   - Renamed `assertClassFile()` → `validateClassFile()` for clarity.  
+
+4. **Inline Variable:**  
+   - Removed unnecessary variables like `classpath` in `loadFromJar`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Code Readability:** The main test methods are clearer and more focused on their purpose.  
+- **Reusability:** Extracted methods reduce code duplication.  
+- **Maintainability:** Any future changes (e.g., how resources are validated) can be made in one place.

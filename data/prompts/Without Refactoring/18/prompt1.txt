@@ -1,0 +1,46 @@
+As a developer, imagine your team leader requests you to review a piece of code to identify potential refactoring opportunities. The original code snippet is as follows:
+```
+package org.apache.solr.jersey;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import org.apache.solr.core.ConfigSet;
+import org.apache.solr.core.SolrConfig;
+import org.glassfish.jersey.server.ApplicationHandler;
+
+/**
+ * Stores Jersey 'ApplicationHandler' instances by an ID or hash derived from their {@link
+ * ConfigSet}.
+ *
+ * <p>ApplicationHandler creation is expensive; caching these objects allows them to be shared by
+ * multiple cores with the same configuration.
+ */
+public class JerseyAppHandlerCache {
+
+  private final Cache<String, ApplicationHandler> applicationByConfigSetId =
+      Caffeine.newBuilder().weakValues().build();
+
+  /**
+   * Return the 'ApplicationHandler' associated with the provided ID, creating it first if
+   * necessary.
+   *
+   * <p>This method is thread-safe by virtue of its delegation to {@link Cache#get(Object,
+   * Function)} internally.
+   *
+   * @param effectiveSolrConfigId an ID to associate the ApplicationHandler with. Usually created
+   *     via {@link SolrConfig#effectiveId()}.
+   * @param createApplicationHandler a Supplier producing an ApplicationHandler
+   */
+  public ApplicationHandler computeIfAbsent(
+      String effectiveSolrConfigId, Supplier<ApplicationHandler> createApplicationHandler) {
+    return applicationByConfigSetId.get(effectiveSolrConfigId, k -> createApplicationHandler.get());
+  }
+
+  public int size() {
+    return applicationByConfigSetId.asMap().size();
+  }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

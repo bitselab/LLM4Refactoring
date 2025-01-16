@@ -1,0 +1,95 @@
+## Refactoring Opportunities and Refactored Code
+
+Here are the potential refactoring opportunities I identified in the provided code snippet:
+
+**1. Extract Method:** The `validateNullToStringStyleRegistry` method can be extracted into a separate method called `assertToStringStyleRegistryEmpty`. This will improve code readability and maintainability.
+
+**Refactored Code:**
+
+```java
+package org.apache.commons.lang3;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.apache.commons.lang3.builder.ToStringStyle;
+import org.junit.jupiter.api.AfterEach;
+
+/**
+ * All tests subclass this test.
+ */
+public class AbstractLangTest {
+
+    /**
+     * All tests should leave the {@link ToStringStyle} registry empty.
+     */
+    @AfterEach
+    public void after() {
+        assertToStringStyleRegistryEmpty();
+    }
+
+    private void assertToStringStyleRegistryEmpty() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+
+}
+```
+
+**2. Inline Variable:** The variable `registry` in the `assertToStringStyleRegistryEmpty` method can be inlined. This will reduce code verbosity.
+
+**Refactored Code:**
+
+```java
+package org.apache.commons.lang3;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.apache.commons.lang3.builder.ToStringStyle;
+import org.junit.jupiter.api.AfterEach;
+
+/**
+ * All tests subclass this test.
+ */
+public class AbstractLangTest {
+
+    /**
+     * All tests should leave the {@link ToStringStyle} registry empty.
+     */
+    @AfterEach
+    public void after() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+
+}
+```
+
+**3. Rename Method:** The `after` method can be renamed to `cleanup` to better reflect its purpose.
+
+**Refactored Code:**
+
+```java
+package org.apache.commons.lang3;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.apache.commons.lang3.builder.ToStringStyle;
+import org.junit.jupiter.api.AfterEach;
+
+/**
+ * All tests subclass this test.
+ */
+public class AbstractLangTest {
+
+    /**
+     * All tests should leave the {@link ToStringStyle} registry empty.
+     */
+    @AfterEach
+    public void cleanup() {
+        assertNull(ToStringStyle.getRegistry(), "Expected null, actual: " + ToStringStyle.getRegistry());
+    }
+
+}
+```
+
+## Conclusion
+
+By applying these refactoring opportunities, the code becomes more readable, maintainable, and easier to understand.

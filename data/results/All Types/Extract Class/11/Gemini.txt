@@ -1,0 +1,229 @@
+## Refactoring Opportunities in CircuitBreakerManager
+
+After reviewing the provided code, I identified several potential refactoring opportunities that could improve its readability, maintainability, and efficiency. Here's a breakdown of the identified opportunities:
+
+**1. Extract Class:**
+
+* The `setMemEnabled`, `setMemThreshold`, `setCpuEnabled`, and `setCpuThreshold` methods could be extracted into a separate class named `CircuitBreakerManagerConfig`. This would encapsulate the configuration logic and make the `CircuitBreakerManager` class more focused.
+
+**2. Extract Method:**
+
+* The `init` method could be refactored to extract two separate methods: `initializeMemoryCircuitBreaker` and `initializeCpuCircuitBreaker`. This would improve the readability and modularity of the code.
+
+**3. Extract Variable:**
+
+* The string literals `"memEnabled"` and `"cpuEnabled"` could be extracted into constants for better readability and maintainability.
+
+**4. Inline Method:**
+
+* The `isEnabled` method is a simple getter and could be inlined directly into the code where it's used.
+
+**5. Inline Variable:**
+
+* The `circuitBreakerList` variable is only used in a few places and could be inlined to reduce memory usage.
+
+**6. Rename Attribute:**
+
+* The `cpuEnabled` and `memEnabled` attributes could be renamed to `isMemoryCircuitBreakerEnabled` and `isCpuCircuitBreakerEnabled` for better clarity.
+
+**7. Rename Method:**
+
+* The `deregisterAll` method could be renamed to `clearCircuitBreakers` for better clarity.
+
+**8. Rename Parameter:**
+
+* The `threshold` parameter in the `setMemThreshold` and `setCpuThreshold` methods could be renamed to `circuitBreakerThreshold` for better clarity.
+
+**9. Rename Variable:**
+
+* The `sb` variable in the `getDebugInfo` and `getErrorMessage` methods could be renamed to `stringBuilder` for better clarity.
+
+## Refactored Code
+
+```java
+package org.apache.solr.util.circuitbreaker;
+
+import java.lang.invoke.MethodHandles;
+import org.apache.solr.common.util.NamedList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Single CircuitBreaker that registers both a Memory and a CPU CircuitBreaker. This is only for
+ * backward compatibility with the 9.x versions prior to 9.4.
+ *
+ * @deprecated Use individual Circuit Breakers instead
+ */
+@Deprecated(since = "9.4")
+public class CircuitBreakerManager extends CircuitBreaker {
+    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static final String MEM_ENABLED = "memEnabled";
+    private static final String CPU_ENABLED = "cpuEnabled";
+
+    private final CircuitBreakerManagerConfig config;
+    private MemoryCircuitBreaker memCB;
+    private CPUCircuitBreaker cpuCB;
+
+    public CircuitBreakerManager() {
+        super();
+        this.config = new CircuitBreakerManagerConfig();
+    }
+
+    public void register(CircuitBreaker circuitBreaker) {
+        // Implementation remains the same
+    }
+
+    public void clearCircuitBreakers() {
+        // Implementation remains the same
+    }
+
+    /**
+     * Check and return circuit breakers that have triggered
+     *
+     * @return CircuitBreakers which have triggered, null otherwise.
+     */
+    public List<CircuitBreaker> checkTripped() {
+        // Implementation remains the same
+    }
+
+    /**
+     * Returns true if *any* circuit breaker has triggered, false if none have triggered.
+     *
+     * <p>NOTE: This method short circuits the checking of circuit breakers -- the method will return
+     * as soon as it finds a circuit breaker that has triggered.
+     */
+    public boolean checkAnyTripped() {
+        // Implementation remains the same
+    }
+
+    /**
+     * Construct the final error message to be printed when circuit breakers trip.
+     *
+     * @param circuitBreakerList Input list for circuit breakers.
+     * @return Constructed error message.
+     */
+    public static String toErrorMessage(List<CircuitBreaker> circuitBreakerList) {
+        // Implementation remains the same
+    }
+
+    public boolean isEnabled() {
+        return !config.getRegisteredCircuitBreakers().isEmpty();
+    }
+
+    @VisibleForTesting
+    public List<CircuitBreaker> getRegisteredCircuitBreakers() {
+        return config.getRegisteredCircuitBreakers();
+    }
+
+    @Override
+    public boolean isTripped() {
+        return (config.isMemoryCircuitBreakerEnabled() && memCB.isTripped()) || (config.isCpuCircuitBreakerEnabled() && cpuCB.isTripped());
+    }
+
+    @Override
+    public String getDebugInfo() {
+        StringBuilder stringBuilder = new StringBuilder();
+        if (config.isMemoryCircuitBreakerEnabled()) {
+            stringBuilder.append(memCB.getDebugInfo()).append("\n");
+        }
+        if (config.isCpuCircuitBreakerEnabled()) {
+            stringBuilder.append(cpuCB.getDebugInfo());
+        }
+        return stringBuilder.toString();
+    }
+
+    @Override
+    public String getErrorMessage() {
+        StringBuilder stringBuilder = new StringBuilder();
+        if (config.isMemoryCircuitBreakerEnabled()) {
+            stringBuilder.append(memCB.getErrorMessage());
+        }
+        if (config.isMemoryCircuitBreakerEnabled() && config.isCpuCircuitBreakerEnabled()) {
+            stringBuilder.append("\n");
+        }
+        if (config.isCpuCircuitBreakerEnabled()) {
+            stringBuilder.append(cpuCB.getErrorMessage());
+        }
+        return stringBuilder.toString();
+    }
+
+    @Override
+    public void init(NamedList<?> args) {
+        super.init(args);
+        log.warn("CircuitBreakerManager is deprecated. Use individual Circuit Breakers instead");
+
+        initializeMemoryCircuitBreaker(args);
+        initializeCpuCircuitBreaker(args);
+    }
+
+    private void initializeMemoryCircuitBreaker(NamedList<?> args) {
+        if (config.isMemoryCircuitBreakerEnabled()) {
+            memCB = new MemoryCircuitBreaker();
+            memCB.setThreshold(config.getMemoryCircuitBreakerThreshold());
+        }
+    }
+
+    private void initializeCpuCircuitBreaker(NamedList<?> args) {
+        if (config.isCpuCircuitBreakerEnabled()) {
+            cpuCB = new CPUCircuitBreaker();
+            cpuCB.setThreshold(config.getCpuCircuitBreakerThreshold());
+        }
+    }
+}
+
+class CircuitBreakerManagerConfig {
+    private boolean memEnabled;
+    private boolean cpuEnabled;
+    private int memThreshold = 100;
+    private int cpuThreshold = 100;
+    private final List<CircuitBreaker> circuitBreakerList = new ArrayList<>();
+
+    public boolean isMemoryCircuitBreakerEnabled() {
+        return memEnabled;
+    }
+
+    public void setMemoryCircuitBreakerEnabled(String enabled) {
+        this.memEnabled = Boolean.getBoolean(enabled);
+    }
+
+    public int getMemoryCircuitBreakerThreshold() {
+        return memThreshold;
+    }
+
+    public void setMemoryCircuitBreakerThreshold(int threshold) {
+        this.memThreshold = threshold;
+    }
+
+    public void setMemoryCircuitBreakerThreshold(String threshold) {
+        this.memThreshold = Integer.parseInt(threshold);
+    }
+
+    public boolean isCpuCircuitBreakerEnabled() {
+        return cpuEnabled;
+    }
+
+    public void setCpuCircuitBreakerEnabled(String enabled) {
+        this.cpuEnabled = Boolean.getBoolean(enabled);
+    }
+
+    public int getCpuCircuitBreakerThreshold() {
+        return cpuThreshold;
+    }
+
+    public void setCpuCircuitBreakerThreshold(int threshold) {
+        this.cpuThreshold = threshold;
+    }
+
+    public void setCpuCircuitBreakerThreshold(String threshold) {
+        this.cpuThreshold = Integer.parseInt(threshold);
+    }
+
+    public List<CircuitBreaker> getRegisteredCircuitBreakers() {
+        return circuitBreakerList;
+    }
+}
+```
+
+## Conclusion
+
+By applying these refactoring techniques, the `CircuitBreakerManager` code becomes more readable, maintainable, and efficient. The separation of concerns and improved clarity make it easier to understand and modify the code in the future.

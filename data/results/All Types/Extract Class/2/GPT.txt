@@ -1,0 +1,134 @@
+Upon reviewing the provided code snippet, I have identified some refactoring opportunities that can improve the readability, reusability, and maintainability of the code. Below are the suggestions:
+
+### Refactoring Opportunities
+
+1. **Extract Method**:
+   - The code for creating a `BrokenInputStream` from a `Throwable` is repeated multiple times in different test methods. We can extract this logic into a separate helper method to avoid repetition.
+   
+2. **Inline Variable**:
+   - In the test methods (e.g., `testAvailable`, `testClose`, `testRead`, etc.), the variable `exception` is used only once. You could inline this variable if you're looking to minimize local variables.
+
+3. **Rename Method**:
+   - The method name `parameters()` is not very descriptive about its purpose. Since this method returns the list of exception classes, a more descriptive name would be `getExceptionClassesForTesting()` or `exceptionClassProvider()`.
+
+4. **Rename Variable**:
+   - The variable `clazz` is not very descriptive. It could be renamed to `exceptionClass` to better convey its purpose.
+
+5. **Extract Class**:
+   - Although the class `CustomException` is small, it might be useful to move it to a separate file if it's expected to grow, or if it's used in other places outside this test.
+
+### Refactored Code
+
+```java
+public class BrokenInputStreamTest {
+
+    /**
+     * Factory for parameterized tests of BrokenInputStream, BrokenReader, BrokenOutputStream, and BrokenWriter.
+     */
+    public static final class CustomException extends Exception {
+        private static final long serialVersionUID = 1L;
+    }
+
+    /**
+     * Provides a stream of exception classes for parameterized tests.
+     */
+    public static Stream<Class<? extends Throwable>> getExceptionClassesForTesting() {
+        return Stream.of(
+                IOException.class,
+                FileNotFoundException.class,
+                FileSystemNotFoundException.class,
+                RuntimeException.class,
+                IllegalArgumentException.class,
+                IllegalStateException.class,
+                Error.class,
+                ExceptionInInitializerError.class,
+                CustomException.class
+        );
+    }
+
+    /**
+     * Helper method to create a BrokenInputStream instance from an exception class.
+     */
+    private static BrokenInputStream createBrokenInputStream(final Class<? extends Throwable> exceptionClass) throws Exception {
+        Throwable exception = exceptionClass.getDeclaredConstructor().newInstance();
+        if (exception instanceof IOException) {
+            return new BrokenInputStream((IOException) exception);
+        }
+        return new BrokenInputStream(exception);
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#getExceptionClassesForTesting")
+    public void testAvailable(final Class<? extends Throwable> exceptionClass) throws Exception {
+        assertExceptionThrown(exceptionClass, BrokenInputStream::available);
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#getExceptionClassesForTesting")
+    public void testClose(final Class<? extends Throwable> exceptionClass) throws Exception {
+        assertExceptionThrown(exceptionClass, BrokenInputStream::close);
+    }
+
+    @Test
+    public void testInstance() {
+        assertNotNull(BrokenInputStream.INSTANCE);
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#getExceptionClassesForTesting")
+    public void testRead(final Class<? extends Throwable> exceptionClass) throws Exception {
+        assertExceptionThrown(exceptionClass, BrokenInputStream::read);
+        assertExceptionThrown(exceptionClass, stream -> stream.read(new byte[1]));
+        assertExceptionThrown(exceptionClass, stream -> stream.read(new byte[1], 0, 1));
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#getExceptionClassesForTesting")
+    public void testReset(final Class<? extends Throwable> exceptionClass) throws Exception {
+        assertExceptionThrown(exceptionClass, BrokenInputStream::reset);
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#getExceptionClassesForTesting")
+    public void testSkip(final Class<? extends Throwable> exceptionClass) throws Exception {
+        assertExceptionThrown(exceptionClass, stream -> stream.skip(1));
+    }
+
+    @Test
+    public void testTryWithResources() {
+        final IOException thrown = assertThrows(IOException.class, () -> {
+            try (InputStream newStream = new BrokenInputStream()) {
+                newStream.read();
+            }
+        });
+        assertEquals("Broken input stream", thrown.getMessage());
+
+        final Throwable[] suppressed = thrown.getSuppressed();
+        assertEquals(1, suppressed.length);
+        assertEquals(IOException.class, suppressed[0].getClass());
+        assertEquals("Broken input stream", suppressed[0].getMessage());
+    }
+
+    /**
+     * Helper method to assert that a method on a BrokenInputStream throws the correct exception.
+     */
+    private void assertExceptionThrown(Class<? extends Throwable> exceptionClass, ThrowingConsumer<BrokenInputStream> method) throws Exception {
+        final BrokenInputStream stream = createBrokenInputStream(exceptionClass);
+        assertEquals(exceptionClass.getDeclaredConstructor().newInstance(), assertThrows(exceptionClass, () -> method.accept(stream)));
+    }
+
+    @FunctionalInterface
+    private interface ThrowingConsumer<T> {
+        void accept(T t) throws Exception;
+    }
+}
+```
+
+### Refactoring Summary:
+1. **Extracted Method**: The common logic for creating a `BrokenInputStream` and checking the exception was extracted into the `createBrokenInputStream` method.
+2. **Renamed Method**: `parameters` was renamed to `getExceptionClassesForTesting` for better clarity.
+3. **Renamed Variable**: The variable `clazz` was renamed to `exceptionClass` for clarity.
+4. **Extracted Helper Method**: The repeated logic for asserting exceptions in test methods was extracted into the `assertExceptionThrown` method. This reduces repetition and improves maintainability.
+5. **Extracted Functional Interface**: Introduced `ThrowingConsumer` to handle methods that throw exceptions.
+
+This refactoring should improve the clarity and maintainability of the code, particularly by reducing repetition and improving method names.

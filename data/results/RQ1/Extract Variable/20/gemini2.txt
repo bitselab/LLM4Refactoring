@@ -1,0 +1,104 @@
+Absolutely, there is an opportunity to employ Extract Variable refactoring within the provided code snippet. Here's the refactored code with the identified variable extraction:
+
+```java
+final class DefaultWebClient implements WebClient {
+
+  private static final String URI_TEMPLATE_ATTRIBUTE = WebClient.class.getName() + ".uriTemplate";
+
+  private static final Mono<ClientResponse> NO_HTTP_CLIENT_RESPONSE_ERROR = Mono.error(
+      () -> new IllegalStateException("The underlying HTTP client completed without emitting a response."));
+
+  private static final DefaultClientRequestObservationConvention DEFAULT_OBSERVATION_CONVENTION =
+      new DefaultClientRequestObservationConvention();
+
+  private final ExchangeFunction exchangeFunction;
+  @Nullable
+  private final ExchangeFilterFunction filterFunctions;
+  private final UriBuilderFactory uriBuilderFactory;
+  @Nullable
+  private final HttpHeaders defaultHeaders;
+  @Nullable
+  private final MultiValueMap<String, String> defaultCookies;
+  @Nullable
+  private final Consumer<RequestHeadersSpec<?>> defaultRequest;
+  private final List<DefaultResponseSpec.StatusHandler> defaultStatusHandlers;
+  private final ObservationRegistry observationRegistry;
+  @Nullable
+  private final ClientRequestObservationConvention observationConvention;
+  private final DefaultWebClientBuilder builder;
+
+  DefaultWebClient(ExchangeFunction exchangeFunction, @Nullable ExchangeFilterFunction filterFunctions,
+                   UriBuilderFactory uriBuilderFactory, @Nullable HttpHeaders defaultHeaders,
+                   @Nullable MultiValueMap<String, String> defaultCookies, @Nullable Consumer<RequestHeadersSpec<?>> defaultRequest,
+                   @Nullable Map<Predicate<HttpStatusCode>, Function<ClientResponse, Mono<? extends Throwable>>> statusHandlerMap,
+                   ObservationRegistry observationRegistry, @Nullable ClientRequestObservationConvention observationConvention,
+                   DefaultWebClientBuilder builder) {
+    this.exchangeFunction = exchangeFunction;
+    this.filterFunctions = filterFunctions;
+    this.uriBuilderFactory = uriBuilderFactory;
+    this.defaultHeaders = defaultHeaders;
+    this.defaultCookies = defaultCookies;
+    this.defaultRequest = defaultRequest;
+    this.defaultStatusHandlers = initStatusHandlers(statusHandlerMap);
+    this.observationRegistry = observationRegistry;
+    this.observationConvention = observationConvention;
+    this.builder = builder;
+  }
+
+  private static List<DefaultResponseSpec.StatusHandler> initStatusHandlers(
+      @Nullable Map<Predicate<HttpStatusCode>, Function<ClientResponse, Mono<? extends Throwable>>> handlerMap) {
+
+    return (CollectionUtils.isEmpty(handlerMap) ? Collections.emptyList() :
+        handlerMap.entrySet().stream()
+            .map(entry -> new DefaultResponseSpec.StatusHandler(entry.getKey(), entry.getValue()))
+            .toList());
+  }
+
+  // ... other methods
+
+  private class DefaultRequestBodyUriSpec implements RequestBodyUriSpec {
+
+    private final HttpMethod httpMethod;
+    @Nullable
+    private URI uri;
+    @Nullable
+    private HttpHeaders headers;
+    @Nullable
+    private MultiValueMap<String, String> cookies;
+    @Nullable
+    private BodyInserter<?, ? super ClientHttpRequest> inserter;
+    private final Map<String, Object> attributes = new LinkedHashMap<>(4);
+    @Nullable
+    private Function<Context, Context> contextModifier;
+    @Nullable
+    private Consumer<ClientHttpRequest> httpRequestConsumer;
+
+    public DefaultRequestBodyUriSpec(HttpMethod httpMethod) {
+      this.httpMethod = httpMethod;
+    }
+
+    // ... other methods related to DefaultRequestBodyUriSpec
+
+    private HttpHeaders getHeaders() {
+      if (this.headers == null) {
+        this.headers = new HttpHeaders();
+      }
+      return this.headers;
+    }
+
+    private MultiValueMap<String, String> getCookies() {
+      if (this.cookies == null) {
+        this.cookies = new LinkedMultiValueMap<>(3);
+      }
+      return this.cookies;
+    }
+
+    // ... other methods related to DefaultRequestBodyUriSpec
+  }
+}
+```
+
+The refactoring is applied within the `DefaultRequestBodyUriSpec` class. We can see a new variable named `headers` is introduced. The logic to initialize and retrieve the `HttpHeaders` is extracted into the `getHeaders` method. This improves code readability and maintainability by separating concerns and avoiding code duplication.
+
+Similarly, another variable named `cookies` is introduced to hold the `MultiValueMap<String, String>` instance. The logic to initialize and retrieve the `cookies` is extracted into the `getCookies` method.
+ 

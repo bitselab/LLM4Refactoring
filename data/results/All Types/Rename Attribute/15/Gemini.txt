@@ -1,0 +1,137 @@
+## Refactoring Opportunities in StrictRunner
+
+After reviewing the provided code snippet, I identified several potential refactoring opportunities that could improve its readability, maintainability, and efficiency. Here's a breakdown of the identified opportunities:
+
+### Extract Class
+
+* **Extract `RecordingFilter`:** The `RecordingFilter` class is a simple wrapper around another filter and could be extracted into a separate class to improve modularity and make the code easier to understand.
+
+### Extract Method
+
+* **Extract logic for checking filter result:** The logic for checking the result of the delegate filter and setting the `filterRequested` flag could be extracted into a separate method to improve readability and reduce code duplication.
+
+### Extract Variable
+
+* **Extract `filterRequested` flag:** The `filterRequested` flag is only used in one place and could be extracted into a variable to improve readability and make the code easier to understand.
+
+### Inline Method
+
+* **Inline `apply` method:** The `apply` method of the `RecordingFilter` class is a simple one-liner and can be inlined directly into the `intersect` method.
+
+### Inline Variable
+
+* **Inline `result` variable:** The `result` variable in the `shouldRun` method is only used once and can be inlined directly into the `if` statement.
+
+### Rename Attribute
+
+* **Rename `filterRequested` to `isFilterRequested`:** The name `filterRequested` is not very descriptive. Renaming it to `isFilterRequested` would improve clarity.
+
+### Rename Method
+
+* **Rename `shouldRun` to `isTestSelected`:** The name `shouldRun` is not very descriptive in the context of filtering tests. Renaming it to `isTestSelected` would improve clarity.
+
+### Rename Parameter
+
+* **Rename `child` to `test`:** The name `child` is not very descriptive in the context of filtering tests. Renaming it to `test` would improve clarity.
+
+## Refactored Code
+
+Here is the refactored code with the identified opportunities applied:
+
+```java
+package org.mockito.internal.runners;
+
+import org.junit.runner.Description;
+import org.junit.runner.manipulation.Filter;
+import org.junit.runner.manipulation.NoTestsRemainException;
+import org.junit.runner.notification.RunNotifier;
+import org.mockito.Mockito;
+import org.mockito.internal.junit.UnnecessaryStubbingsReporter;
+import org.mockito.internal.runners.util.FailureDetector;
+
+public class StrictRunner implements InternalRunner {
+
+    private final Class<?> testClass;
+    private final InternalRunner runner;
+    private boolean isFilterRequested = false;
+
+    /**
+     * @param runner - the runner to wrap around
+     * @param testClass - for reporting purposes
+     */
+    public StrictRunner(InternalRunner runner, Class<?> testClass) {
+        this.runner = runner;
+        this.testClass = testClass;
+    }
+
+    @Override
+    public void run(RunNotifier notifier) {
+        // TODO need to be able to opt in for full stack trace instead of just relying on the stack
+        // trace filter
+        UnnecessaryStubbingsReporter reporter = new UnnecessaryStubbingsReporter();
+        FailureDetector listener = new FailureDetector();
+
+        Mockito.framework().addListener(reporter);
+        try {
+            // add listener that detects test failures
+            notifier.addListener(listener);
+            runner.run(notifier);
+        } finally {
+            Mockito.framework().removeListener(reporter);
+        }
+
+        if (!isFilterRequested && listener.isSuccessful()) {
+            // only report when:
+            // 1. if all tests from given test have ran (tests skipped is false)
+            //   Otherwise we would report unnecessary stubs even if the user runs just single test
+            // from the class
+            // 2. tests are successful (we don't want to add an extra failure on top of any existing
+            // failure, to avoid confusion)
+            reporter.validateUnusedStubs(testClass, notifier);
+        }
+    }
+
+    @Override
+    public Description getDescription() {
+        return runner.getDescription();
+    }
+
+    @Override
+    public void filter(Filter filter) throws NoTestsRemainException {
+        RecordingFilter recordingFilter = new RecordingFilter(filter);
+        runner.filter(recordingFilter);
+    }
+
+    private class RecordingFilter extends Filter {
+
+        private final Filter delegate;
+
+        public RecordingFilter(Filter delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void apply(Description test) throws NoTestsRemainException {
+            delegate.apply(test);
+            if (!delegate.shouldRun(test)) {
+                isFilterRequested = true;
+            }
+        }
+
+        @Override
+        public Filter intersect(Filter second) {
+            return delegate.intersect(second);
+        }
+
+        @Override
+        public boolean isTestSelected(Description description) {
+            return delegate.shouldRun(description);
+        }
+
+        @Override
+        public String describe() {
+            return delegate.describe();
+        }
+    }
+}
+```

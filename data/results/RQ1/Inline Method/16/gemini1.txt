@@ -1,0 +1,15 @@
+Absolutely, here are some refactoring opportunities for the provided code snippet:
+
+1. **Reduce Code Duplication:** There's a code block repeated twice for checking if `zkHost` property exists and setting it based on system property (`wrapAndSetZkHostFromSysPropIfNeeded`). This can be refactored into a separate method to improve readability and maintainability.
+
+2. **Use Optional for substituteProperties:** The `substituteProperties` parameter is a `Properties` object but it can be null in some cases. Consider using `Optional<Properties>` to handle the possibility of it being absent more explicitly.
+
+3. **Simplify `checkForIllegalConfig`:** This method does multiple checks for specific attributes in the configuration. You can potentially leverage libraries like `Apache Commons Validator` to simplify these checks.
+
+4. **Use Stream API for `loadProperties`:** The `loadProperties` method iterates over child nodes and builds a `Properties` object. This can be refactored using streams for a more concise and functional approach.
+
+5. **Consider Builder Pattern for `NodeConfig`:** The `fillSolrSection` method constructs a `NodeConfig` object by setting various properties. This can be improved by using the Builder pattern to create a more readable and chained approach for setting configurations.
+
+6. **Extract Helper Methods:** Some logic within `fillSolrSection` for handling specific properties might benefit from being extracted into separate helper methods for better organization and reusability.
+
+Remember, these are just suggestions, and the specific refactoring approach might depend on your coding style and project requirements.

@@ -1,0 +1,145 @@
+The provided `PathUtilEx` class has a few opportunities for refactoring to improve clarity, maintainability, and adherence to modern coding practices.
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Method**  
+   - **Problem**: The logic in `chooseJdk(Collection<? extends Module> modules)` for filtering and selecting the JDK is embedded within the method.  
+   - **Solution**: Extract the filtering and selection logic into separate private methods for clarity.
+
+2. **Extract Variable**  
+   - **Problem**: Complex expressions like the `Comparator` in `max()` reduce readability.  
+   - **Solution**: Extract the comparator into a named variable.
+
+3. **Inline Method**  
+   - **Problem**: The overloaded private `chooseJdk(Project, Collection<Module>)` method is deprecated and only used by `getAnyJdk()`.  
+   - **Solution**: Inline this method into `getAnyJdk()` to reduce indirection.
+
+4. **Rename Method**  
+   - **Problem**: `chooseJdk` is ambiguous.  
+   - **Solution**: Rename it to `findHighestVersionJdk` to make its purpose explicit.
+
+5. **Rename Parameter**  
+   - **Problem**: `modules` is generic.  
+   - **Solution**: Rename to `moduleCollection` for clarity.
+
+6. **Mark Deprecated Methods Clearly**  
+   - **Problem**: Deprecated methods are still public.  
+   - **Solution**: Reduce their visibility if possible or provide alternatives.
+
+---
+
+### **Refactored Code**
+
+```java
+package com.intellij.openapi.projectRoots.ex;
+
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.projectRoots.JavaSdkType;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.roots.ProjectRootManager;
+import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.lang.JavaVersion;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+
+/**
+ * Utility class for handling JDK selection in a project.
+ */
+public final class PathUtilEx {
+
+    @Nullable
+    public static Sdk getAnyJdk(@NotNull Project project) {
+        Sdk projectSdk = ProjectRootManager.getInstance(project).getProjectSdk();
+        if (isJavaSdk(projectSdk)) {
+            return projectSdk;
+        }
+
+        Collection<Module> modules = List.of(ModuleManager.getInstance(project).getModules());
+        return findHighestVersionJdk(modules);
+    }
+
+    /**
+     * @deprecated The meaning of this method is unclear. Use explicit criteria to select a JDK.
+     */
+    @Deprecated(forRemoval = true)
+    @Nullable
+    public static Sdk findHighestVersionJdk(@NotNull Collection<? extends Module> moduleCollection) {
+        List<Sdk> jdks = extractJavaSdks(moduleCollection);
+        return selectHighestVersionJdk(jdks);
+    }
+
+    /**
+     * Filters Java SDKs from the provided modules.
+     */
+    @NotNull
+    private static List<Sdk> extractJavaSdks(@NotNull Collection<? extends Module> moduleCollection) {
+        return ContainerUtil.mapNotNull(moduleCollection, module -> {
+            if (module == null) return null;
+            Sdk sdk = ModuleRootManager.getInstance(module).getSdk();
+            return isJavaSdk(sdk) ? sdk : null;
+        });
+    }
+
+    /**
+     * Selects the JDK with the highest version from a list of SDKs.
+     */
+    @Nullable
+    private static Sdk selectHighestVersionJdk(@NotNull List<Sdk> jdks) {
+        if (jdks.isEmpty()) {
+            return null;
+        }
+
+        Comparator<Sdk> versionComparator = Comparator.comparing(
+                sdk -> JavaVersion.tryParse(sdk.getVersionString()), 
+                Comparator.nullsFirst(Comparator.naturalOrder())
+        );
+
+        return jdks.stream().max(versionComparator).orElse(null);
+    }
+
+    /**
+     * Checks if the provided SDK is a Java SDK.
+     */
+    private static boolean isJavaSdk(@Nullable Sdk sdk) {
+        return sdk != null && sdk.getSdkType() instanceof JavaSdkType;
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extracted Methods**  
+   - `extractJavaSdks()` handles SDK filtering.  
+   - `selectHighestVersionJdk()` handles selecting the JDK with the highest version.  
+   - `isJavaSdk()` checks if a given SDK is a Java SDK.
+
+2. **Renamed Methods and Parameters**  
+   - `chooseJdk()` → `findHighestVersionJdk()` for clarity.  
+   - `modules` → `moduleCollection` for descriptiveness.
+
+3. **Inlined Deprecated Method**  
+   - The deprecated private `chooseJdk(Project, Collection<Module>)` was inlined into `getAnyJdk()`.
+
+4. **Extracted Comparator**  
+   - The comparator in `max()` was extracted into `versionComparator` for readability.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Improved Readability**: Clear method names and extracted logic improve comprehension.  
+- **Maintainability**: Changes to SDK filtering or selection logic are localized.  
+- **Reduced Redundancy**: Simplified method calls and removed unnecessary indirection.
+
+Let me know if you'd like to refine this further!

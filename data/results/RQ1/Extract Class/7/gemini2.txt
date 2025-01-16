@@ -1,0 +1,80 @@
+There are two potential opportunities for Extract Class refactoring in the provided code:
+
+**1. Extracting `resolveArrayType` method:**
+
+- Create a new class named `ArrayTypeResolver` with a private constructor.
+- Move the `resolveArrayType` method from `ArrayViaElementArgumentReturnTypeResolver` to the new class `ArrayTypeResolver`.
+- Update the call to `ArrayTypeHelper.resolveArrayType` within the method to use the newly created class.
+
+This refactoring improves code organization by separating the logic for resolving the array type into a dedicated class.
+
+**Refactored Code:**
+
+```java
+public class ArrayViaElementArgumentReturnTypeResolver implements FunctionReturnTypeResolver {
+
+  // ... existing code ...
+
+  private static BasicType<?> resolveArrayType(DomainType<?> elementType, TypeConfiguration typeConfiguration) {
+    return ArrayTypeResolver.resolveArrayType(elementType, typeConfiguration);
+  }
+
+  // ... existing code ...
+
+  public static class ArrayTypeResolver {
+    private ArrayTypeResolver() {}
+
+    public static BasicType<?> resolveArrayType(DomainType<?> elementType, TypeConfiguration typeConfiguration) {
+      // ... existing logic from original resolveArrayType method ...
+    }
+  }
+}
+```
+
+**2. Extracting logic for resolving basic valued mapping (optional):**
+
+- Create a new class named `MappingTypeResolver` with a private constructor.
+- Inside the `resolveFunctionReturnType` method, extract the logic for checking if the inferred type is a `BasicValuedMapping` and returning its `JdbcMapping` into a separate method named `getJdbcMappingFromBasicType` within the new class.
+
+This refactoring is optional and might be less impactful depending on the codebase complexity. However, it can further improve code readability.
+
+**Refactored Code (with optional extraction):**
+
+```java
+public class ArrayViaElementArgumentReturnTypeResolver implements FunctionReturnTypeResolver {
+
+  // ... existing code ...
+
+  private static ReturnableType<?> getJdbcMappingFromBasicType(MappingModelExpressible<?> inferredType) {
+    if (inferredType instanceof BasicValuedMapping) {
+      return ((BasicValuedMapping) inferredType).getJdbcMapping();
+    }
+    return null;
+  }
+
+  @Override
+  public ReturnableType<?> resolveFunctionReturnType(
+      // ... existing arguments ...
+  ) {
+    final MappingModelExpressible<?> inferredType = inferredTypeSupplier.get();
+    if (inferredType != null) {
+      ReturnableType<?> jdbcMapping = getJdbcMappingFromBasicType(inferredType);
+      if (jdbcMapping != null) {
+        return jdbcMapping;
+      }
+      // ... existing logic ...
+    }
+    // ... existing logic ...
+  }
+
+  // ... existing code ...
+
+  public static class MappingTypeResolver {
+    private MappingTypeResolver() {}
+
+    // ... (optional) define getJdbcMappingFromBasicType here ...
+  }
+}
+```
+
+Remember to update any other parts of the codebase that might call the original `resolveArrayType` method to use the new class.

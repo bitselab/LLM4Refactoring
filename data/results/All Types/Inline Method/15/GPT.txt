@@ -1,0 +1,268 @@
+The `BytesStore` class is functional but can be significantly improved for readability, maintainability, and modularity. Here are the identified refactoring opportunities and the refactored code.
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Class:**  
+   - **Problem:** The class mixes byte storage logic with reader functionality, making it overly complex.  
+   - **Solution:** Extract `ForwardBytesReader` and `ReverseBytesReader` into separate classes.
+
+2. **Extract Method:**  
+   - **Problem:** Methods like `writeBytes`, `copyBytes`, and `reverse` are too long and complex.  
+   - **Solution:** Break them into smaller helper methods.
+
+3. **Extract Variable:**  
+   - **Problem:** Magic numbers and repeated expressions like `(int)(pos >> blockBits)` are hard to read.  
+   - **Solution:** Extract them into variables with meaningful names.
+
+4. **Rename Method:**  
+   - **Problem:** Method names like `copyBytes` are ambiguous.  
+   - **Solution:** Rename to `copyBytesWithinStore`.
+
+5. **Inline Method:**  
+   - **Problem:** The single-use method `getFallbackSorter()` could be inlined if it’s simple.  
+   - **Solution:** Consider inlining or simplifying.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.lucene.util.fst;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.lucene.store.DataInput;
+import org.apache.lucene.store.DataOutput;
+import org.apache.lucene.util.RamUsageEstimator;
+
+class BytesStore extends DataOutput implements FSTReader {
+
+    private static final long BASE_RAM_BYTES_USED =
+            RamUsageEstimator.shallowSizeOfInstance(BytesStore.class) +
+            RamUsageEstimator.shallowSizeOfInstance(ArrayList.class);
+
+    private final List<byte[]> blocks = new ArrayList<>();
+    private final int blockSize;
+    private final int blockBits;
+    private final int blockMask;
+
+    private byte[] currentBlock;
+    private int nextWriteIndex;
+
+    public BytesStore(int blockBits) {
+        this.blockBits = blockBits;
+        this.blockSize = 1 << blockBits;
+        this.blockMask = blockSize - 1;
+        this.nextWriteIndex = blockSize;
+    }
+
+    @Override
+    public void writeByte(byte b) {
+        ensureWritableBlock();
+        currentBlock[nextWriteIndex++] = b;
+    }
+
+    @Override
+    public void writeBytes(byte[] bytes, int offset, int length) {
+        while (length > 0) {
+            ensureWritableBlock();
+            int writable = Math.min(length, blockSize - nextWriteIndex);
+            System.arraycopy(bytes, offset, currentBlock, nextWriteIndex, writable);
+            nextWriteIndex += writable;
+            offset += writable;
+            length -= writable;
+        }
+    }
+
+    public void writeByteAt(long position, byte b) {
+        byte[] block = getBlock(position);
+        block[getBlockOffset(position)] = b;
+    }
+
+    public void writeIntAt(long position, int value) {
+        for (int i = 3; i >= 0; i--) {
+            writeByteAt(position + i, (byte) (value >>> (i * 8)));
+        }
+    }
+
+    public void copyBytesWithinStore(long source, long destination, int length) {
+        assert source < destination;
+        byte[] tempBuffer = new byte[length];
+        copyBytesToArray(source, tempBuffer, 0, length);
+        writeBytes(destination, tempBuffer, 0, length);
+    }
+
+    private void ensureWritableBlock() {
+        if (nextWriteIndex == blockSize) {
+            currentBlock = new byte[blockSize];
+            blocks.add(currentBlock);
+            nextWriteIndex = 0;
+        }
+    }
+
+    private byte[] getBlock(long position) {
+        return blocks.get((int) (position >> blockBits));
+    }
+
+    private int getBlockOffset(long position) {
+        return (int) (position & blockMask);
+    }
+
+    public void copyBytesToArray(long source, byte[] dest, int offset, int length) {
+        while (length > 0) {
+            byte[] block = getBlock(source);
+            int blockOffset = getBlockOffset(source);
+            int chunk = Math.min(blockSize - blockOffset, length);
+            System.arraycopy(block, blockOffset, dest, offset, chunk);
+            source += chunk;
+            offset += chunk;
+            length -= chunk;
+        }
+    }
+
+    public void reverseBytes(long start, long end) {
+        assert start < end;
+        while (start < end) {
+            byte temp = readByteAt(start);
+            writeByteAt(start++, readByteAt(end));
+            writeByteAt(end--, temp);
+        }
+    }
+
+    public byte readByteAt(long position) {
+        byte[] block = getBlock(position);
+        return block[getBlockOffset(position)];
+    }
+
+    @Override
+    public void writeTo(DataOutput out) throws IOException {
+        for (byte[] block : blocks) {
+            out.writeBytes(block, 0, block.length);
+        }
+    }
+
+    public long getPosition() {
+        return ((long) (blocks.size() - 1) * blockSize) + nextWriteIndex;
+    }
+
+    public long size() {
+        return getPosition();
+    }
+
+    @Override
+    public long ramBytesUsed() {
+        long size = BASE_RAM_BYTES_USED;
+        for (byte[] block : blocks) {
+            size += RamUsageEstimator.sizeOf(block);
+        }
+        return size;
+    }
+
+    public FST.BytesReader getForwardReader() {
+        return new ForwardBytesReader(blocks, blockBits, blockSize);
+    }
+
+    public FST.BytesReader getReverseReader() {
+        return new ReverseBytesReader(blocks, blockBits, blockSize);
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + "(blocks=" + blocks.size() + ")";
+    }
+}
+```
+
+---
+
+### **Extracted Classes**
+
+#### **ForwardBytesReader**
+```java
+class ForwardBytesReader extends FST.BytesReader {
+    private final List<byte[]> blocks;
+    private final int blockBits;
+    private final int blockSize;
+    private byte[] currentBlock;
+    private int currentBufferIndex;
+    private int currentReadIndex;
+
+    ForwardBytesReader(List<byte[]> blocks, int blockBits, int blockSize) {
+        this.blocks = blocks;
+        this.blockBits = blockBits;
+        this.blockSize = blockSize;
+    }
+
+    @Override
+    public byte readByte() {
+        if (currentReadIndex == blockSize) {
+            currentBlock = blocks.get(++currentBufferIndex);
+            currentReadIndex = 0;
+        }
+        return currentBlock[currentReadIndex++];
+    }
+
+    @Override
+    public boolean reversed() {
+        return false;
+    }
+}
+```
+
+#### **ReverseBytesReader**
+```java
+class ReverseBytesReader extends FST.BytesReader {
+    private final List<byte[]> blocks;
+    private final int blockBits;
+    private final int blockSize;
+    private byte[] currentBlock;
+    private int currentBufferIndex;
+    private int currentReadIndex;
+
+    ReverseBytesReader(List<byte[]> blocks, int blockBits, int blockSize) {
+        this.blocks = blocks;
+        this.blockBits = blockBits;
+        this.blockSize = blockSize;
+        this.currentBufferIndex = blocks.size() - 1;
+        this.currentBlock = blocks.get(currentBufferIndex);
+        this.currentReadIndex = blockSize - 1;
+    }
+
+    @Override
+    public byte readByte() {
+        if (currentReadIndex == -1) {
+            currentBlock = blocks.get(--currentBufferIndex);
+            currentReadIndex = blockSize - 1;
+        }
+        return currentBlock[currentReadIndex--];
+    }
+
+    @Override
+    public boolean reversed() {
+        return true;
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extracted Classes:**  
+   - `ForwardBytesReader` and `ReverseBytesReader` handle their logic independently.
+
+2. **Extracted Methods:**  
+   - Separated complex logic in methods like `writeBytes` and `copyBytesWithinStore`.
+
+3. **Renamed Methods:**  
+   - `copyBytes` → `copyBytesWithinStore` for clarity.
+
+4. **Extracted Variables:**  
+   - Used helper methods like `getBlock()` and `getBlockOffset()` for readability.
+
+---
+
+This refactoring simplifies the original `BytesStore` class, improves maintainability, and clarifies the responsibilities of each component. Let me know if you'd like further improvements!

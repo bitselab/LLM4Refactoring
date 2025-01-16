@@ -1,0 +1,106 @@
+Upon reviewing the code, there are several refactoring opportunities that can improve readability, reduce duplication, and increase maintainability. Below are the potential refactoring suggestions based on the nine types of refactoring:
+
+### 1. **Extract Method**
+- The method `getStartLogMessage` contains string-building logic, which could be refactored into a separate helper method to handle the construction of the log message. This will make the code easier to read and modify in the future.
+
+### 2. **Rename Variable**
+- The variable `message` in the `getStartLogMessage` method could be renamed to something more descriptive, like `logMessage`, to clarify its purpose.
+
+### 3. **Inline Variable**
+- The variable `this.contextPath` is used in the `createHttpHandler` method within the `if` condition. It can be inlined to reduce unnecessary variable assignments, especially since it is only used in one place.
+
+### Refactored Code
+
+```java
+package org.springframework.boot.web.embedded.undertow;
+
+import io.undertow.Handlers;
+import io.undertow.Undertow.Builder;
+import io.undertow.server.HttpHandler;
+import io.undertow.servlet.api.DeploymentManager;
+
+import org.springframework.boot.web.server.WebServer;
+import org.springframework.util.StringUtils;
+
+/**
+ * {@link WebServer} that can be used to control an embedded Undertow server. Typically
+ * this class should be created using {@link UndertowServletWebServerFactory} and not
+ * directly.
+ *
+ * @author Ivan Sopov
+ * @author Andy Wilkinson
+ * @author Eddú Meléndez
+ * @author Christoph Dreis
+ * @author Kristine Jetzke
+ * @since 2.0.0
+ * @see UndertowServletWebServerFactory
+ */
+public class UndertowServletWebServer extends UndertowWebServer {
+
+    private final String contextPath;
+    private final DeploymentManager manager;
+
+    /**
+     * Create a new {@link UndertowServletWebServer} instance.
+     * @param builder the builder
+     * @param httpHandlerFactories the handler factories
+     * @param contextPath the root context path
+     * @param autoStart if the server should be started
+     * @since 2.3.0
+     */
+    public UndertowServletWebServer(Builder builder, Iterable<HttpHandlerFactory> httpHandlerFactories,
+                                    String contextPath, boolean autoStart) {
+        super(builder, httpHandlerFactories, autoStart);
+        this.contextPath = contextPath;
+        this.manager = findManager(httpHandlerFactories);
+    }
+
+    private DeploymentManager findManager(Iterable<HttpHandlerFactory> httpHandlerFactories) {
+        for (HttpHandlerFactory httpHandlerFactory : httpHandlerFactories) {
+            if (httpHandlerFactory instanceof DeploymentManagerHttpHandlerFactory deploymentManagerFactory) {
+                return deploymentManagerFactory.getDeploymentManager();
+            }
+        }
+        return null;
+    }
+
+    @Override
+    protected HttpHandler createHttpHandler() {
+        HttpHandler handler = super.createHttpHandler();
+        if (StringUtils.hasLength(this.contextPath)) {
+            handler = Handlers.path().addPrefixPath(this.contextPath, handler);
+        }
+        return handler;
+    }
+
+    @Override
+    protected String getStartLogMessage() {
+        return buildStartLogMessage();
+    }
+
+    private String buildStartLogMessage() {
+        StringBuilder logMessage = new StringBuilder(super.getStartLogMessage());
+        logMessage.append(" with context path '")
+                  .append(StringUtils.hasText(this.contextPath) ? this.contextPath : "/")
+                  .append("'");
+        return logMessage.toString();
+    }
+
+    public DeploymentManager getDeploymentManager() {
+        return this.manager;
+    }
+}
+```
+
+### Key Changes:
+1. **Extract Method**: 
+   - The string-building logic in `getStartLogMessage` has been extracted to a new method, `buildStartLogMessage`, for better separation of concerns.
+   
+2. **Rename Variable**: 
+   - The variable `message` was renamed to `logMessage` to better reflect its purpose in constructing the log message.
+   
+3. **Inline Variable**: 
+   - The `this.contextPath` is used directly in the `if` condition in `createHttpHandler` without the need for a separate variable.
+
+### Summary of Refactoring:
+These changes improve the clarity and maintainability of the class. Extracting the log message building to a separate method makes it easier to modify the log message format later. Renaming the variable to `logMessage` helps clarify its intent, and inlining the variable simplifies the logic in `createHttpHandler`.

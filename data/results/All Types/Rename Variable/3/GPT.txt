@@ -1,0 +1,210 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Repeated object creation and setup in tests can be moved to helper methods.  
+   - String formatting logic in `testToStringSpecifyStyleOutput` can be extracted.
+
+2. **Extract Variable:**  
+   - Inline repeated configurations such as `DiffBuilder.TO_STRING_FORMAT` and `SHORT_STYLE`.  
+   - Extract magic strings used for field names and error messages.
+
+3. **Rename Method:**  
+   - Improve method names to be more descriptive, e.g., `testNullLhs()` → `testDiffResultThrowsExceptionWhenLeftIsNull()`.
+
+4. **Inline Variable:**  
+   - Inline simple variables that are only used once after initialization.
+
+5. **Extract Class:**  
+   - Extract inner classes (`EmptyClass`, `SimpleClass`) if they are complex or reusable. For this case, it's optional since they are simple.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.commons.lang3.builder;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Iterator;
+import java.util.List;
+
+import org.apache.commons.lang3.AbstractLangTest;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Unit tests for {@link DiffResult}.
+ */
+public class DiffResultTest extends AbstractLangTest {
+
+    private static final String BOOLEAN_FIELD_NAME = "booleanField";
+    private static final ToStringStyle DEFAULT_STYLE = ToStringStyle.DEFAULT_STYLE;
+    private static final ToStringStyle SHORT_STYLE = ToStringStyle.SHORT_PREFIX_STYLE;
+    private static final String TO_STRING_FORMAT = DiffBuilder.TO_STRING_FORMAT;
+
+    private static final SimpleClass SIMPLE_FALSE = new SimpleClass(false);
+    private static final SimpleClass SIMPLE_TRUE = new SimpleClass(true);
+
+    private static final class EmptyClass {
+        // Empty class for testing
+    }
+
+    private static final class SimpleClass implements Diffable<SimpleClass> {
+        private final boolean booleanField;
+
+        SimpleClass(final boolean booleanField) {
+            this.booleanField = booleanField;
+        }
+
+        static String getFieldName() {
+            return BOOLEAN_FIELD_NAME;
+        }
+
+        @Override
+        public DiffResult<SimpleClass> diff(final SimpleClass obj) {
+            return new DiffBuilder<>(this, obj, SHORT_STYLE)
+                    .append(getFieldName(), booleanField, obj.booleanField)
+                    .build();
+        }
+    }
+
+    @Test
+    public void testDefaultStyle() {
+        DiffResult<SimpleClass> diffResult = createDiffResult(SIMPLE_TRUE, SIMPLE_FALSE, DEFAULT_STYLE);
+        assertEquals(DEFAULT_STYLE, diffResult.getToStringStyle());
+    }
+
+    @Test
+    public void testIterator() {
+        DiffResult<SimpleClass> diffResult = createDiffResult(SIMPLE_TRUE, SIMPLE_FALSE, SHORT_STYLE);
+        Iterator<Diff<?>> iterator = diffResult.iterator();
+        Iterator<Diff<?>> expectedIterator = SIMPLE_TRUE.diff(SIMPLE_FALSE).getDiffs().iterator();
+
+        while (iterator.hasNext()) {
+            assertTrue(expectedIterator.hasNext());
+            assertEquals(expectedIterator.next(), iterator.next());
+        }
+    }
+
+    @Test
+    public void testLeftAndRightGetters() {
+        DiffResult<SimpleClass> diffResult = createDiffResult(SIMPLE_TRUE, SIMPLE_FALSE, SHORT_STYLE);
+        assertEquals(SIMPLE_TRUE, diffResult.getLeft());
+        assertEquals(SIMPLE_FALSE, diffResult.getRight());
+    }
+
+    @Test
+    public void testListIsNonModifiable() {
+        DiffResult<SimpleClass> diffResult = createDiffResult(SIMPLE_TRUE, SIMPLE_FALSE, SHORT_STYLE);
+        assertEquals(1, diffResult.getNumberOfDiffs());
+        assertThrows(UnsupportedOperationException.class, () -> diffResult.getDiffs().remove(0));
+    }
+
+    @Test
+    public void testNoDifferencesString() {
+        DiffResult<SimpleClass> diffResult = createDiffResult(SIMPLE_TRUE, SIMPLE_TRUE, SHORT_STYLE);
+        assertEquals(DiffResult.OBJECTS_SAME_STRING, diffResult.toString());
+    }
+
+    @Test
+    public void testDiffResultThrowsExceptionWhenLeftIsNull() {
+        assertThrows(NullPointerException.class, () -> new DiffResult<>(null, SIMPLE_FALSE, SIMPLE_TRUE.diff(SIMPLE_FALSE).getDiffs(), SHORT_STYLE, TO_STRING_FORMAT));
+    }
+
+    @Test
+    public void testDiffResultThrowsExceptionWhenRightIsNull() {
+        assertThrows(NullPointerException.class, () -> new DiffResult<>(SIMPLE_TRUE, null, SIMPLE_TRUE.diff(SIMPLE_FALSE).getDiffs(), SHORT_STYLE, TO_STRING_FORMAT));
+    }
+
+    @Test
+    public void testDiffResultThrowsExceptionWhenDiffListIsNull() {
+        assertThrows(NullPointerException.class, () -> new DiffResult<>(SIMPLE_TRUE, SIMPLE_FALSE, null, SHORT_STYLE, TO_STRING_FORMAT));
+    }
+
+    @Test
+    public void testToStringOutput() {
+        DiffResult<EmptyClass> result = createDiffResultWithAppend(new EmptyClass(), new EmptyClass(), "test", false, true);
+        assertEquals("DiffResultTest.EmptyClass[test=false] differs from DiffResultTest.EmptyClass[test=true]", result.toString());
+    }
+
+    @Test
+    public void testToStringFormat() {
+        DiffResult<EmptyClass> result = createDiffResultWithFormat(new EmptyClass(), new EmptyClass(), "test", false, true, "%s <> %s");
+        assertEquals("DiffResultTest.EmptyClass[test=false] <> DiffResultTest.EmptyClass[test=true]", result.toString());
+    }
+
+    @Test
+    public void testToStringSpecifyStyleOutput() {
+        DiffResult<SimpleClass> result = SIMPLE_FALSE.diff(SIMPLE_TRUE);
+        assertEquals(SHORT_STYLE, result.getToStringStyle());
+
+        String lhsString = createToString(SIMPLE_FALSE, ToStringStyle.MULTI_LINE_STYLE);
+        String rhsString = createToString(SIMPLE_TRUE, ToStringStyle.MULTI_LINE_STYLE);
+
+        assertEquals(String.format("%s differs from %s", lhsString, rhsString), result.toString(ToStringStyle.MULTI_LINE_STYLE));
+    }
+
+    // Helper Methods
+
+    private <T> DiffResult<T> createDiffResult(T lhs, T rhs, ToStringStyle style) {
+        return new DiffResult<>(lhs, rhs, ((Diffable<T>) lhs).diff(rhs).getDiffs(), style, TO_STRING_FORMAT);
+    }
+
+    private DiffResult<EmptyClass> createDiffResultWithAppend(EmptyClass lhs, EmptyClass rhs, String field, boolean lhsValue, boolean rhsValue) {
+        return DiffBuilder.<EmptyClass>builder()
+                .setLeft(lhs)
+                .setRight(rhs)
+                .setStyle(SHORT_STYLE)
+                .append(field, lhsValue, rhsValue)
+                .build();
+    }
+
+    private DiffResult<EmptyClass> createDiffResultWithFormat(EmptyClass lhs, EmptyClass rhs, String field, boolean lhsValue, boolean rhsValue, String format) {
+        return DiffBuilder.<EmptyClass>builder()
+                .setLeft(lhs)
+                .setRight(rhs)
+                .setStyle(SHORT_STYLE)
+                .setToStringFormat(format)
+                .append(field, lhsValue, rhsValue)
+                .build();
+    }
+
+    private String createToString(SimpleClass obj, ToStringStyle style) {
+        return new ToStringBuilder(obj, style)
+                .append(SimpleClass.getFieldName(), obj.booleanField)
+                .build();
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Method:**  
+   - Created helper methods:  
+     - `createDiffResult()`  
+     - `createDiffResultWithAppend()`  
+     - `createDiffResultWithFormat()`  
+     - `createToString()`
+
+2. **Rename Method:**  
+   - Improved method names for clarity:  
+     - `testNullLhs()` → `testDiffResultThrowsExceptionWhenLeftIsNull()`  
+     - `testNullRhs()` → `testDiffResultThrowsExceptionWhenRightIsNull()`  
+
+3. **Extract Variable:**  
+   - Replaced magic strings with constants (`BOOLEAN_FIELD_NAME`, `DEFAULT_STYLE`, etc.).
+
+4. **Simplified Test Setup:**  
+   - Used helper methods to eliminate repetitive code in tests.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Cleaner and more intuitive test methods.  
+- **Reusability:** Helper methods reduce code duplication.  
+- **Maintainability:** Centralized logic for object creation simplifies updates.

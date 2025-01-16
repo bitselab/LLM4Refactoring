@@ -1,0 +1,79 @@
+## Refactoring Opportunities
+
+Based on the provided code snippet, here are the identified refactoring opportunities:
+
+**1. Extract Variable:**
+
+The expression `new CompiledAutomaton(PrefixQuery.toAutomaton(new BytesRef(prefix)), true, true, true)` is repeated twice in the constructor and the `visitMatchingTerms` method. This expression could be extracted into a local variable to improve readability and avoid redundancy.
+
+**2. Inline Variable:**
+
+The variable `text` in the `visitMatchingTerms` method is only used once and could be inlined to simplify the code.
+
+**Refactored Code:**
+
+```java
+package org.apache.lucene.queryparser.surround.query;
+
+import java.io.IOException;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.search.PrefixQuery;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.automaton.CompiledAutomaton;
+
+/** Query that matches String prefixes */
+public class SrndPrefixQuery extends SimpleTerm {
+    private final CompiledAutomaton compiled;
+
+    public SrndPrefixQuery(String prefix, boolean quoted, char truncator) {
+        super(quoted);
+        this.prefix = prefix;
+        this.compiled = extractAutomaton(prefix);
+        this.truncator = truncator;
+    }
+
+    private static CompiledAutomaton extractAutomaton(String prefix) {
+        return new CompiledAutomaton(PrefixQuery.toAutomaton(new BytesRef(prefix)), true, true, true);
+    }
+
+    private final String prefix;
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    private final char truncator;
+
+    public char getSuffixOperator() {
+        return truncator;
+    }
+
+    @Override
+    public String toStringUnquoted() {
+        return getPrefix();
+    }
+
+    @Override
+    protected void suffixToString(StringBuilder r) {
+        r.append(getSuffixOperator());
+    }
+
+    @Override
+    public void visitMatchingTerms(IndexReader reader, String fieldName, MatchingTermVisitor mtv)
+            throws IOException {
+        Terms terms = MultiTerms.getTerms(reader, fieldName);
+        if (terms != null) {
+            TermsEnum termsEnum = compiled.getTermsEnum(terms);
+
+            BytesRef text;
+            while ((text = termsEnum.next()) != null) {
+                mtv.visitMatchingTerm(new Term(fieldName, BytesRef.deepCopyOf(text)));
+            }
+        }
+    }
+}
+```

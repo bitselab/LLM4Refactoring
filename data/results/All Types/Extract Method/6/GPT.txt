@@ -1,0 +1,144 @@
+This code contains various opportunities for applying the specified types of refactoring, such as **Extract Class**, **Extract Method**, **Extract Variable**, **Inline Method**, **Inline Variable**, **Rename Attribute**, **Rename Method**, **Rename Parameter**, and **Rename Variable**. Below are suggestions for each:
+
+### **1. Extract Method**
+- **Method Extraction for Repeated Logic**
+  The logic of reading files in `testSeekAndReadWithConf`, `testPartialReadWithNoData`, and `testPartialReadWithSomeData` is quite similar. It’s possible to extract a common method that handles file reading, buffer management, and assertion checks. For example:
+  
+  ```java
+  private void performReadOperation(FSDataInputStream iStream, int seekPos, int length, byte[] fileContent, int footerReadBufferSize) throws IOException {
+      byte[] buffer = new byte[length];
+      int bytesRead = iStream.read(buffer, 0, length);
+      assertEquals(length, bytesRead);
+      assertContentReadCorrectly(fileContent, seekPos, length, buffer, testFilePath);
+  }
+  ```
+  
+  The same method can be reused in `testSeekAndReadWithConf`, `testPartialReadWithNoData`, and `testPartialReadWithSomeData`.
+
+### **2. Extract Class**
+- **Metrics and File System Handling**
+  The file creation, content handling, and configuration testing logic (such as `getRandomBytesArray`, `createFileWithContent`, etc.) could be extracted into a separate class responsible for file setup and configuration verification. This would clean up the test methods and allow for reuse. For example, creating a class like:
+  
+  ```java
+  public class FileTestHelper {
+      public static Path createTestFile(AzureBlobFileSystem fs, String fileName, byte[] fileContent) {
+          // Implementation for creating test file
+      }
+      public static byte[] getRandomBytes(int size) {
+          // Implementation for generating random bytes
+      }
+  }
+  ```
+  
+  This class could centralize the file and content setup logic, making the tests more readable.
+
+### **3. Extract Variable**
+- **Repetitive Numeric Expressions**
+  Repeated calculations like `(int) Math.pow(2, i) * 256 * ONE_KB` could be extracted into a variable or constant. For example:
+
+  ```java
+  private static final int KB_UNIT = 256 * ONE_KB;
+  int fileSize = (int) Math.pow(2, i) * KB_UNIT;
+  int footerReadBufferSize = (int) Math.pow(2, j) * KB_UNIT;
+  ```
+
+  This would reduce duplication and clarify the meaning of the calculations.
+
+### **4. Inline Method**
+- **Simple Methods**
+  Some simple methods like `seekPos(SeekTo seekTo, int fileSize)` can be inlined directly in the test methods if they aren't complex enough to justify being separate methods. This would help reduce unnecessary indirection.
+
+### **5. Inline Variable**
+- **Temporary Variables**
+  Variables such as `int length = AbfsInputStream.FOOTER_SIZE;` are only used once and could be inlined in the code:
+
+  ```java
+  iStream.seek(fileSize - (TEN * ONE_KB));
+  iStream.read(buffer, 0, AbfsInputStream.FOOTER_SIZE);
+  ```
+
+  This makes the code more concise without sacrificing clarity.
+
+### **6. Rename Attribute**
+- **Non-descriptive Variable Names**
+  Rename variables like `i`, `j`, `fileIdx`, `fileIdx1`, etc., to more descriptive names that reflect their purpose. For example:
+  
+  - `i` -> `fileSizeExponent`
+  - `j` -> `footerBufferExponent`
+  - `fileIdx` -> `testFileIndex`
+  
+  This improves readability and makes the code self-documenting.
+
+### **7. Rename Method**
+- **Method Names Could Be More Descriptive**
+  Methods such as `testSeekAndReadWithConf` could be renamed to more descriptive names reflecting the actual behavior they are testing, such as `testSeekAndReadWithFooterOptimizationEnabled`.
+
+  Similarly, `testPartialReadWithSomeData` could be renamed to `testPartialReadWithBufferOverflow`.
+
+### **8. Rename Parameter**
+- **Confusing or Generic Parameters**
+  Parameters like `seekTo` or `optimizeFooterRead` could be renamed to make their role clearer. For example, `optimizeFooterRead` could be renamed to `isFooterReadOptimizationEnabled`.
+
+### **9. Rename Variable**
+- **Unclear Variables**
+  Variables like `fileIdx1` could be renamed to something clearer, like `testFileIndex`. This avoids ambiguity and improves clarity.
+
+### **Overall Refactoring Example:**
+
+Here’s how part of the code might look after applying these refactorings:
+
+```java
+public class ITestAbfsInputStreamReadFooter extends ITestAbfsInputStream {
+
+    private static final int KB_UNIT = 256 * ONE_KB;
+
+    @Test
+    public void testSeekAndReadWithFooterOptimizationEnabled() throws Exception {
+        performSeekAndReadTest(true, SeekTo.BEGIN);
+    }
+
+    @Test
+    public void testSeekAndReadWithoutFooterOptimization() throws Exception {
+        performSeekAndReadTest(false, SeekTo.BEGIN);
+    }
+
+    private void performSeekAndReadTest(boolean isFooterOptimizationEnabled, SeekTo seekTo) throws Exception {
+        int fileIdx = 0;
+        for (int fileSizeExponent = 0; fileSizeExponent <= 4; fileSizeExponent++) {
+            for (int bufferExponent = 0; bufferExponent <= 2; bufferExponent++) {
+                int fileSize = (int) Math.pow(2, fileSizeExponent) * KB_UNIT;
+                int footerReadBufferSize = (int) Math.pow(2, bufferExponent) * KB_UNIT;
+                final AzureBlobFileSystem fs = getFileSystem(isFooterOptimizationEnabled, fileSize);
+                String fileName = methodName.getMethodName() + fileIdx++;
+                byte[] fileContent = getRandomBytesArray(fileSize);
+                Path testFilePath = createFileWithContent(fs, fileName, fileContent);
+                performFileRead(fs, testFilePath, seekTo, footerReadBufferSize, fileContent);
+            }
+        }
+    }
+
+    private void performFileRead(final AzureBlobFileSystem fs, final Path testFilePath, SeekTo seekTo, int footerReadBufferSize, byte[] fileContent) throws IOException {
+        FSDataInputStream iStream = fs.open(testFilePath);
+        try {
+            seekAndReadWithAssertions(iStream, seekTo, footerReadBufferSize, fileContent);
+        } finally {
+            iStream.close();
+        }
+    }
+
+    private void seekAndReadWithAssertions(FSDataInputStream iStream, SeekTo seekTo, int footerReadBufferSize, byte[] fileContent) throws IOException {
+        AbfsInputStream abfsInputStream = (AbfsInputStream) iStream.getWrappedStream();
+        // Perform assertions here
+        assertEquals(footerReadBufferSize, abfsInputStream.getFooterReadBufferSize());
+        byte[] buffer = new byte[AbfsInputStream.FOOTER_SIZE];
+        int bytesRead = iStream.read(buffer, 0, buffer.length);
+        assertEquals(buffer.length, bytesRead);
+        assertContentReadCorrectly(fileContent, seekPos(seekTo), buffer.length, buffer, testFilePath);
+    }
+}
+```
+
+This version:
+1. Extracts methods to eliminate duplication.
+2. Renames variables and methods for clarity.
+3. Simplifies calculations by using constants.

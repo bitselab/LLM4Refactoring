@@ -1,0 +1,39 @@
+## Refactoring Opportunities
+
+The provided code snippet contains several opportunities for refactoring:
+
+1. **Reduce code duplication:** There is significant code duplication in the methods `testNumBackendCalls`, `testSeekAndReadWithConf`, and potentially other methods. This can be refactored by creating a helper method to encapsulate the common logic of opening the file, seeking to the specified position, reading data, and verifying the results.
+
+2. **Extract magic numbers:** The constants `TEN`, `TWENTY`, and `ONE_KB` are used throughout the code. These can be extracted into meaningful variable names or constants to improve code readability.
+
+3. **Simplify variable names:** Some variable names, like `iStream` and `buffer`, could be more descriptive to improve code clarity. Consider using names that reflect their specific purpose within the code.
+
+4. **Use descriptive method names:** Method names like `testNumBackendCalls` and `seekReadAndTest` are not very descriptive. Refactoring these names to better reflect their functionality would improve code readability.
+
+
+Here's an example of refactoring the `testNumBackendCalls` method using a helper method and more descriptive variable names:
+
+```java
+private static void testNumBackendCalls(boolean optimizeFooterRead, int fileSize) throws Exception {
+  for (int footerReadBufferSize = 256; footerReadBufferSize <= 1024; footerReadBufferSize *= 2) {
+    final AzureBlobFileSystem fs = getFileSystem(optimizeFooterRead, fileSize);
+    verifyBackendCalls(fs, optimizeFooterRead, fileSize, footerReadBufferSize);
+  }
+}
+
+private static void verifyBackendCalls(AzureBlobFileSystem fs, boolean optimizeFooterRead, int fileSize, int footerReadBufferSize) throws Exception {
+  int fileIdx = 0;
+  for (int i = 0; i <= 4; i++) {
+    Path testFilePath = createPathAndFileWithContent(fs, fileIdx++, fileSize);
+    FutureDataInputStreamBuilder builder = getParameterizedBuilder(testFilePath, fs, footerReadBufferSize);
+    try (FSDataInputStream iStream = builder.build().get()) {
+      // Seek and read logic here
+      // ...
+    }
+  }
+}
+```
+
+This refactoring improves code readability and maintainability by reducing duplication and using more descriptive names. You can apply similar techniques to other parts of the codebase.
+
+It's important to note that these are just suggestions, and the specific refactoring approach may vary depending on your coding style and preferences.

@@ -1,0 +1,49 @@
+## Refactoring Opportunity: Extract Class for Public Suffix Logic
+
+There's a potential opportunity to extract a class to improve code readability and maintainability. The logic related to finding public suffixes (`findPublicSuffix`, `topPrivateDomain`, and helper methods like `ancestor`) can be separated into a dedicated class.
+
+Here's the refactored code with the extracted class:
+
+```java
+public final class DomainSplitFunction {
+
+  private static final DeprecationLogger deprecationLogger = DeprecationLogger.getLogger(DomainSplitFunction.class);
+
+  private DomainSplitFunction() {}
+
+  private static String replaceDots(String input) {
+    // ... (same logic)
+  }
+
+  private static List<String> splitDomain(String domain) {
+    // ... (same logic)
+  }
+
+  public static List<String> domainSplit(String host) {
+    // ... (same logic, calling PublicSuffixLogic for public suffix handling)
+  }
+}
+
+class PublicSuffixLogic {
+
+  private static final Map<String, String> exact;
+  private static final Map<String, String> under;
+  private static final Map<String, String> excluded;
+
+  static {
+    // ... (same logic for initializing exact, under, and excluded maps)
+  }
+
+  public static int findPublicSuffix(List<String> parts) {
+    // ... (same logic)
+  }
+
+  public static String topPrivateDomain(String name, List<String> parts, int publicSuffixIndex) {
+    // ... (same logic)
+  }
+
+  private PublicSuffixLogic() {} // Enforce private constructor for utility class
+}
+```
+
+This refactoring improves code organization by separating concerns. The `DomainSplitFunction` class now focuses on the core logic of splitting the domain, while the `PublicSuffixLogic` class handles finding and managing public suffixes. This makes the code easier to understand and maintain.

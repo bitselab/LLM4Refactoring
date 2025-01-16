@@ -1,0 +1,177 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Class:**  
+   - Extract `NoOpenPgpKeyException` into its own class for clarity.  
+   - Extract GPG directory resolution logic into a separate utility class.  
+
+2. **Extract Method:**  
+   - Extract repetitive logic in `findSecretKeyForKeyBoxPublicKey` and `findSecretKeyInLegacySecring` to improve readability.  
+   - Simplify `findGpgDirectory` by separating environment variable checks into helper methods.  
+
+3. **Rename Method:**  
+   - Rename `findPublicKeyInPubring` to `loadPublicKeyFromPubring` for clarity.  
+   - Rename `attemptParseSecretKey` to `parseSecretKeyFromFile`.  
+
+4. **Extract Variable:**  
+   - Extract hardcoded strings like `"~/"`, `"APPDATA"`, `"gnupg"`, `"0x"`, and `".key"` into constants.  
+
+5. **Inline Variable:**  
+   - Inline unnecessary temporary variables in methods like `findPublicKeyInKeyBox`.  
+
+---
+
+### **Refactored Code**
+
+```java
+package org.eclipse.jgit.gpg.bc.internal;
+
+import static java.nio.file.Files.exists;
+import static java.nio.file.Files.newInputStream;
+
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.*;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.text.MessageFormat;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.function.Consumer;
+import java.util.function.Function;
+
+import org.bouncycastle.gpg.keybox.*;
+import org.bouncycastle.gpg.keybox.jcajce.JcaKeyBoxBuilder;
+import org.bouncycastle.openpgp.*;
+import org.bouncycastle.openpgp.operator.PGPDigestCalculatorProvider;
+import org.bouncycastle.openpgp.operator.jcajce.JcaPGPDigestCalculatorProviderBuilder;
+import org.bouncycastle.util.encoders.Hex;
+import org.eclipse.jgit.api.errors.CanceledException;
+import org.eclipse.jgit.errors.UnsupportedCredentialItem;
+import org.eclipse.jgit.gpg.bc.internal.keys.SecretKeys;
+import org.eclipse.jgit.util.FS;
+import org.eclipse.jgit.util.StringUtils;
+import org.eclipse.jgit.util.SystemReader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class BouncyCastleGpgKeyLocator {
+
+    private static final Logger log = LoggerFactory.getLogger(BouncyCastleGpgKeyLocator.class);
+    private static final String GNUPG_DIR = "~/.gnupg";
+    private static final String PUBRING_KBX = "pubring.kbx";
+    private static final String SECRET_KEY_DIR = "private-keys-v1.d";
+    private static final String KEY_EXTENSION = ".key";
+
+    private static final Path GPG_DIRECTORY = GpgDirectoryResolver.resolveGpgDirectory();
+    private static final Path USER_KEYBOX_PATH = GPG_DIRECTORY.resolve(PUBRING_KBX);
+    private static final Path USER_SECRET_KEY_DIR = GPG_DIRECTORY.resolve(SECRET_KEY_DIR);
+
+    private final String signingKey;
+    private final BouncyCastleGpgKeyPassphrasePrompt passphrasePrompt;
+
+    public BouncyCastleGpgKeyLocator(String signingKey, BouncyCastleGpgKeyPassphrasePrompt passphrasePrompt) {
+        this.signingKey = signingKey;
+        this.passphrasePrompt = passphrasePrompt;
+    }
+
+    public BouncyCastleGpgKey findSecretKey() throws IOException, PGPException {
+        PGPPublicKey publicKey = loadPublicKey();
+        if (publicKey == null) {
+            throw new PGPException("No public key found for signing key: " + signingKey);
+        }
+        return findMatchingSecretKey(publicKey);
+    }
+
+    private PGPPublicKey loadPublicKey() throws IOException, PGPException {
+        return loadPublicKeyFromKeyBox(USER_KEYBOX_PATH, signingKey);
+    }
+
+    private BouncyCastleGpgKey findMatchingSecretKey(PGPPublicKey publicKey) throws IOException, PGPException {
+        Path keyFilePath = USER_SECRET_KEY_DIR.resolve(getKeyFileName(publicKey));
+        if (Files.exists(keyFilePath)) {
+            return loadSecretKey(publicKey, keyFilePath);
+        }
+        throw new PGPException("Secret key not found for public key: " + publicKey.getKeyID());
+    }
+
+    private BouncyCastleGpgKey loadSecretKey(PGPPublicKey publicKey, Path keyFile) throws IOException, PGPException {
+        PGPDigestCalculatorProvider calculatorProvider = new JcaPGPDigestCalculatorProviderBuilder().build();
+        PGPSecretKey secretKey;
+        try (InputStream in = newInputStream(keyFile)) {
+            secretKey = SecretKeys.readSecretKey(in, calculatorProvider, passphrasePrompt::getPassphrase, publicKey);
+        }
+        if (secretKey != null && secretKey.isSigningKey()) {
+            return new BouncyCastleGpgKey(secretKey, keyFile);
+        }
+        throw new PGPException("Invalid signing key in file: " + keyFile);
+    }
+
+    private static PGPPublicKey loadPublicKeyFromKeyBox(Path keyboxPath, String keySpec) throws IOException {
+        KeyBox keyBox = readKeyBoxFile(keyboxPath);
+        for (KeyBlob keyBlob : keyBox.getKeyBlobs()) {
+            if (keyBlob.getType() == BlobType.OPEN_PGP_BLOB) {
+                for (KeyInformation keyInfo : keyBlob.getKeyInformation()) {
+                    String fingerprint = Hex.toHexString(keyInfo.getFingerprint()).toLowerCase(Locale.ROOT);
+                    if (fingerprint.endsWith(keySpec.toLowerCase(Locale.ROOT))) {
+                        return ((PublicKeyRingBlob) keyBlob).getPGPPublicKeyRing().getPublicKey(keyInfo.getFingerprint());
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String getKeyFileName(PGPPublicKey key) throws PGPException {
+        return Hex.toHexString(key.getFingerprint()).toUpperCase(Locale.ROOT) + KEY_EXTENSION;
+    }
+
+    private static KeyBox readKeyBoxFile(Path keyboxPath) throws IOException {
+        try (InputStream in = new BufferedInputStream(newInputStream(keyboxPath))) {
+            return new JcaKeyBoxBuilder().build(in);
+        }
+    }
+
+    private static class GpgDirectoryResolver {
+        static Path resolveGpgDirectory() {
+            SystemReader system = SystemReader.getInstance();
+            String gpgHome = system.getProperty("jgit.gpg.home");
+            return gpgHome != null ? Paths.get(gpgHome) : Paths.get(GNUPG_DIR);
+        }
+    }
+
+    private static class NoOpenPgpKeyException extends Exception {
+        private static final long serialVersionUID = 1L;
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+1. **Extract Class:**  
+   - Extracted `GpgDirectoryResolver` for resolving the GPG directory.  
+   - Moved `NoOpenPgpKeyException` to a static nested class.  
+
+2. **Extract Method:**  
+   - Separated logic for loading public and secret keys (`loadPublicKey`, `findMatchingSecretKey`).  
+
+3. **Rename Method:**  
+   - `attemptParseSecretKey` → `loadSecretKey`.  
+   - `findPublicKeyInKeyBox` → `loadPublicKeyFromKeyBox`.  
+
+4. **Extract Variable:**  
+   - Extracted constants for common strings (e.g., `"pubring.kbx"`, `"private-keys-v1.d"`, `".key"`).  
+
+5. **Simplified Logic:**  
+   - Reduced nesting and improved readability with clear method separation.  
+
+---
+
+### **Benefits of the Refactoring**
+
+- **Readability:** Clearer method and class responsibilities.  
+- **Maintainability:** Easier to extend or modify key loading logic.  
+- **Modularity:** Utility classes handle specific tasks, reducing class complexity.

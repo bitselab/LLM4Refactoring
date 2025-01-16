@@ -1,0 +1,110 @@
+## Refactoring Opportunities in PropertyMappingVectorFieldStepImpl
+
+The provided code snippet exhibits several potential refactoring opportunities:
+
+**Extract Method:**
+
+* **`fieldModelContributor.add( c -> c.vectorTypeOptionsStep().projectable( projectable ) )`:** This code appears twice within the class. Extracting it into a separate method would reduce redundancy and improve readability.
+* **`fieldModelContributor.add( c -> c.vectorTypeOptionsStep().searchable( searchable ) )`:** This code appears twice within the class. Extracting it into a separate method would reduce redundancy and improve readability.
+* **`fieldModelContributor.add( c -> c.vectorTypeOptionsStep().vectorSimilarity( vectorSimilarity ) )`:** This code appears twice within the class. Extracting it into a separate method would reduce redundancy and improve readability.
+* **`fieldModelContributor.add( c -> c.vectorTypeOptionsStep().beamWidth( beamWidth ) )`:** This code appears twice within the class. Extracting it into a separate method would reduce redundancy and improve readability.
+* **`fieldModelContributor.add( c -> c.vectorTypeOptionsStep().maxConnections( maxConnections ) )`:** This code appears twice within the class. Extracting it into a separate method would reduce redundancy and improve readability.
+* **`fieldModelContributor.add( c -> c.indexNullAs( indexNullAs ) )`:** This code appears once within the class. However, extracting it into a separate method could still improve readability and maintainability.
+
+**Extract Variable:**
+
+* **`c -> c.vectorTypeOptionsStep()`:** This expression is used multiple times within the class. Extracting it into a variable would improve readability and maintainability.
+
+**Inline Method:**
+
+* **`projectable(Projectable projectable)`:** This method simply delegates to the `fieldModelContributor`. Inlining it would reduce code complexity and improve performance.
+* **`searchable(Searchable searchable)`:** This method simply returns `this`. Inlining it would reduce code complexity.
+* **`indexNullAs(String indexNullAs)`:** This method simply delegates to the `fieldModelContributor`. Inlining it would reduce code complexity and improve performance.
+
+**Rename Method:**
+
+* **`vectorSimilarity(VectorSimilarity vectorSimilarity)`:** This method name is not very descriptive. Renaming it to `withVectorSimilarity` would improve clarity.
+* **`beamWidth(int beamWidth)`:** This method name is not very descriptive. Renaming it to `withBeamWidth` would improve clarity.
+* **`maxConnections(int maxConnections)`:** This method name is not very descriptive. Renaming it to `withMaxConnections` would improve clarity.
+
+**Rename Parameter:**
+
+* **`projectable`:** This parameter name is not very descriptive. Renaming it to `projectableType` would improve clarity.
+* **`searchable`:** This parameter name is not very descriptive. Renaming it to `searchableType` would improve clarity.
+* **`vectorSimilarity`:** This parameter name is not very descriptive. Renaming it to `similarity` would improve clarity.
+* **`beamWidth`:** This parameter name is not very descriptive. Renaming it to `width` would improve clarity.
+* **`maxConnections`:** This parameter name is not very descriptive. Renaming it to `maxConnections` would improve clarity.
+
+**Rename Variable:**
+
+* **`fieldModelContributor`:** This variable name is not very descriptive. Renaming it to `fieldOptions` would improve clarity.
+
+**Additional Notes:**
+
+* The use of static methods could be reduced by utilizing instance methods instead.
+
+## Refactored Code
+
+Here's the refactored code incorporating the identified opportunities:
+
+```java
+package org.hibernate.search.mapper.pojo.mapping.definition.programmatic.impl;
+
+import org.hibernate.search.engine.backend.types.Projectable;
+import org.hibernate.search.engine.backend.types.Searchable;
+import org.hibernate.search.engine.backend.types.VectorSimilarity;
+import org.hibernate.search.mapper.pojo.bridge.binding.spi.FieldModelContributorContext;
+import org.hibernate.search.mapper.pojo.extractor.mapping.programmatic.ContainerExtractorPath;
+import org.hibernate.search.mapper.pojo.mapping.building.spi.PojoPropertyMetadataContributor;
+import org.hibernate.search.mapper.pojo.mapping.definition.programmatic.PropertyMappingStep;
+import org.hibernate.search.mapper.pojo.mapping.definition.programmatic.PropertyMappingVectorFieldStep;
+
+class PropertyMappingVectorFieldStepImpl extends AbstractPropertyMappingFieldOptionsStep<PropertyMappingVectorFieldStepImpl>
+        implements PropertyMappingVectorFieldStep, PojoPropertyMetadataContributor {
+
+    private final FieldModelContributor fieldOptions;
+
+    PropertyMappingVectorFieldStepImpl(PropertyMappingStep parent, int dimension, String relativeFieldName) {
+        super( parent, relativeFieldName, FieldModelContributorContext::vectorTypeOptionsStep );
+        fieldOptions = new FieldModelContributor();
+        extractors( ContainerExtractorPath.noExtractors() );
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep projectable(Projectable projectable) {
+        fieldOptions.add( options -> options.projectable( projectable ) );
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep searchable(Searchable searchable) {
+        fieldOptions.add( options -> options.searchable( searchable ) );
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep withVectorSimilarity(VectorSimilarity similarity) {
+        fieldOptions.add( options -> options.vectorSimilarity( similarity ) );
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep withBeamWidth(int width) {
+        fieldOptions.add( options -> options.beamWidth( width ) );
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep withMaxConnections(int maxConnections) {
+        fieldOptions.add( options -> options.maxConnections( maxConnections ) );
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep indexNullAs(String indexNullAs) {
+        fieldOptions.add( options -> options.indexNullAs( indexNullAs ) );
+        return this;
+    }
+
+}
+```

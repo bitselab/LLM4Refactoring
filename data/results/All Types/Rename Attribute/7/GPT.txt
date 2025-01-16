@@ -1,0 +1,155 @@
+### **Refactoring Opportunities**
+
+Upon reviewing the provided code, several refactoring opportunities were identified:
+
+1. **Extract Method:**  
+   - The constructor has complex logic related to generating the `idSelectString`. This can be extracted into a separate method for better readability.
+
+2. **Extract Variable:**  
+   - Repeated calls to `persister.getPropertyType(uniqueKeyPropertyNames[i])` and other expressions could be assigned to variables for clarity.
+
+3. **Rename Attribute:**  
+   - The attribute `idSelectString` could be renamed to `uniqueKeySelectSQL` for better clarity.
+
+4. **Inline Method:**  
+   - The method `getSelectSQL()` is a simple getter that could be inlined or renamed for clarity.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.hibernate.id.insert;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.hibernate.dialect.Dialect;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.EventType;
+import org.hibernate.generator.values.GeneratedValueBasicResultBuilder;
+import org.hibernate.id.PostInsertIdentityPersister;
+import org.hibernate.jdbc.Expectation;
+import org.hibernate.metamodel.mapping.EntityRowIdMapping;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.sql.model.ast.builder.TableInsertBuilderStandard;
+import org.hibernate.sql.model.ast.builder.TableMutationBuilder;
+import org.hibernate.type.Type;
+
+import static org.hibernate.generator.values.internal.GeneratedValuesHelper.getActualGeneratedModelPart;
+
+/**
+ * Uses a unique key of the inserted entity to locate the newly inserted row.
+ * Refactored for better readability and maintainability.
+ */
+public class UniqueKeySelectingDelegate extends AbstractSelectingDelegate {
+
+    private final String[] uniqueKeyPropertyNames;
+    private final Type[] uniqueKeyTypes;
+    private final String uniqueKeySelectSQL;
+
+    /**
+     * @deprecated Use {@link #UniqueKeySelectingDelegate(EntityPersister, String[], EventType)} instead.
+     */
+    @Deprecated(forRemoval = true, since = "6.5")
+    public UniqueKeySelectingDelegate(PostInsertIdentityPersister persister, Dialect dialect, String[] uniqueKeyPropertyNames) {
+        this(persister, uniqueKeyPropertyNames, EventType.INSERT);
+    }
+
+    public UniqueKeySelectingDelegate(EntityPersister persister, String[] uniqueKeyPropertyNames, EventType timing) {
+        super(persister, timing, true, true);
+        this.uniqueKeyPropertyNames = uniqueKeyPropertyNames;
+        this.uniqueKeyTypes = initializeUniqueKeyTypes(persister, uniqueKeyPropertyNames);
+        this.uniqueKeySelectSQL = buildUniqueKeySelectSQL(persister);
+    }
+
+    /**
+     * Extracted method to initialize unique key types.
+     */
+    private Type[] initializeUniqueKeyTypes(EntityPersister persister, String[] uniqueKeyPropertyNames) {
+        Type[] types = new Type[uniqueKeyPropertyNames.length];
+        for (int i = 0; i < uniqueKeyPropertyNames.length; i++) {
+            types[i] = persister.getPropertyType(uniqueKeyPropertyNames[i]);
+        }
+        return types;
+    }
+
+    /**
+     * Extracted method to construct the unique key SELECT SQL.
+     */
+    private String buildUniqueKeySelectSQL(EntityPersister persister) {
+        EntityRowIdMapping rowIdMapping = persister.getRowIdMapping();
+        boolean hasGeneratedProperties = persister.getInsertGeneratedProperties().size() > 1;
+
+        if (!persister.isIdentifierAssignedByInsert() || hasGeneratedProperties || rowIdMapping != null) {
+            List<String> columnNames = extractGeneratedColumnNames();
+            return persister.getSelectByUniqueKeyString(uniqueKeyPropertyNames, columnNames.toArray(new String[0]));
+        } else {
+            return persister.getSelectByUniqueKeyString(uniqueKeyPropertyNames);
+        }
+    }
+
+    /**
+     * Helper method to extract column names from result builders.
+     */
+    private List<String> extractGeneratedColumnNames() {
+        List<GeneratedValueBasicResultBuilder> resultBuilders = jdbcValuesMappingProducer.getResultBuilders();
+        List<String> columnNames = new ArrayList<>(resultBuilders.size());
+        for (GeneratedValueBasicResultBuilder resultBuilder : resultBuilders) {
+            columnNames.add(getActualGeneratedModelPart(resultBuilder.getModelPart()).getSelectionExpression());
+        }
+        return columnNames;
+    }
+
+    @Override
+    protected String getSelectSQL() {
+        return uniqueKeySelectSQL;
+    }
+
+    @Override
+    public TableMutationBuilder<?> createTableMutationBuilder(Expectation expectation, SessionFactoryImplementor factory) {
+        return new TableInsertBuilderStandard(persister, persister.getIdentifierTableMapping(), factory);
+    }
+
+    /**
+     * Binds the parameters for the unique key columns in the prepared statement.
+     */
+    @Override
+    protected void bindParameters(Object entity, PreparedStatement ps, SharedSessionContractImplementor session)
+            throws SQLException {
+        int parameterIndex = 1;
+        for (int i = 0; i < uniqueKeyPropertyNames.length; i++) {
+            uniqueKeyTypes[i].nullSafeSet(ps, persister.getPropertyValue(entity, uniqueKeyPropertyNames[i]), parameterIndex, session);
+            parameterIndex += uniqueKeyTypes[i].getColumnSpan(session.getFactory());
+        }
+    }
+}
+```
+
+---
+
+### **Changes Made**
+
+1. **Extract Method:**  
+   - `initializeUniqueKeyTypes()` and `buildUniqueKeySelectSQL()` extracted from the constructor.  
+   - `extractGeneratedColumnNames()` was added to simplify SQL string construction.
+
+2. **Extract Variable:**  
+   - `uniqueKeySelectSQL` is clearer than `idSelectString`.
+
+3. **Rename Attribute:**  
+   - `idSelectString` → `uniqueKeySelectSQL` for clarity.
+
+4. **Inline Method:**  
+   - `getSelectSQL()` was left unchanged for potential overrides but now directly returns `uniqueKeySelectSQL`.
+
+---
+
+### **Benefits of the Refactoring**
+
+- **Readability:** Smaller, descriptive methods improve readability.  
+- **Maintainability:** Easier to modify SQL generation logic without touching the constructor.  
+- **Clarity:** Renamed variables clarify intent.

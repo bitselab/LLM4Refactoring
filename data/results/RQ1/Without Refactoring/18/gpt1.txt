@@ -1,0 +1,74 @@
+The given code is fairly clean, but there are a few opportunities for improvement and refactoring to make it more concise, readable, and potentially improve maintainability. Here's a list of suggestions:
+
+### Refactoring Opportunities:
+
+1. **Use `Cache`'s `getIfPresent` method for more explicit handling of cache hits**: 
+   The current implementation uses `Cache#get` with a `Function`. While this is perfectly valid, using `getIfPresent` would make the code more explicit when we're dealing with cache hits and misses. If the cache does not contain the key, we can create a new `ApplicationHandler` and then store it.
+
+2. **Simplifying the `computeIfAbsent` method**: The `computeIfAbsent` method is working well, but we can simplify the logic using `Cache#get` with a lambda directly. This will improve readability by making it more concise.
+
+3. **Comments and Javadoc**: The code already has Javadoc for the most part, but we could make some adjustments for clarity, especially around the purpose of the cache.
+
+### Refactored Code:
+
+```java
+package org.apache.solr.jersey;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.util.function.Supplier;
+import org.apache.solr.core.SolrConfig;
+import org.glassfish.jersey.server.ApplicationHandler;
+
+/**
+ * Stores and caches Jersey 'ApplicationHandler' instances by an ID or hash derived from their {@link ConfigSet}.
+ * 
+ * <p>ApplicationHandler creation is expensive; caching these objects allows them to be shared by
+ * multiple cores with the same configuration.
+ */
+public class JerseyAppHandlerCache {
+
+  private final Cache<String, ApplicationHandler> applicationByConfigSetId =
+      Caffeine.newBuilder().weakValues().build();
+
+  /**
+   * Retrieves the 'ApplicationHandler' associated with the provided ID, creating it if necessary.
+   *
+   * <p>This method is thread-safe due to the internal use of the cache's get method, which handles concurrency.
+   *
+   * @param effectiveSolrConfigId an ID to associate the ApplicationHandler with, typically created
+   *     via {@link SolrConfig#effectiveId()}.
+   * @param createApplicationHandler a Supplier that generates the ApplicationHandler.
+   * @return The cached or newly created ApplicationHandler.
+   */
+  public ApplicationHandler computeIfAbsent(
+      String effectiveSolrConfigId, Supplier<ApplicationHandler> createApplicationHandler) {
+    // If not present in the cache, create and put it
+    return applicationByConfigSetId.get(effectiveSolrConfigId, key -> createApplicationHandler.get());
+  }
+
+  /**
+   * Returns the number of ApplicationHandlers currently cached.
+   *
+   * @return the size of the cache
+   */
+  public int size() {
+    return applicationByConfigSetId.asMap().size();
+  }
+}
+```
+
+### Explanation of Changes:
+
+1. **Javadoc Improvements**: 
+   - The Javadoc for the `computeIfAbsent` method has been slightly modified for clarity and conciseness, emphasizing that the method is thread-safe due to the cache implementation.
+   
+2. **`getIfPresent` Usage**: This was not necessary in this refactor because `Caffeine`'s `get` method with a `Function` is quite efficient and idiomatic for lazy-loading cache values. The refactoring keeps the current `get` usage.
+
+3. **Simplification of Lambda in `get`**: The method `applicationByConfigSetId.get()` is already concise. The lambda function remains simple and direct.
+
+4. **Code Style**: 
+   - The class and method names remain unchanged, as they are already appropriate.
+   - Removed redundant comments and adjusted the method documentation slightly to clarify its behavior.
+
+In conclusion, **no major refactoring** was necessary, but I made a few minor improvements to readability and clarity. The original design is quite good, and the refactor doesn't alter functionality but enhances the code's readability and maintainability.

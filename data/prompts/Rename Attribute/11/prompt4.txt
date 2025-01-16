@@ -1,0 +1,127 @@
+As a developer, imagine your team leader requests you to review a piece of code to identify potential refactoring opportunities for the following nine types of refactoring: [Extract Class, Extract Method, Extract Variable, Inline Method, Inline Variable, Rename Attribute, Rename Method, Rename Parameter, Rename Variable]. The original code snippet is as follows:
+```
+package org.eclipse.jetty.websocket.core.client;
+
+import java.io.IOException;
+import java.net.URI;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+
+import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.api.Request;
+import org.eclipse.jetty.util.DecoratedObjectFactory;
+import org.eclipse.jetty.util.component.ContainerLifeCycle;
+import org.eclipse.jetty.websocket.core.CoreSession;
+import org.eclipse.jetty.websocket.core.ExtensionConfig;
+import org.eclipse.jetty.websocket.core.FrameHandler;
+import org.eclipse.jetty.websocket.core.WebSocketComponents;
+import org.eclipse.jetty.websocket.core.WebSocketExtensionRegistry;
+import org.eclipse.jetty.websocket.core.client.internal.HttpClientProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class WebSocketCoreClient extends ContainerLifeCycle
+{
+    public static final String WEBSOCKET_CORECLIENT_ATTRIBUTE = WebSocketCoreClient.class.getName();
+
+    private static final Logger LOG = LoggerFactory.getLogger(WebSocketCoreClient.class);
+    private final HttpClient httpClient;
+    private final WebSocketComponents components;
+    private ClassLoader classLoader;
+
+    public WebSocketCoreClient()
+    {
+        this(null, new WebSocketComponents());
+    }
+
+    public WebSocketCoreClient(WebSocketComponents webSocketComponents)
+    {
+        this(null, webSocketComponents);
+    }
+
+    public WebSocketCoreClient(HttpClient httpClient, WebSocketComponents webSocketComponents)
+    {
+        this.httpClient = Objects.requireNonNullElse(httpClient, HttpClientProvider.get());
+        addBean(this.httpClient);
+        if (webSocketComponents == null)
+        {
+            if (this.httpClient.isStarted())
+                webSocketComponents = new WebSocketComponents(null, null, this.httpClient.getByteBufferPool(), null, null, this.httpClient.getExecutor());
+            else
+                webSocketComponents = new WebSocketComponents();
+        }
+        components = webSocketComponents;
+        addBean(components);
+        if (!this.httpClient.isStarted())
+        {
+            if (this.httpClient.getByteBufferPool() == null)
+                this.httpClient.setByteBufferPool(components.getBufferPool());
+            if (this.httpClient.getExecutor() == null)
+                this.httpClient.setExecutor(components.getExecutor());
+        }
+        classLoader = Thread.currentThread().getContextClassLoader();
+    }
+
+    public ClassLoader getClassLoader()
+    {
+        return classLoader;
+    }
+
+    public void setClassLoader(ClassLoader classLoader)
+    {
+        this.classLoader = Objects.requireNonNull(classLoader);
+    }
+
+    public CompletableFuture<CoreSession> connect(FrameHandler frameHandler, URI wsUri) throws IOException
+    {
+        CoreClientUpgradeRequest request = CoreClientUpgradeRequest.from(this, wsUri, frameHandler);
+        return connect(request);
+    }
+
+    public CompletableFuture<CoreSession> connect(CoreClientUpgradeRequest request) throws IOException
+    {
+        if (!isStarted())
+            throw new IllegalStateException(WebSocketCoreClient.class.getSimpleName() + "@" + this.hashCode() + " is not started");
+
+        // Validate Requested Extensions
+        for (ExtensionConfig reqExt : request.getExtensions())
+        {
+            if (!components.getExtensionRegistry().isAvailable(reqExt.getName()))
+            {
+                throw new IllegalArgumentException("Requested extension [" + reqExt.getName() + "] is not installed");
+            }
+        }
+
+        for (Request.Listener l : getBeans(Request.Listener.class))
+        {
+            request.listener(l);
+        }
+
+        if (LOG.isDebugEnabled())
+            LOG.debug("connect to websocket {}", request.getURI());
+
+        return request.sendAsync();
+    }
+
+    public WebSocketExtensionRegistry getExtensionRegistry()
+    {
+        return components.getExtensionRegistry();
+    }
+
+    public HttpClient getHttpClient()
+    {
+        return httpClient;
+    }
+
+    public DecoratedObjectFactory getObjectFactory()
+    {
+        return components.getObjectFactory();
+    }
+
+    public WebSocketComponents getWebSocketComponents()
+    {
+        return components;
+    }
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

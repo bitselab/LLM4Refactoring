@@ -1,0 +1,85 @@
+The provided code snippet offers several opportunities for refactoring to improve readability and maintainability, particularly around repeated patterns and method chaining. Here's a breakdown of potential refactorings:
+
+### 1. **Extract Method** (for repeated logic in each method)
+The logic of adding a lambda to `fieldModelContributor` is repeated in each method. It can be extracted into a helper method to eliminate duplication and make the code easier to maintain.
+
+### 2. **Inline Variable** (for unnecessary variable declarations)
+Some methods don't need to create a local variable before using it. For instance, `projectable` and `searchable` parameters could directly be passed to methods without creating intermediate variables.
+
+### 3. **Extract Class** (if needed, for more complex cases)
+The `fieldModelContributor.add` pattern seems to represent some form of configuration, which may justify extracting it to a new class if it grows more complex.
+
+### 4. **Rename Method** (if clearer names are needed)
+All methods in this class seem appropriately named for their respective actions, so renaming is not necessary.
+
+### Refactored Code
+
+```java
+package org.hibernate.search.mapper.pojo.mapping.definition.programmatic.impl;
+
+import org.hibernate.search.engine.backend.types.Projectable;
+import org.hibernate.search.engine.backend.types.Searchable;
+import org.hibernate.search.engine.backend.types.VectorSimilarity;
+import org.hibernate.search.mapper.pojo.bridge.binding.spi.FieldModelContributorContext;
+import org.hibernate.search.mapper.pojo.extractor.mapping.programmatic.ContainerExtractorPath;
+import org.hibernate.search.mapper.pojo.mapping.building.spi.PojoPropertyMetadataContributor;
+import org.hibernate.search.mapper.pojo.mapping.definition.programmatic.PropertyMappingStep;
+import org.hibernate.search.mapper.pojo.mapping.definition.programmatic.PropertyMappingVectorFieldStep;
+
+class PropertyMappingVectorFieldStepImpl extends AbstractPropertyMappingFieldOptionsStep<PropertyMappingVectorFieldStepImpl>
+        implements PropertyMappingVectorFieldStep, PojoPropertyMetadataContributor {
+
+    PropertyMappingVectorFieldStepImpl(PropertyMappingStep parent, int dimension, String relativeFieldName) {
+        super( parent, relativeFieldName, FieldModelContributorContext::vectorTypeOptionsStep );
+        extractors( ContainerExtractorPath.noExtractors() );
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep projectable(Projectable projectable) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().projectable(projectable));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep searchable(Searchable searchable) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().searchable(searchable));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep vectorSimilarity(VectorSimilarity vectorSimilarity) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().vectorSimilarity(vectorSimilarity));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep beamWidth(int beamWidth) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().beamWidth(beamWidth));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep maxConnections(int maxConnections) {
+        addFieldModelContributor(c -> c.vectorTypeOptionsStep().maxConnections(maxConnections));
+        return this;
+    }
+
+    @Override
+    public PropertyMappingVectorFieldStep indexNullAs(String indexNullAs) {
+        addFieldModelContributor(c -> c.indexNullAs(indexNullAs));
+        return this;
+    }
+
+    // Extracted method to avoid code duplication
+    private void addFieldModelContributor(FieldModelContributorContext.Consumer consumer) {
+        fieldModelContributor.add(consumer);
+    }
+}
+```
+
+### Changes made:
+1. **Extract Method**: The repeated pattern of calling `fieldModelContributor.add` with different lambda expressions was extracted into the `addFieldModelContributor` method. This reduces duplication and makes the code more maintainable.
+2. **Inline Variable**: No unnecessary variables were found, so this wasn't applicable.
+
+### Conclusion:
+This refactoring simplifies the code by removing duplication while preserving the original behavior. It enhances maintainability by making it easier to change how `fieldModelContributor` is used across the various methods.

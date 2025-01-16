@@ -1,0 +1,116 @@
+Upon reviewing the provided code, I have identified a few opportunities for refactoring based on the listed types, which would improve readability, maintainability, and modularity.
+
+### Potential Refactoring Opportunities:
+1. **Extract Method**: The logging logic in the `updateClusterCredentials` method is repeated twice. It could be extracted into a separate method to avoid duplication.
+   
+2. **Extract Variable**: The `Set<String> addedClusterAliases` and `Set<String> removedClusterAliases` are computed using `Sets.difference`. These calculations could be moved to their own method for better clarity.
+
+3. **Rename Method**: The method `updateClusterCredentials` could be renamed to something more descriptive, like `refreshClusterCredentials` to reflect the fact that it’s updating the credentials and returning the result of the update.
+
+4. **Extract Method**: The logic of converting `clusterCredentials.keySet()` to a comma-delimited string could be moved to a utility method to simplify the `updateClusterCredentials` method.
+
+### Refactored Code:
+```java
+package org.elasticsearch.transport;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.settings.SecureString;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.util.set.Sets;
+import org.elasticsearch.core.Nullable;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+
+import static org.elasticsearch.transport.RemoteClusterService.REMOTE_CLUSTER_CREDENTIALS;
+
+public class RemoteClusterCredentialsManager {
+    private static final Logger logger = LogManager.getLogger(RemoteClusterCredentialsManager.class);
+
+    private volatile Map<String, SecureString> clusterCredentials = Collections.emptyMap();
+
+    @SuppressWarnings("this-escape")
+    public RemoteClusterCredentialsManager(Settings settings) {
+        refreshClusterCredentials(settings);
+    }
+
+    /**
+     * Refreshes the cluster credentials based on the provided settings.
+     *
+     * @param settings the settings containing the new cluster credentials
+     * @return the result of the credential update, including added and removed clusters
+     */
+    public final synchronized UpdateRemoteClusterCredentialsResult refreshClusterCredentials(Settings settings) {
+        final Map<String, SecureString> newClusterCredentials = REMOTE_CLUSTER_CREDENTIALS.getAsMap(settings);
+        if (clusterCredentials.isEmpty()) {
+            clusterCredentials = newClusterCredentials;
+            logCredentialsUpdated();
+            return new UpdateRemoteClusterCredentialsResult(Set.copyOf(newClusterCredentials.keySet()), Collections.emptySet());
+        }
+
+        final Set<String> addedClusterAliases = calculateAddedClusterAliases(newClusterCredentials);
+        final Set<String> removedClusterAliases = calculateRemovedClusterAliases(newClusterCredentials);
+        clusterCredentials = newClusterCredentials;
+        logCredentialsUpdated();
+        assert Sets.haveEmptyIntersection(removedClusterAliases, addedClusterAliases);
+        return new UpdateRemoteClusterCredentialsResult(addedClusterAliases, removedClusterAliases);
+    }
+
+    /**
+     * Logs the updated remote cluster credentials.
+     */
+    private void logCredentialsUpdated() {
+        logger.debug(
+                () -> Strings.format(
+                        "Updated remote cluster credentials for clusters: [%s]",
+                        String.join(", ", clusterCredentials.keySet())
+                )
+        );
+    }
+
+    /**
+     * Calculates the added cluster aliases by comparing the current and new credentials.
+     *
+     * @param newClusterCredentials the new cluster credentials
+     * @return the added cluster aliases
+     */
+    private Set<String> calculateAddedClusterAliases(Map<String, SecureString> newClusterCredentials) {
+        return Sets.difference(newClusterCredentials.keySet(), clusterCredentials.keySet());
+    }
+
+    /**
+     * Calculates the removed cluster aliases by comparing the current and new credentials.
+     *
+     * @param newClusterCredentials the new cluster credentials
+     * @return the removed cluster aliases
+     */
+    private Set<String> calculateRemovedClusterAliases(Map<String, SecureString> newClusterCredentials) {
+        return Sets.difference(clusterCredentials.keySet(), newClusterCredentials.keySet());
+    }
+
+    public record UpdateRemoteClusterCredentialsResult(Set<String> addedClusterAliases, Set<String> removedClusterAliases) {}
+
+    @Nullable
+    public SecureString resolveCredentials(String clusterAlias) {
+        return clusterCredentials.get(clusterAlias);
+    }
+
+    public boolean hasCredentials(String clusterAlias) {
+        return clusterCredentials.containsKey(clusterAlias);
+    }
+
+    public static final RemoteClusterCredentialsManager EMPTY = new RemoteClusterCredentialsManager(Settings.EMPTY);
+}
+```
+
+### Key Refactorings:
+1. **Extracted Method**: The logging logic was extracted into the `logCredentialsUpdated` method to avoid code duplication.
+2. **Extracted Method**: The logic for calculating the added and removed cluster aliases was extracted into `calculateAddedClusterAliases` and `calculateRemovedClusterAliases` methods to improve clarity.
+3. **Renamed Method**: The method `updateClusterCredentials` was renamed to `refreshClusterCredentials` to better describe its functionality.
+4. **Inline Variable**: The call to `Strings.collectionToCommaDelimitedString` was replaced with a simpler `String.join(", ", ...)` for easier readability, as it directly uses Java's `String.join` method.
+
+### Conclusion:
+The refactored code is now cleaner, with repeated logic extracted into separate methods for improved readability and maintainability. The renamed method `refreshClusterCredentials` better reflects its purpose, and the logging has been simplified to avoid duplication.

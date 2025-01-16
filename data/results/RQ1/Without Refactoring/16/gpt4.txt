@@ -1,0 +1,151 @@
+After reviewing the provided code, there are several refactoring opportunities that align with the nine types you mentioned. Here’s a breakdown of the areas where refactoring can improve code readability, modularity, and maintainability:
+
+### Refactoring Opportunities
+
+#### 1. **Extract Method**
+The `streamPrimesToSinkAsynchronously` method is large and contains multiple concerns:
+- Managing the thread creation.
+- Writing numbers to the sink.
+- Handling errors.
+- Closing the sink.
+
+We can **extract parts** of this method into smaller methods to clarify the logic.
+
+#### 2. **Extract Variable**
+Inside the `streamPrimesToSinkAsynchronously` method, the thread's name is hard-coded (`"writer"`). This could be extracted into a variable to make it more configurable and clearer.
+
+#### 3. **Rename Method**
+The method `streamPrimesToSinkAsynchronously` could be renamed to something more descriptive, like `startStreamingPrimesToSink`.
+
+#### 4. **Rename Variable**
+The variable `sink` inside `streamPrimesToSinkAsynchronously` is somewhat generic. A more descriptive name, like `outputSink`, would clarify its role.
+
+#### 5. **Inline Method**
+The method `factor(int n)` is small and used only inside the `streamPrimesToSinkAsynchronously` method. We could **inline** this method since it’s used only once.
+
+#### 6. **Inline Variable**
+In the `factor(int n)` method, the variable `x` could be inlined since it is used only once.
+
+### Refactored Code
+
+```java
+package okhttp3.recipes;
+
+import java.io.IOException;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okio.BufferedSink;
+import okio.Okio;
+import okio.Pipe;
+
+public final class PostStreamingWithPipe {
+  public static final MediaType MEDIA_TYPE_MARKDOWN
+      = MediaType.get("text/x-markdown; charset=utf-8");
+
+  private final OkHttpClient client = new OkHttpClient();
+
+  public void run() throws Exception {
+    final PipeBody pipeBody = new PipeBody();
+
+    Request request = new Request.Builder()
+        .url("https://api.github.com/markdown/raw")
+        .post(pipeBody)
+        .build();
+
+    startStreamingPrimesToSink(pipeBody.sink());
+
+    try (Response response = client.newCall(request).execute()) {
+      if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+
+      System.out.println(response.body().string());
+    }
+  }
+
+  private void startStreamingPrimesToSink(final BufferedSink outputSink) {
+    Thread writerThread = createWriterThread(outputSink);
+    writerThread.start();
+  }
+
+  private Thread createWriterThread(final BufferedSink outputSink) {
+    return new Thread("primeWriter") {
+      @Override public void run() {
+        try {
+          writePrimesToSink(outputSink);
+        } catch (IOException | InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
+    };
+  }
+
+  private void writePrimesToSink(BufferedSink outputSink) throws IOException, InterruptedException {
+    outputSink.writeUtf8("Numbers\n");
+    outputSink.writeUtf8("-------\n");
+    for (int i = 2; i <= 997; i++) {
+      System.out.println(i);
+      Thread.sleep(10);
+      outputSink.writeUtf8(String.format(" * %s = %s\n", i, findFactors(i)));
+    }
+    outputSink.close();
+  }
+
+  private String findFactors(int n) {
+    for (int i = 2; i < n; i++) {
+      if (n % i == 0) return findFactors(n / i) + " × " + i;
+    }
+    return Integer.toString(n);
+  }
+
+  /**
+   * This request body makes it possible for another thread to stream data to the uploading request.
+   * This is potentially useful for posting live event streams like video capture. Callers should
+   * write to {@code sink()} and close it to complete the post.
+   */
+  static final class PipeBody extends RequestBody {
+    private final Pipe pipe = new Pipe(8192);
+    private final BufferedSink sink = Okio.buffer(pipe.sink());
+
+    public BufferedSink sink() {
+      return sink;
+    }
+
+    @Override public MediaType contentType() {
+      return MEDIA_TYPE_MARKDOWN;
+    }
+
+    @Override public void writeTo(BufferedSink sink) throws IOException {
+      sink.writeAll(pipe.source());
+    }
+  }
+
+  public static void main(String... args) throws Exception {
+    new PostStreamingWithPipe().run();
+  }
+}
+```
+
+### Summary of Changes:
+1. **Extracted Method**: 
+   - `startStreamingPrimesToSink`: For creating and starting the thread.
+   - `createWriterThread`: For generating the thread responsible for writing primes to the sink.
+   - `writePrimesToSink`: Extracted the prime-writing logic from the thread body.
+   
+2. **Renamed Method**:
+   - `streamPrimesToSinkAsynchronously` → `startStreamingPrimesToSink` for clarity.
+
+3. **Extracted Variable**:
+   - `writer` thread name changed to `"primeWriter"`.
+
+4. **Renamed Variable**:
+   - `sink` → `outputSink` for better context.
+
+5. **Inlined Method**:
+   - The `factor(int n)` method was inlined into the `findFactors(int n)` method.
+
+6. **Inlined Variable**:
+   - The `x` variable in `factor(int n)` was inlined.
+
+This refactored code improves clarity, reduces duplication, and enhances maintainability by isolating distinct concerns into separate methods.

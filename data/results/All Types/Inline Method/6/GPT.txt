@@ -1,0 +1,173 @@
+The provided code is a test class for verifying the behavior of extended attributes (`xAttr`) in the `AzureBlobFileSystem`. While the code is generally well-structured, there are several refactoring opportunities to improve readability, maintainability, and reduce duplication.
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem**: The test class mixes setup, utility methods, and test logic.  
+   - **Solution**: Extract the attribute setup and verification logic into a helper class, e.g., `XAttrTestHelper`.
+
+2. **Extract Method**  
+   - **Problem**: Repeated patterns for setting and verifying attributes.  
+   - **Solution**: Extract reusable logic into separate methods, e.g., `setAndVerifyXAttr()` and `attemptInvalidXAttrOperation()`.
+
+3. **Extract Variable**  
+   - **Problem**: Repeated strings like `"user.someAttribute"` and repeated calls to `fs.getAbfsStore().encodeAttribute(...)`.  
+   - **Solution**: Extract constants and helper methods for attribute names and value encoding.
+
+4. **Inline Method**  
+   - **Problem**: The `getIsNamespaceEnabled(fs)` method isn't shown but is presumably trivial.  
+   - **Solution**: Inline this check directly where used if it’s not reused elsewhere.
+
+5. **Rename Attribute**  
+   - **Problem**: `CREATE_FLAG` and `REPLACE_FLAG` are clear but could be more expressive.  
+   - **Solution**: Rename to `XATTR_CREATE_FLAG` and `XATTR_REPLACE_FLAG` for clarity.
+
+6. **Rename Method**  
+   - **Problem**: `testGetSetXAttrHelper` sounds like a helper for a test but actually performs core test logic.  
+   - **Solution**: Rename to `verifySetAndGetXAttr`.
+
+7. **Rename Variable**  
+   - **Problem**: Variables like `attributeValue1` and `attributeValue2` are not very descriptive.  
+   - **Solution**: Rename to `asciiAttributeValue` and `unicodeAttributeValue`.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.hadoop.fs.azurebfs;
+
+import java.io.IOException;
+import java.util.EnumSet;
+
+import org.junit.Assume;
+import org.junit.Test;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.XAttrSetFlag;
+import org.apache.hadoop.fs.azurebfs.constants.FSOperationType;
+import org.apache.hadoop.fs.azurebfs.utils.TracingHeaderValidator;
+
+import static org.apache.hadoop.test.LambdaTestUtils.intercept;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertNull;
+
+/**
+ * Test attribute operations for AzureBlobFileSystem.
+ */
+public class ITestAzureBlobFileSystemAttributes extends AbstractAbfsIntegrationTest {
+
+    private static final EnumSet<XAttrSetFlag> XATTR_CREATE_FLAG = EnumSet.of(XAttrSetFlag.CREATE);
+    private static final EnumSet<XAttrSetFlag> XATTR_REPLACE_FLAG = EnumSet.of(XAttrSetFlag.REPLACE);
+    private static final String ATTRIBUTE_NAME = "user.someAttribute";
+
+    public ITestAzureBlobFileSystemAttributes() throws Exception {
+        super();
+    }
+
+    @Test
+    public void testSetGetXAttr() throws Exception {
+        AzureBlobFileSystem fs = getFileSystem();
+        AbfsConfiguration conf = fs.getAbfsStore().getAbfsConfiguration();
+        verifySetAndGetXAttr(fs, conf);
+    }
+
+    @Test
+    public void testSetGetXAttrCreateReplace() throws Exception {
+        AzureBlobFileSystem fs = getFileSystem();
+        Assume.assumeTrue(getIsNamespaceEnabled(fs));
+
+        Path testFile = path("createReplaceXAttr");
+        byte[] attributeValue = encodeAttribute(fs, "one");
+
+        touch(testFile);
+        setAndVerifyXAttr(fs, testFile, ATTRIBUTE_NAME, attributeValue, XATTR_CREATE_FLAG);
+
+        attemptInvalidXAttrOperation(fs, testFile, ATTRIBUTE_NAME, attributeValue, XATTR_CREATE_FLAG);
+    }
+
+    @Test
+    public void testSetGetXAttrReplace() throws Exception {
+        AzureBlobFileSystem fs = getFileSystem();
+        Assume.assumeTrue(getIsNamespaceEnabled(fs));
+
+        Path testFile = path("replaceXAttr");
+        byte[] initialValue = encodeAttribute(fs, "one");
+        byte[] updatedValue = encodeAttribute(fs, "two");
+
+        attemptInvalidXAttrOperation(fs, testFile, ATTRIBUTE_NAME, initialValue, XATTR_REPLACE_FLAG);
+
+        setAndVerifyXAttr(fs, testFile, ATTRIBUTE_NAME, initialValue, XATTR_CREATE_FLAG);
+        setAndVerifyXAttr(fs, testFile, ATTRIBUTE_NAME, updatedValue, XATTR_REPLACE_FLAG);
+    }
+
+    private void verifySetAndGetXAttr(final AzureBlobFileSystem fs, final AbfsConfiguration conf) throws IOException {
+        Assume.assumeTrue(getIsNamespaceEnabled(fs));
+
+        Path testFile = path("setGetXAttr");
+        String asciiAttrName = "user.asciiAttribute";
+        String unicodeAttrName = "user.unicodeAttribute";
+
+        byte[] asciiAttributeValue = encodeAttribute(fs, "hi");
+        byte[] unicodeAttributeValue = encodeAttribute(fs, "你好");
+
+        touch(testFile);
+        assertNull(fs.getXAttr(testFile, asciiAttrName));
+
+        fs.registerListener(new TracingHeaderValidator(conf.getClientCorrelationId(), fs.getFileSystemId(), FSOperationType.SET_ATTR, true, 0));
+        fs.setXAttr(testFile, asciiAttrName, asciiAttributeValue);
+        fs.setListenerOperation(FSOperationType.GET_ATTR);
+        assertArrayEquals(asciiAttributeValue, fs.getXAttr(testFile, asciiAttrName));
+        fs.registerListener(null);
+
+        fs.setXAttr(testFile, unicodeAttrName, unicodeAttributeValue);
+        assertArrayEquals(asciiAttributeValue, fs.getXAttr(testFile, asciiAttrName));
+        assertArrayEquals(unicodeAttributeValue, fs.getXAttr(testFile, unicodeAttrName));
+    }
+
+    private void setAndVerifyXAttr(AzureBlobFileSystem fs, Path file, String attributeName, byte[] attributeValue, EnumSet<XAttrSetFlag> flag) throws IOException {
+        fs.setXAttr(file, attributeName, attributeValue, flag);
+        assertArrayEquals(attributeValue, fs.getXAttr(file, attributeName));
+    }
+
+    private void attemptInvalidXAttrOperation(AzureBlobFileSystem fs, Path file, String attributeName, byte[] attributeValue, EnumSet<XAttrSetFlag> flag) {
+        intercept(IOException.class, () -> fs.setXAttr(file, attributeName, attributeValue, flag));
+    }
+
+    private byte[] encodeAttribute(AzureBlobFileSystem fs, String value) throws IOException {
+        return fs.getAbfsStore().encodeAttribute(value);
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extracted Methods**:  
+   - `setAndVerifyXAttr()`: Handles setting and verifying attributes.  
+   - `attemptInvalidXAttrOperation()`: Handles intercepting invalid operations.
+
+2. **Extracted Variable**:  
+   - `ATTRIBUTE_NAME` is now a constant.  
+   - `encodeAttribute()` encapsulates attribute encoding.
+
+3. **Renamed Attributes/Methods**:  
+   - `CREATE_FLAG` → `XATTR_CREATE_FLAG`.  
+   - `REPLACE_FLAG` → `XATTR_REPLACE_FLAG`.  
+   - `testGetSetXAttrHelper()` → `verifySetAndGetXAttr()`.
+
+4. **Improved Readability**:  
+   - Removed redundant logic and replaced it with reusable methods.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability**: Clear method separation improves understanding.  
+- **Maintainability**: Centralized logic for repeated patterns reduces future maintenance.  
+- **Test Reliability**: Isolated methods for setup and validation reduce test flakiness.
+
+Let me know if you'd like further refinements or additional suggestions!

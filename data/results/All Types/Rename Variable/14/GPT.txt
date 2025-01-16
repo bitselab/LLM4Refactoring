@@ -1,0 +1,110 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method**  
+   - The logic for compiling the prefix into a `CompiledAutomaton` can be extracted into a separate method for clarity.  
+   - The term visiting logic in `visitMatchingTerms` can also be extracted for better readability.
+
+2. **Rename Attribute**  
+   - `truncator` could be renamed to `suffixOperator` for better semantic clarity, aligning with the `getSuffixOperator()` method.
+
+3. **Extract Variable**  
+   - The repeated call to `new Term(fieldName, BytesRef.deepCopyOf(text))` can be extracted into a variable.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.lucene.queryparser.surround.query;
+
+import java.io.IOException;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.MultiTerms;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.index.Terms;
+import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.search.PrefixQuery;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.automaton.CompiledAutomaton;
+
+/** Query that matches String prefixes */
+public class SrndPrefixQuery extends SimpleTerm {
+    private final CompiledAutomaton compiledAutomaton;
+    private final String prefix;
+    private final char suffixOperator;
+
+    public SrndPrefixQuery(String prefix, boolean quoted, char suffixOperator) {
+        super(quoted);
+        this.prefix = prefix;
+        this.suffixOperator = suffixOperator;
+        this.compiledAutomaton = compilePrefixToAutomaton(prefix);
+    }
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    public char getSuffixOperator() {
+        return suffixOperator;
+    }
+
+    @Override
+    public String toStringUnquoted() {
+        return getPrefix();
+    }
+
+    @Override
+    protected void suffixToString(StringBuilder builder) {
+        builder.append(getSuffixOperator());
+    }
+
+    @Override
+    public void visitMatchingTerms(IndexReader reader, String fieldName, MatchingTermVisitor visitor)
+            throws IOException {
+        Terms terms = MultiTerms.getTerms(reader, fieldName);
+        if (terms != null) {
+            visitTermsWithAutomaton(terms, fieldName, visitor);
+        }
+    }
+
+    /** Extracted method to compile prefix into a CompiledAutomaton */
+    private CompiledAutomaton compilePrefixToAutomaton(String prefix) {
+        return new CompiledAutomaton(PrefixQuery.toAutomaton(new BytesRef(prefix)), true, true, true);
+    }
+
+    /** Extracted method for iterating over matching terms */
+    private void visitTermsWithAutomaton(Terms terms, String fieldName, MatchingTermVisitor visitor)
+            throws IOException {
+        TermsEnum termsEnum = compiledAutomaton.getTermsEnum(terms);
+        BytesRef text;
+        while ((text = termsEnum.next()) != null) {
+            Term matchingTerm = new Term(fieldName, BytesRef.deepCopyOf(text));
+            visitor.visitMatchingTerm(matchingTerm);
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Method:**  
+   - Created `compilePrefixToAutomaton()` for the automaton compilation logic.  
+   - Created `visitTermsWithAutomaton()` for iterating over matching terms.  
+
+2. **Rename Attribute:**  
+   - Renamed `truncator` → `suffixOperator` to better reflect its purpose.
+
+3. **Extract Variable:**  
+   - Extracted the construction of `Term` into a variable `matchingTerm` in `visitTermsWithAutomaton()`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Extracted methods make the main logic clearer.  
+- **Maintainability:** Easier to modify the automaton logic or term visiting without touching core logic.  
+- **Consistency:** Naming (`suffixOperator`) now better reflects the method `getSuffixOperator()`.
+
+No further refactoring is necessary.

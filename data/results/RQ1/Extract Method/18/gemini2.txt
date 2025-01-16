@@ -1,0 +1,63 @@
+There are indeed refactoring opportunities in the provided code. We can identify two potential methods to extract:
+
+1. **Extracting logic for identifying forbidden mime types:**
+
+The logic for checking forbidden mime types is repeated three times in the code:
+
+  - `isFileForbiddenInConfigset(Path file)`
+  - `isFileForbiddenInConfigset(InputStream fileStream)`
+  - `isFileForbiddenInConfigset(byte[] bytes)`
+
+We can extract a new method to encapsulate this logic:
+
+```java
+private boolean isForbiddenMimeType(String mimeType) {
+  return forbiddenTypes.contains(mimeType);
+}
+```
+
+Then, update the existing methods to use this new method:
+
+```java
+public static boolean isFileForbiddenInConfigset(Path file) {
+  try (InputStream fileStream = Files.newInputStream(file)) {
+    return isForbiddenMimeType(FileTypeMagicUtil.INSTANCE.guessMimeType(fileStream));
+  } catch (IOException e) {
+    // ... existing exception handling
+  }
+}
+
+// Similar updates for other methods using isForbiddenMimeType
+```
+
+2. **Extracting logic for guessing mime type:**
+
+All three methods (`guessMimeType(Path file)`,  `guessMimeType(InputStream stream)`, `guessMimeType(byte[] bytes)`)  delegate the mime type guessing logic to `util.findMatch` with different input sources. We can extract this logic into a separate method:
+
+```java
+private String getMimeTypeFromContentInfo(Object source) throws IOException {
+  ContentInfo contentInfo = util.findMatch(source);
+  if (contentInfo == null) {
+    return ContentType.OTHER.getMimeType();
+  } else {
+    return contentInfo.getContentType().getMimeType();
+  }
+}
+```
+
+Then, update the existing methods to use this new method with the appropriate source:
+
+```java
+public String guessMimeType(Path file) {
+  try {
+    return getMimeTypeFromContentInfo(file.toFile());
+  } catch (IOException e) {
+    // ... existing exception handling
+  }
+}
+
+// Similar updates for other methods using getMimeTypeFromContentInfo
+```
+
+These refactorings improve code readability and maintainability by reducing code duplication and separating concerns.
+ 

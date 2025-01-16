@@ -1,0 +1,252 @@
+The provided `StateBackendLoader` code has opportunities for refactoring to improve readability, maintainability, and adherence to the Single Responsibility Principle. Below are the identified refactoring opportunities and the refactored code.
+
+---
+
+### **Refactoring Opportunities**
+
+#### 1. **Extract Class**
+- Move utility methods related to wrapping and identifying state backends (`wrapStateBackend`, `isChangelogStateBackend`) to a helper class like `StateBackendUtils`.
+
+#### 2. **Extract Method**
+- Break down long methods such as `loadStateBackendFromConfig` into smaller methods for better modularity and readability.
+
+#### 3. **Extract Variable**
+- Extract repetitive or complex expressions into meaningful variables (e.g., repeated log messages or configuration key lookups).
+
+#### 4. **Rename Methods/Variables**
+- Rename methods or variables to make their purpose more explicit (e.g., `loadFromApplicationOrConfigOrDefaultInternal` → `loadBackendWithPriority`).
+
+#### 5. **Inline Variable**
+- Inline unnecessary intermediate variables to simplify the code.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.flink.runtime.state;
+
+import org.apache.flink.configuration.*;
+import org.apache.flink.runtime.state.changelog.ChangelogStateBackendHandle;
+import org.apache.flink.runtime.state.delegate.DelegatingStateBackend;
+import org.apache.flink.runtime.state.hashmap.HashMapStateBackendFactory;
+import org.apache.flink.runtime.state.memory.MemoryStateBackendFactory;
+import org.apache.flink.util.DynamicCodeLoadingException;
+import org.apache.flink.util.TernaryBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.util.Collection;
+import java.util.Optional;
+
+import static org.apache.flink.util.Preconditions.checkNotNull;
+
+/**
+ * Utility for loading and configuring state backends.
+ */
+public class StateBackendLoader {
+
+    private static final Logger LOG = LoggerFactory.getLogger(StateBackendLoader.class);
+
+    // Backend-related constants
+    public static final String HASHMAP_STATE_BACKEND_NAME = "hashmap";
+    @Deprecated public static final String MEMORY_STATE_BACKEND_NAME = "jobmanager";
+    @Deprecated public static final String FS_STATE_BACKEND_NAME = "filesystem";
+    public static final String ROCKSDB_STATE_BACKEND_NAME = "rocksdb";
+
+    private static final String CHANGELOG_STATE_BACKEND =
+            "org.apache.flink.state.changelog.ChangelogStateBackend";
+    private static final String DEACTIVATED_CHANGELOG_STATE_BACKEND =
+            "org.apache.flink.state.changelog.DeactivatedChangelogStateBackend";
+    private static final String ROCKSDB_STATE_BACKEND_FACTORY =
+            "org.apache.flink.contrib.streaming.state.EmbeddedRocksDBStateBackendFactory";
+
+    private StateBackendLoader() {
+        // Prevent instantiation
+    }
+
+    @Nonnull
+    public static StateBackend loadStateBackendFromConfig(
+            ReadableConfig config, ClassLoader classLoader, @Nullable Logger logger)
+            throws IllegalConfigurationException, DynamicCodeLoadingException, IOException {
+
+        checkNotNull(config, "config");
+        checkNotNull(classLoader, "classLoader");
+
+        final String backendName = config.get(StateBackendOptions.STATE_BACKEND);
+        final String factoryClassName = resolveFactoryClassName(backendName, logger);
+
+        switch (backendName.toLowerCase()) {
+            case MEMORY_STATE_BACKEND_NAME:
+                logDeprecatedBackendUsage(logger, backendName);
+                return new MemoryStateBackendFactory().createFromConfig(config, classLoader);
+
+            case FS_STATE_BACKEND_NAME:
+                logDeprecatedBackendUsage(logger, backendName);
+                // Fall through to HashMap
+            case HASHMAP_STATE_BACKEND_NAME:
+                return new HashMapStateBackendFactory().createFromConfig(config, classLoader);
+
+            default:
+                logFactoryLoading(logger, factoryClassName);
+                return createBackendFromFactory(factoryClassName, config, classLoader);
+        }
+    }
+
+    private static String resolveFactoryClassName(String backendName, @Nullable Logger logger) {
+        if (ROCKSDB_STATE_BACKEND_NAME.equalsIgnoreCase(backendName)) {
+            logFactoryLoading(logger, ROCKSDB_STATE_BACKEND_FACTORY);
+            return ROCKSDB_STATE_BACKEND_FACTORY;
+        }
+        return backendName;
+    }
+
+    private static void logDeprecatedBackendUsage(@Nullable Logger logger, String backendName) {
+        if (logger != null) {
+            logger.warn(
+                    "{} state backend is deprecated. Consider using the 'hashmap' state backend instead.",
+                    backendName.toLowerCase());
+        }
+    }
+
+    private static void logFactoryLoading(@Nullable Logger logger, String factoryClassName) {
+        if (logger != null) {
+            logger.info("Loading state backend via factory {}", factoryClassName);
+        }
+    }
+
+    private static StateBackend createBackendFromFactory(
+            String factoryClassName, ReadableConfig config, ClassLoader classLoader)
+            throws DynamicCodeLoadingException {
+        try {
+            @SuppressWarnings("rawtypes")
+            Class<? extends StateBackendFactory> clazz =
+                    Class.forName(factoryClassName, false, classLoader)
+                            .asSubclass(StateBackendFactory.class);
+
+            StateBackendFactory<?> factory = clazz.getDeclaredConstructor().newInstance();
+            return factory.createFromConfig(config, classLoader);
+        } catch (Exception e) {
+            throw new DynamicCodeLoadingException("Failed to load state backend: " + factoryClassName, e);
+        }
+    }
+
+    public static StateBackend fromApplicationOrConfigOrDefault(
+            @Nullable StateBackend fromApplication,
+            TernaryBoolean isChangelogEnabledFromApp,
+            Configuration config,
+            ClassLoader classLoader,
+            @Nullable Logger logger)
+            throws IllegalConfigurationException, DynamicCodeLoadingException, IOException {
+
+        StateBackend rootBackend = loadBackendWithPriority(fromApplication, config, classLoader, logger);
+        return StateBackendUtils.wrapBackendIfNeeded(rootBackend, isChangelogEnabledFromApp, config, classLoader, logger);
+    }
+
+    private static StateBackend loadBackendWithPriority(
+            @Nullable StateBackend fromApplication,
+            Configuration config,
+            ClassLoader classLoader,
+            @Nullable Logger logger)
+            throws IllegalConfigurationException, DynamicCodeLoadingException, IOException {
+
+        if (fromApplication != null) {
+            return configureApplicationDefinedBackend(fromApplication, config, classLoader, logger);
+        }
+
+        return loadStateBackendFromConfig(config, classLoader, logger);
+    }
+
+    private static StateBackend configureApplicationDefinedBackend(
+            StateBackend fromApplication, Configuration config, ClassLoader classLoader, @Nullable Logger logger)
+            throws IOException {
+        if (fromApplication instanceof ConfigurableStateBackend) {
+            if (logger != null) {
+                logger.info("Configuring application-defined state backend: {}", fromApplication);
+            }
+            return ((ConfigurableStateBackend) fromApplication).configure(config, classLoader);
+        }
+        return fromApplication;
+    }
+}
+
+/**
+ * Utility class for handling backend-specific operations.
+ */
+class StateBackendUtils {
+
+    private static final Logger LOG = LoggerFactory.getLogger(StateBackendUtils.class);
+
+    private StateBackendUtils() {
+        // Prevent instantiation
+    }
+
+    public static StateBackend wrapBackendIfNeeded(
+            StateBackend rootBackend,
+            TernaryBoolean isChangelogEnabled,
+            Configuration config,
+            ClassLoader classLoader,
+            @Nullable Logger logger)
+            throws DynamicCodeLoadingException {
+
+        boolean enableChangeLog = determineChangelogState(isChangelogEnabled, config);
+        if (enableChangeLog) {
+            return wrapStateBackend(rootBackend, classLoader, StateBackendLoader.CHANGELOG_STATE_BACKEND, logger);
+        }
+
+        logBackendSelection(logger, rootBackend);
+        return rootBackend;
+    }
+
+    private static boolean determineChangelogState(TernaryBoolean isChangelogEnabled, Configuration config) {
+        return TernaryBoolean.TRUE.equals(isChangelogEnabled)
+                || (TernaryBoolean.UNDEFINED.equals(isChangelogEnabled)
+                && config.get(StateChangelogOptions.ENABLE_STATE_CHANGE_LOG));
+    }
+
+    public static StateBackend wrapStateBackend(
+            StateBackend backend, ClassLoader classLoader, String className, @Nullable Logger logger)
+            throws DynamicCodeLoadingException {
+
+        try {
+            Constructor<? extends DelegatingStateBackend> constructor =
+                    Class.forName(className, false, classLoader)
+                            .asSubclass(DelegatingStateBackend.class)
+                            .getDeclaredConstructor(StateBackend.class);
+            constructor.setAccessible(true);
+            StateBackend wrappedBackend = constructor.newInstance(backend);
+            logBackendDelegation(logger, backend, wrappedBackend);
+            return wrappedBackend;
+        } catch (Exception e) {
+            throw new DynamicCodeLoadingException("Failed to initialize backend: " + className, e);
+        }
+    }
+
+    private static void logBackendDelegation(@Nullable Logger logger, StateBackend rootBackend, StateBackend wrappedBackend) {
+        if (logger != null) {
+            logger.info("Delegating {} to {}", rootBackend.getClass().getSimpleName(), wrappedBackend.getClass().getSimpleName());
+        }
+    }
+
+    private static void logBackendSelection(@Nullable Logger logger, StateBackend rootBackend) {
+        if (logger != null) {
+            logger.info("Selected state backend: {}", rootBackend.getClass().getSimpleName());
+        }
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+1. **Extract Class:** Moved backend wrapping and changelog handling to `StateBackendUtils`.
+2. **Extract Method:** Modularized long methods for better readability.
+3. **Rename Method:** Renamed `loadFromApplicationOrConfigOrDefaultInternal` to `loadBackendWithPriority` for clarity.
+4. **Extract Variable:** Extracted reusable expressions and log messages.
+5. **Simplified Logic:** Reduced redundancy in backend determination and logging.
+
+This refactored version improves maintainability, clarity, and separation of concerns. Let me know if you need further assistance!

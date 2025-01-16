@@ -1,0 +1,113 @@
+## Refactoring Opportunities
+
+Here's an analysis of the provided code snippet with potential refactoring opportunities identified:
+
+**Extract Method:**
+
+* The `releaseStatement` method can be extracted from the `AbstractReturningDelegate` class and placed in a separate utility class. This method is responsible for releasing the prepared statement and is used in both `performInsert` and `performInsertReturning` methods. Extracting it into a separate utility class would improve code reusability and maintainability.
+
+**Rename Method:**
+
+* The `executeAndExtractReturning` method could be renamed to `extractReturningValues` for better clarity. The current name is a bit verbose and doesn't accurately reflect the method's purpose.
+
+**Rename Parameter:**
+
+* The `sql` parameter in the `executeAndExtractReturning` method could be renamed to `insertSql` to be more specific and descriptive of its actual usage.
+
+**Inline Variable:**
+
+* The `insert` variable in the `performInsertReturning` method could be inlined. It is only used once and doesn't require its own variable declaration.
+
+**Extract Variable:**
+
+* The repeated string concatenation of `MessageHelper.infoString(persister)` in the exception message within `performInsertReturning` could be extracted into a separate variable for better readability.
+
+**Rename Attribute:**
+
+* The `sqlString` attribute in the `PreparedStatementDetails` class could be renamed to `sql` for consistency with other variable names related to SQL statements.
+
+## Refactored Code
+
+Here's the refactored code incorporating the suggested changes:
+
+```java
+package org.hibernate.id.insert;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+import org.hibernate.engine.jdbc.mutation.JdbcValueBindings;
+import org.hibernate.engine.jdbc.mutation.group.PreparedStatementDetails;
+import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.EventType;
+import org.hibernate.generator.values.AbstractGeneratedValuesMutationDelegate;
+import org.hibernate.generator.values.GeneratedValues;
+import org.hibernate.id.PostInsertIdentityPersister;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.pretty.MessageHelper;
+
+public abstract class AbstractReturningDelegate extends AbstractGeneratedValuesMutationDelegate
+        implements InsertGeneratedIdentifierDelegate {
+
+    private static final String INFO_STRING = MessageHelper.infoString(persister);
+
+    public AbstractReturningDelegate(
+            EntityPersister persister,
+            EventType timing,
+            boolean supportsArbitraryValues,
+            boolean supportsRowId) {
+        super(persister, timing, supportsArbitraryValues, supportsRowId);
+    }
+
+    @Override
+    public GeneratedValues performInsert(
+            PreparedStatementDetails statementDetails,
+            JdbcValueBindings valueBindings,
+            Object entity,
+            SharedSessionContractImplementor session) {
+        session.getJdbcServices().getSqlStatementLogger().logStatement(statementDetails.getSql());
+        valueBindings.beforeStatement(statementDetails);
+        return extractReturningValues(statementDetails.getSql(), statementDetails.getStatement(), session);
+    }
+
+    @Override
+    public final GeneratedValues performInsertReturning(String insertSql, SharedSessionContractImplementor session, Binder binder) {
+        try {
+            // prepare and execute the insert
+            PreparedStatement insert = prepareStatement(insertSql, session);
+            try {
+                binder.bindValues(insert);
+                return extractReturningValues(insertSql, insert, session);
+            } finally {
+                StatementUtils.releaseStatement(insert, session);
+            }
+        } catch (SQLException sqle) {
+            throw session.getJdbcServices().getSqlExceptionHelper().convert(
+                    sqle,
+                    "could not insert: " + INFO_STRING,
+                    insertSql
+            );
+        }
+    }
+
+    protected abstract GeneratedValues extractReturningValues(
+            String insertSql,
+            PreparedStatement preparedStatement,
+            SharedSessionContractImplementor session);
+}
+
+class StatementUtils {
+
+    private StatementUtils() {
+    }
+
+    public static void releaseStatement(PreparedStatement preparedStatement, SharedSessionContractImplementor session) {
+        final JdbcCoordinator jdbcCoordinator = session.getJdbcCoordinator();
+        jdbcCoordinator.getLogicalConnection().getResourceRegistry().release(preparedStatement);
+        jdbcCoordinator.afterStatementExecution();
+    }
+}
+```
+
+This refactored code improves the overall readability, maintainability, and reusability of the original code.

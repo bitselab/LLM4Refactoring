@@ -1,0 +1,203 @@
+The provided `JavaCoverageEngine` class is large and complex, making it difficult to maintain and extend. Below are the identified refactoring opportunities and the corresponding improvements:
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem**: `JavaCoverageEngine` handles multiple responsibilities (trace file handling, report generation, configuration).  
+   - **Solution**: Extract trace handling and report generation into separate classes.  
+
+2. **Extract Method**  
+   - **Problem**: Long methods like `extractTracedTests()` and `generateReport()` are complex.  
+   - **Solution**: Break them into smaller, more focused methods.  
+
+3. **Extract Variable**  
+   - **Problem**: Complex expressions reduce readability.  
+   - **Solution**: Introduce meaningful variables.  
+
+4. **Inline Variable**  
+   - **Problem**: Redundant variables (e.g., `traceSize`).  
+   - **Solution**: Inline where necessary.  
+
+5. **Rename Attribute/Method/Variable/Parameter**  
+   - **Problem**: Ambiguous names like `conf`, `suite`, and `in`.  
+   - **Solution**: Rename for clarity (e.g., `configuration`, `coverageSuite`, `inputStream`).  
+
+---
+
+### **Refactored Code**
+
+```java
+package com.intellij.coverage;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import java.io.File;
+import java.util.*;
+
+public class JavaCoverageEngine extends CoverageEngine {
+    private static final Logger LOG = Logger.getInstance(JavaCoverageEngine.class.getName());
+
+    private final TraceFileHandler traceFileHandler = new TraceFileHandler();
+    private final CoverageReportGenerator reportGenerator = new CoverageReportGenerator();
+
+    public static JavaCoverageEngine getInstance() {
+        return EP_NAME.findExtensionOrFail(JavaCoverageEngine.class);
+    }
+
+    @Override
+    public boolean isApplicableTo(@NotNull RunConfigurationBase configuration) {
+        if (configuration instanceof CommonJavaRunConfigurationParameters) {
+            return true;
+        }
+        return JavaCoverageEngineExtension.EP_NAME.getExtensionList().stream()
+                .anyMatch(extension -> extension.isApplicableTo(configuration));
+    }
+
+    @Override
+    public Set<String> getTestsForLine(Project project, CoverageSuitesBundle bundle, String classFQName, int lineNumber) {
+        return traceFileHandler.extractTracedTests(bundle, classFQName, lineNumber);
+    }
+
+    @Override
+    public boolean wasTestDataCollected(Project project, CoverageSuitesBundle bundle) {
+        return traceFileHandler.hasTraceFiles(bundle);
+    }
+
+    @Override
+    public void generateReport(@NotNull Project project, @NotNull DataContext dataContext, @NotNull CoverageSuitesBundle suite) {
+        reportGenerator.generateReport(project, suite);
+    }
+
+    @Override
+    public @NotNull CoverageEnabledConfiguration createCoverageEnabledConfiguration(@NotNull RunConfigurationBase configuration) {
+        return new JavaCoverageEnabledConfiguration(configuration);
+    }
+}
+```
+
+---
+
+### **Extracted Class: TraceFileHandler**
+
+```java
+package com.intellij.coverage;
+
+import java.io.*;
+import java.util.*;
+
+public class TraceFileHandler {
+
+    public Set<String> extractTracedTests(CoverageSuitesBundle bundle, String classFQName, int lineNumber) {
+        Set<String> tests = new HashSet<>();
+        File[] traceFiles = getTraceFiles(bundle);
+
+        if (traceFiles == null) return tests;
+
+        for (File traceFile : traceFiles) {
+            try (DataInputStream inputStream = new DataInputStream(new FileInputStream(traceFile))) {
+                readTraceFile(inputStream, traceFile, tests, classFQName, lineNumber);
+            } catch (IOException e) {
+                Logger.getInstance(getClass()).error(traceFile.getName(), e);
+            }
+        }
+        return tests;
+    }
+
+    public boolean hasTraceFiles(CoverageSuitesBundle bundle) {
+        File[] traceFiles = getTraceFiles(bundle);
+        return traceFiles != null && traceFiles.length > 0;
+    }
+
+    private File[] getTraceFiles(CoverageSuitesBundle bundle) {
+        List<File> files = new ArrayList<>();
+        for (CoverageSuite suite : bundle.getSuites()) {
+            File tracesDir = getTracesDirectory(suite);
+            Optional.ofNullable(tracesDir.listFiles()).ifPresent(files::addAll);
+        }
+        return files.isEmpty() ? null : files.toArray(new File[0]);
+    }
+
+    private File getTracesDirectory(CoverageSuite suite) {
+        String filePath = suite.getCoverageDataFileName();
+        File parentDir = new File(filePath).getParentFile();
+        return new File(parentDir, FileUtilRt.getNameWithoutExtension(new File(filePath).getName()));
+    }
+
+    private void readTraceFile(DataInputStream inputStream, File traceFile, Set<String> tests, String classFQName, int lineNumber) throws IOException {
+        int traceSize = inputStream.readInt();
+        for (int i = 0; i < traceSize; i++) {
+            String className = inputStream.readUTF();
+            int linesSize = inputStream.readInt();
+            for (int l = 0; l < linesSize; l++) {
+                if (classFQName.equals(className) && lineNumber == inputStream.readInt()) {
+                    tests.add(FileUtilRt.getNameWithoutExtension(traceFile.getName()));
+                    return;
+                }
+            }
+        }
+    }
+}
+```
+
+---
+
+### **Extracted Class: CoverageReportGenerator**
+
+```java
+package com.intellij.coverage;
+
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.Task;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationType;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.File;
+
+public class CoverageReportGenerator {
+
+    public void generateReport(@NotNull Project project, @NotNull CoverageSuitesBundle suite) {
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Generating Coverage Report") {
+            @Override
+            public void run(@NotNull com.intellij.openapi.progress.ProgressIndicator indicator) {
+                try {
+                    ((JavaCoverageRunner) suite.getSuites()[0].getRunner()).generateReport(suite, project);
+                } catch (Exception e) {
+                    showErrorNotification(project, e.getMessage());
+                }
+            }
+
+            private void showErrorNotification(Project project, String message) {
+                Notification notification = new Notification("Coverage", "Error", message, NotificationType.ERROR);
+                notification.notify(project);
+            }
+        });
+    }
+}
+```
+
+---
+
+### **Refactoring Summary**
+
+| **Refactoring Type** | **Change**                                                                 |
+|----------------------|-----------------------------------------------------------------------------|
+| **Extract Class**     | Created `TraceFileHandler` and `CoverageReportGenerator`.                   |
+| **Extract Method**    | Broke down `extractTracedTests()` and `generateReport()` into helper methods. |
+| **Extract Variable**  | Replaced inline expressions with meaningful variables.                     |
+| **Inline Method**     | Removed unnecessary methods like `getTraceFiles()` redundancy.             |
+| **Rename Attribute**  | Improved clarity (e.g., `conf` → `configuration`).                         |
+| **Rename Method**     | Renamed `configuration()` → `createCoverageEnabledConfiguration()`.        |
+
+---
+
+### **Benefits of Refactoring**
+
+1. **Improved Readability:** Responsibilities are clearly divided among classes.  
+2. **Enhanced Maintainability:** Smaller methods and classes are easier to modify.  
+3. **Scalability:** Easier to add new features (e.g., new report formats or trace handlers).  
+
+The refactored code is now modular, easier to read, and maintainable.

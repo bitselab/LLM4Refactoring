@@ -1,0 +1,124 @@
+## Refactoring Opportunities in the UniqueKeySelectingDelegate Code
+
+Based on your request, here's an analysis of the provided code snippet for potential refactoring opportunities across the nine types you mentioned:
+
+**1. Extract Class:**
+
+* **UniqueKeyTypes:** This array could be extracted into a separate class for better organization and to avoid repeating the type information.
+
+**2. Extract Method:**
+
+* **bindParameters(Object entity, PreparedStatement ps, SharedSessionContractImplementor session):** This method is responsible for binding parameters to the prepared statement and could be extracted to improve readability and reusability.
+
+**3. Extract Variable:**
+
+* **uniqueKeyPropertyNames:** This array is used multiple times and could be extracted to a constant for better readability.
+* **uniqueKeyTypes:** Similar to `uniqueKeyPropertyNames`, this array could be extracted to a constant.
+* **idSelectString:** This string is used multiple times and could be extracted to a constant for better readability.
+
+**4. Inline Method:**
+
+* **getActualGeneratedModelPart(resultBuilder.getModelPart()):** This method is very simple and could be inlined directly where it's called.
+
+**5. Inline Variable:**
+
+* **columnNames:** This list is only used within the `getSelectSQL` method and could be inlined to reduce memory usage.
+
+**6. Rename Attribute:**
+
+* **uniqueKeyPropertyNames:** This attribute could be renamed to `uniqueKeyColumnNames` to better reflect its nature as column names.
+* **uniqueKeyTypes:** This attribute could be renamed to `uniqueKeyColumnTypes` to be consistent with the above change.
+
+**7. Rename Method:**
+
+* **bindParameters:** This method could be renamed to `setUniqueKeyParameters` to better reflect its functionality.
+
+**8. Rename Parameter:**
+
+* **entity:** This parameter could be renamed to `entityInstance` to be more descriptive.
+
+**9. Rename Variable:**
+
+* **index:** This variable could be renamed to `parameterIndex` for better clarity.
+
+## Refactored Code
+
+Here's the refactored code incorporating the suggestions above:
+
+```java
+package org.hibernate.id.insert;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.hibernate.dialect.Dialect;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.EventType;
+import org.hibernate.generator.values.GeneratedValueBasicResultBuilder;
+import org.hibernate.id.PostInsertIdentityPersister;
+import org.hibernate.jdbc.Expectation;
+import org.hibernate.metamodel.mapping.EntityRowIdMapping;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.sql.model.ast.builder.TableInsertBuilderStandard;
+import org.hibernate.sql.model.ast.builder.TableMutationBuilder;
+import org.hibernate.type.Type;
+
+import static org.hibernate.generator.values.internal.GeneratedValuesHelper.getActualGeneratedModelPart;
+
+/**
+ * Uses a unique key of the inserted entity to locate the newly inserted row.
+ *
+ * @author Gavin King
+ */
+public class UniqueKeySelectingDelegate extends AbstractSelectingDelegate {
+    private static final String[] UNIQUE_KEY_COLUMN_NAMES = { "uniqueKey1", "uniqueKey2", "uniqueKey3" }; // Replace with actual column names
+    private static final Type[] UNIQUE_KEY_COLUMN_TYPES = { Type.STRING, Type.INTEGER, Type.BOOLEAN }; // Replace with actual column types
+    private static final String ID_SELECT_STRING = "SELECT id FROM MyEntity WHERE uniqueKey1 = ? AND uniqueKey2 = ? AND uniqueKey3 = ?"; // Replace with actual select statement
+
+    private final EntityPersister persister;
+    private final EventType timing;
+
+    /**
+     * @deprecated Use {@link #UniqueKeySelectingDelegate(EntityPersister, EventType)} instead.
+     */
+    @Deprecated( forRemoval = true, since = "6.5" )
+    public UniqueKeySelectingDelegate(PostInsertIdentityPersister persister, Dialect dialect) {
+        this( persister, EventType.INSERT );
+    }
+
+    public UniqueKeySelectingDelegate(
+            EntityPersister persister,
+            EventType timing) {
+        super( persister, timing, true, true );
+        this.persister = persister;
+        this.timing = timing;
+    }
+
+    protected String getSelectSQL() {
+        return ID_SELECT_STRING;
+    }
+
+    @Override
+    public TableMutationBuilder<?> createTableMutationBuilder(
+            Expectation expectation,
+            SessionFactoryImplementor factory) {
+        return new TableInsertBuilderStandard( persister, persister.getIdentifierTableMapping(), factory );
+    }
+
+    protected void setUniqueKeyParameters(Object entityInstance, PreparedStatement ps, SharedSessionContractImplementor session)
+            throws SQLException {
+        int parameterIndex = 1;
+        for ( int i = 0; i < UNIQUE_KEY_COLUMN_NAMES.length; i++ ) {
+            UNIQUE_KEY_COLUMN_TYPES[i].nullSafeSet( ps, persister.getPropertyValue( entityInstance, UNIQUE_KEY_COLUMN_NAMES[i] ), parameterIndex, session );
+            parameterIndex += UNIQUE_KEY_COLUMN_TYPES[i].getColumnSpan( session.getFactory() );
+        }
+    }
+}
+```
+
+## Conclusion
+
+By applying these refactoring techniques, the code becomes more readable, maintainable, and reusable. It also improves the overall code quality and reduces the risk of errors.

@@ -1,0 +1,279 @@
+The provided code is already relatively clean, but there are some areas where refactoring opportunities exist to improve readability, maintainability, and modularity. Below are suggestions based on the nine refactoring types requested:
+
+### 1. **Extract Method**:  
+Some of the code in the `verify()` and `reset()` methods is repetitive. For instance, the following lines appear in both methods:
+```java
+MockingProgress mockingProgress = mockingProgress();
+mockingProgress.validateState();
+mockingProgress.reset();
+mockingProgress.resetOngoingStubbing();
+```
+This can be extracted into a separate method to eliminate redundancy and make the code more concise.
+
+**Refactor**:
+```java
+private void resetMockingProgress() {
+    MockingProgress mockingProgress = mockingProgress();
+    mockingProgress.validateState();
+    mockingProgress.reset();
+    mockingProgress.resetOngoingStubbing();
+}
+```
+
+Then in the `verify()` and `reset()` methods:
+```java
+resetMockingProgress();
+```
+
+### 2. **Extract Variable**:  
+In the `verify()` method, the exception handling could be simplified by creating a variable for the error message.
+
+**Refactor**:
+```java
+String errorMessage = join(
+    "An unexpected error occurred while verifying a static stub",
+    "",
+    "To correctly verify a stub, invoke a single static method of "
+    + control.getType().getName()
+    + " in the provided lambda.",
+    "For example, if a method 'sample' was defined, provide a lambda or anonymous class containing the code",
+    "",
+    "() -> " + control.getType().getSimpleName() + ".sample()",
+    "or",
+    control.getType().getSimpleName() + "::sample"
+);
+```
+
+Then:
+```java
+throw new MockitoException(errorMessage, t);
+```
+
+### 3. **Inline Method**:  
+The `toString()` method in this case is simple enough and doesn't need its own method unless further complexity is added later. No refactoring needed here.
+
+### 4. **Inline Variable**:  
+The `MockingProgress mockingProgress` variable in several methods is useful, but its use is relatively short-lived. If it's only used once, you could inline the variable to reduce verbosity. 
+
+However, in this case, keeping it as a variable improves readability and maintainability, so no inlining is necessary for this case.
+
+### 5. **Rename Attribute**:  
+No attributes are misnamed in the given class. All names appear meaningful and descriptive (e.g., `control`, `closed`, `location`).
+
+### 6. **Rename Method**:  
+The method names are clear and follow Java naming conventions. No renaming is required here.
+
+### 7. **Rename Parameter**:  
+In the `when()` and `verify()` methods, the `verification` parameter could be renamed to something more specific like `stubVerification` or `verificationAction` to make it more descriptive of its role in the method.
+
+For example:
+```java
+public <S> OngoingStubbing<S> when(Verification verificationAction) {
+    ...
+}
+```
+
+And in `verify()`:
+```java
+public void verify(Verification verificationAction, VerificationMode mode) {
+    ...
+}
+```
+
+### 8. **Rename Variable**:  
+The variable `stubbing` could be renamed to `ongoingStubbing` for clarity.
+
+```java
+OngoingStubbing<S> ongoingStubbing = (OngoingStubbing<S>) mockingProgress.pullOngoingStubbing();
+```
+
+### 9. **Extract Class**:  
+The class is fairly cohesive, and there are no obvious opportunities for extracting new classes from this code.
+
+---
+
+### Refactored Code Example:
+```java
+package org.mockito.internal;
+
+import static org.mockito.internal.exceptions.Reporter.missingMethodInvocation;
+import static org.mockito.internal.progress.ThreadSafeMockingProgress.mockingProgress;
+import static org.mockito.internal.util.MockUtil.getInvocationContainer;
+import static org.mockito.internal.util.MockUtil.resetMock;
+import static org.mockito.internal.util.StringUtil.join;
+import static org.mockito.internal.verification.VerificationModeFactory.noInteractions;
+import static org.mockito.internal.verification.VerificationModeFactory.noMoreInteractions;
+
+import org.mockito.MockedStatic;
+import org.mockito.MockingDetails;
+import org.mockito.Mockito;
+import org.mockito.exceptions.base.MockitoAssertionError;
+import org.mockito.exceptions.base.MockitoException;
+import org.mockito.internal.debugging.LocationFactory;
+import org.mockito.internal.listeners.VerificationStartedNotifier;
+import org.mockito.internal.progress.MockingProgress;
+import org.mockito.internal.stubbing.InvocationContainerImpl;
+import org.mockito.internal.verification.MockAwareVerificationMode;
+import org.mockito.internal.verification.VerificationDataImpl;
+import org.mockito.invocation.Location;
+import org.mockito.invocation.MockHandler;
+import org.mockito.plugins.MockMaker;
+import org.mockito.stubbing.OngoingStubbing;
+import org.mockito.verification.VerificationMode;
+
+public final class MockedStaticImpl<T> implements MockedStatic<T> {
+
+    private final MockMaker.StaticMockControl<T> control;
+
+    private boolean closed;
+
+    private final Location location = LocationFactory.create();
+
+    protected MockedStaticImpl(MockMaker.StaticMockControl<T> control) {
+        this.control = control;
+    }
+
+    @Override
+    public <S> OngoingStubbing<S> when(Verification verificationAction) {
+        assertNotClosed();
+
+        try {
+            verificationAction.apply();
+        } catch (MockitoException exception) {
+            throw exception;
+        } catch (Throwable ignored) {
+        }
+
+        MockingProgress mockingProgress = mockingProgress();
+        mockingProgress.stubbingStarted();
+        @SuppressWarnings("unchecked")
+        OngoingStubbing<S> ongoingStubbing = (OngoingStubbing<S>) mockingProgress.pullOngoingStubbing();
+        if (ongoingStubbing == null) {
+            mockingProgress.reset();
+            throw missingMethodInvocation();
+        }
+        return ongoingStubbing;
+    }
+
+    @Override
+    public void verify(Verification verificationAction, VerificationMode mode) {
+        assertNotClosed();
+
+        MockingDetails mockingDetails = Mockito.mockingDetails(control.getType());
+        MockHandler handler = mockingDetails.getMockHandler();
+
+        VerificationStartedNotifier.notifyVerificationStarted(
+                handler.getMockSettings().getVerificationStartedListeners(), mockingDetails);
+
+        MockingProgress mockingProgress = mockingProgress();
+        VerificationMode actualMode = mockingProgress.maybeVerifyLazily(mode);
+        mockingProgress.verificationStarted(
+                new MockAwareVerificationMode(
+                        control.getType(), actualMode, mockingProgress.verificationListeners()));
+
+        try {
+            verificationAction.apply();
+        } catch (MockitoException | MockitoAssertionError e) {
+            throw e;
+        } catch (Throwable t) {
+            String errorMessage = join(
+                "An unexpected error occurred while verifying a static stub",
+                "",
+                "To correctly verify a stub, invoke a single static method of "
+                + control.getType().getName()
+                + " in the provided lambda.",
+                "For example, if a method 'sample' was defined, provide a lambda or anonymous class containing the code",
+                "",
+                "() -> " + control.getType().getSimpleName() + ".sample()",
+                "or",
+                control.getType().getSimpleName() + "::sample"
+            );
+            throw new MockitoException(errorMessage, t);
+        }
+    }
+
+    @Override
+    public void reset() {
+        assertNotClosed();
+        resetMockingProgress();
+        resetMock(control.getType());
+    }
+
+    @Override
+    public void clearInvocations() {
+        assertNotClosed();
+        resetMockingProgress();
+        getInvocationContainer(control.getType()).clearInvocations();
+    }
+
+    @Override
+    public void verifyNoMoreInteractions() {
+        assertNotClosed();
+
+        mockingProgress().validateState();
+        InvocationContainerImpl invocations = getInvocationContainer(control.getType());
+        VerificationDataImpl data = new VerificationDataImpl(invocations, null);
+        noMoreInteractions().verify(data);
+    }
+
+    @Override
+    public void verifyNoInteractions() {
+        assertNotClosed();
+
+        mockingProgress().validateState();
+        InvocationContainerImpl invocations = getInvocationContainer(control.getType());
+        VerificationDataImpl data = new VerificationDataImpl(invocations, null);
+        noInteractions().verify(data);
+    }
+
+    @Override
+    public boolean isClosed() {
+        return closed;
+    }
+
+    @Override
+    public void close() {
+        assertNotClosed();
+
+        closed = true;
+        control.disable();
+    }
+
+    @Override
+    public void closeOnDemand() {
+        if (!closed) {
+            close();
+        }
+    }
+
+    private void assertNotClosed() {
+        if (closed) {
+            throw new MockitoException(
+                    join(
+                            "The static mock created at",
+                            location.toString(),
+                            "is already resolved and cannot longer be used"));
+        }
+    }
+
+    private void resetMockingProgress() {
+        MockingProgress mockingProgress = mockingProgress();
+        mockingProgress.validateState();
+        mockingProgress.reset();
+        mockingProgress.resetOngoingStubbing();
+    }
+
+    @Override
+    public String toString() {
+        return "static mock for " + control.getType().getName();
+    }
+}
+```
+
+### Summary of Changes:
+1. **Extracted Method**: `resetMockingProgress()` to reduce duplication.
+2. **Extracted Variable**: Error message in the `verify()` method.
+3. **Renamed Parameter**: `verification` to `verificationAction` for clarity.
+4. **Renamed Variable**: `stubbing` to `ongoingStubbing` for clarity.
+
+These changes make the code slightly cleaner, easier to maintain, and reduce redundancy. However, the code remains mostly unchanged as it was already well-structured for its intended purpose.

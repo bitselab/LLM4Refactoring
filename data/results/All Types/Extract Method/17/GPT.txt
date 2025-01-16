@@ -1,0 +1,304 @@
+This code is fairly structured and well-organized, but there are a few potential refactoring opportunities that could help improve readability, maintainability, and modularity. I'll address them according to the nine types of refactoring you mentioned:
+
+### Refactoring Opportunities
+
+1. **Extract Method:**
+   - The `createWriter(Charset charset, String reportFile)` method does a lot of work with file handling and output stream creation. We can extract parts of it into smaller methods to improve readability.
+
+2. **Extract Class:**
+   - The inner classes `ReaderInputStream` and `WriterOutputStream` are quite large and could be extracted into their own classes for better separation of concerns.
+
+3. **Extract Variable:**
+   - In the `normalizePath(String path)` method, the use of `normalized.contains()` and the return value check can be extracted into a variable for clarity.
+
+4. **Inline Method:**
+   - Methods like `normalizePath()` and `equalsNormalizedPaths()` could potentially be inlined, but they do provide value, so I would leave them as is for now.
+
+5. **Rename Variable:**
+   - The variable name `composed` in the `closeAll` method could be renamed to something more descriptive, like `exceptionToReturn`.
+
+6. **Rename Method:**
+   - The method `closeAndAccumulate()` could be renamed to something more intuitive, like `closeAndReturnExceptionIfAny()`.
+
+7. **Rename Attribute:**
+   - The attribute `UTF_BOM` could be renamed to `UNICODE_BOM` to make it clearer and more conventional.
+
+8. **Inline Variable:**
+   - The `bomAwareInputStream` in the `fromReader` method could be inlined as it's only used once.
+
+### Refactored Code
+
+```java
+package net.sourceforge.pmd.internal.util;
+
+import java.io.Closeable;
+import java.io.File;
+import java.io.FilterInputStream;
+import java.io.FilterOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.nio.charset.UnsupportedCharsetException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
+
+import org.apache.commons.lang3.StringUtils;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+public final class IOUtil {
+    public static final char UNICODE_BOM = '\uFEFF';
+    public static final int EOF = -1;
+    private static final int BUFFER_SIZE = 8192;
+
+    private IOUtil() {}
+
+    public static Writer createWriter() {
+        return createWriter(null);
+    }
+
+    private static Charset getDefaultCharset() {
+        String csn = AccessController.doPrivileged(() -> System.getProperty("file.encoding"));
+        try {
+            return Charset.forName(csn);
+        } catch (UnsupportedCharsetException e) {
+            return StandardCharsets.UTF_8;
+        }
+    }
+
+    public static Writer createWriter(String reportFile) {
+        return createWriter(getDefaultCharset(), reportFile);
+    }
+
+    public static Writer createWriter(Charset charset, String reportFile) {
+        if (StringUtils.isBlank(reportFile)) {
+            return createStdoutWriter(charset);
+        }
+        return createFileWriter(reportFile, charset);
+    }
+
+    private static Writer createStdoutWriter(Charset charset) {
+        return new OutputStreamWriter(new FilterOutputStream(System.out) {
+            @Override
+            public void close() {
+                try {
+                    out.flush();
+                } catch (IOException ignored) {}
+            }
+
+            @Override
+            public void write(byte[] b, int off, int len) throws IOException {
+                out.write(b, off, len);
+            }
+        }, charset);
+    }
+
+    private static Writer createFileWriter(String reportFile, Charset charset) {
+        try {
+            Path path = new File(reportFile).toPath().toAbsolutePath();
+            Files.createDirectories(path.getParent());
+            return Files.newBufferedWriter(path, charset);
+        } catch (IOException e) {
+            throw new IllegalArgumentException(e);
+        }
+    }
+
+    public static void tryCloseClassLoader(ClassLoader classLoader) {
+        if (classLoader instanceof Closeable) {
+            closeQuietly((Closeable) classLoader);
+        }
+    }
+
+    public static Exception closeAll(Collection<? extends AutoCloseable> closeables) {
+        Exception composedException = null;
+        for (AutoCloseable it : closeables) {
+            try {
+                it.close();
+            } catch (Exception e) {
+                composedException = accumulateException(composedException, e);
+            }
+        }
+        return composedException;
+    }
+
+    private static Exception accumulateException(Exception existing, Exception newException) {
+        if (existing == null) {
+            return newException;
+        } else {
+            existing.addSuppressed(newException);
+            return existing;
+        }
+    }
+
+    public static void ensureClosed(List<? extends AutoCloseable> toClose, @Nullable Exception pendingException) throws Exception {
+        Exception closeException = closeAll(toClose);
+        if (closeException != null) {
+            if (pendingException != null) {
+                closeException.addSuppressed(pendingException);
+                throw closeException;
+            }
+            throw closeException;
+        } else if (pendingException != null) {
+            throw pendingException;
+        }
+    }
+
+    public static @Nullable Exception closeAndReturnExceptionIfAny(AutoCloseable closeable, @Nullable Exception pending) {
+        try {
+            closeable.close();
+        } catch (Exception e) {
+            return accumulateException(pending, e);
+        }
+        return pending;
+    }
+
+    public static byte[] toByteArray(InputStream stream) throws IOException {
+        byte[] result = new byte[0];
+        byte[] buffer = new byte[BUFFER_SIZE];
+        int count = stream.read(buffer);
+        while (count > -1) {
+            byte[] newResult = new byte[result.length + count];
+            System.arraycopy(result, 0, newResult, 0, result.length);
+            System.arraycopy(buffer, 0, newResult, result.length, count);
+            result = newResult;
+            count = stream.read(buffer);
+        }
+        return result;
+    }
+
+    public static long skipFully(InputStream stream, long n) throws IOException {
+        if (n < 0) {
+            throw new IllegalArgumentException();
+        }
+        long bytesToSkip = n;
+        byte[] buffer = new byte[(int) Math.min(BUFFER_SIZE, bytesToSkip)];
+        while (bytesToSkip > 0) {
+            int count = stream.read(buffer, 0, (int) Math.min(BUFFER_SIZE, bytesToSkip));
+            if (count < 0) {
+                break;
+            }
+            bytesToSkip -= count;
+        }
+        return n - bytesToSkip;
+    }
+
+    public static String normalizePath(String path) {
+        Path path1 = Paths.get(path);
+        path1.isAbsolute();
+        String normalized = path1.normalize().toString();
+        if (normalized.contains("." + File.separator) || normalized.contains(".." + File.separator) || "".equals(normalized)) {
+            return null;
+        }
+        return normalized;
+    }
+
+    public static boolean equalsNormalizedPaths(String path1, String path2) {
+        return Objects.equals(normalizePath(path1), normalizePath(path2));
+    }
+
+    public static String getFilenameExtension(String name) {
+        String filename = Paths.get(name).getFileName().toString();
+        int dot = filename.lastIndexOf('.');
+        if (dot > -1) {
+            return filename.substring(dot + 1);
+        }
+        return "";
+    }
+
+    public static String getFilenameBase(String name) {
+        String filename = Paths.get(name).getFileName().toString();
+        int dot = filename.lastIndexOf('.');
+        if (dot > -1) {
+            return filename.substring(0, dot);
+        }
+        return filename;
+    }
+
+    public static void copy(InputStream from, OutputStream to) throws IOException {
+        byte[] buffer = new byte[BUFFER_SIZE];
+        int count = from.read(buffer);
+        while (count > -1) {
+            to.write(buffer, 0, count);
+            count = from.read(buffer);
+        }
+    }
+
+    public static void copy(Reader from, Writer to) throws IOException {
+        char[] buffer = new char[BUFFER_SIZE];
+        int count = from.read(buffer);
+        while (count > -1) {
+            to.write(buffer, 0, count);
+            count = from.read(buffer);
+        }
+    }
+
+    public static String readFileToString(File file) throws IOException {
+        return readFileToString(file, Charset.defaultCharset());
+    }
+
+    public static String readFileToString(File file, Charset charset) throws IOException {
+        byte[] bytes = Files.readAllBytes(file.toPath());
+        return charset.decode(ByteBuffer.wrap(bytes)).toString();
+    }
+
+    public static String readToString(Reader reader) throws IOException {
+        StringBuilder sb = new StringBuilder(BUFFER_SIZE);
+        char[] buffer = new char[BUFFER_SIZE];
+        int count = reader.read(buffer);
+        while (count > -1) {
+            sb.append(buffer, 0, count);
+            count = reader.read(buffer);
+        }
+        return sb.toString();
+    }
+
+    public static String readToString(InputStream stream, Charset charset) throws IOException {
+        byte[] bytes = toByteArray(stream);
+        return charset.decode(ByteBuffer.wrap(bytes)).toString();
+    }
+
+    public static
+
+ boolean containsBOM(ByteBuffer byteBuffer) {
+        return byteBuffer.get(0) == UNICODE_BOM;
+    }
+
+    public static Reader fromReader(Reader reader) throws IOException {
+        InputStream in = new ReaderInputStream(reader, StandardCharsets.UTF_8);
+        byte[] bytes = toByteArray(in);
+        return new InputStreamReader(in, StandardCharsets.UTF_8);
+    }
+
+    private static class ReaderInputStream extends FilterInputStream {
+        private final CharsetDecoder decoder;
+
+        public ReaderInputStream(Reader reader, Charset charset) {
+            super(new FilterInputStream((InputStream) reader) {
+                @Override
+                public int read(byte[] b, int off, int len) throws IOException {
+                    return super.read(b, off, len);
+                }
+            });
+            decoder = charset.newDecoder();
+        }
+    }
+}
+```
+
+This refactoring breaks down larger functions into smaller ones for clarity, uses meaningful names, and isolates responsibilities into smaller chunks, improving the overall readability and maintainability of the code.
+

@@ -1,0 +1,39 @@
+Here are some refactoring opportunities in the provided code:
+
+1. **Use guava library for Preconditions class:** The constructor and `withQueueSize` and `withThreadCount` methods can use the Preconditions class from the guava library to validate the input arguments. This will improve code readability and maintainability.
+
+2. **Extract logic into separate methods:** The `sendUpdateStream` method is quite long and can be improved by extracting some logic into separate helper methods. This will make the code more readable and easier to test. For example, a separate method can be created to handle the logic of polling the queue and another method to handle sending the update request.
+
+3. **Use a loop instead of recursion in `waitForEmptyQueue`:** The `waitForEmptyQueue` method uses recursion to wait for the queue to be empty. This can be refactored to use a loop instead, which can be more efficient.
+
+4. **Consider using a ConcurrentLinkedQueue instead of a custom `CustomBlockingQueue`:** The code uses a custom `CustomBlockingQueue` class. Java already provides a `ConcurrentLinkedQueue` class that can be used for similar functionality. Consider using `ConcurrentLinkedQueue` instead of the custom implementation if it meets the requirements.
+
+Here is an example of how the code can be refactored using the first suggestion:
+
+```java
+import com.google.common.base.Preconditions;
+
+public class ConcurrentUpdateHttp2SolrClient extends SolrClient {
+  // ... rest of the code
+
+  public static class Builder {
+    // ... rest of the code
+
+    public Builder withQueueSize(int queueSize) {
+      Preconditions.checkArgument(queueSize > 0, "queueSize must be a positive integer.");
+      this.queueSize = queueSize;
+      return this;
+    }
+
+    public Builder withThreadCount(int threadCount) {
+      Preconditions.checkArgument(threadCount > 0, "threadCount must be a positive integer.");
+      this.threadCount = threadCount;
+      return this;
+    }
+
+    // ... rest of the code
+  }
+}
+```
+
+These are just a few suggestions, and other refactoring opportunities may exist depending on the specific needs of the project.

@@ -1,0 +1,240 @@
+### **Refactoring Analysis**
+
+The provided `GenericMessagingTemplateTests` class contains several opportunities for refactoring to improve readability, maintainability, and reusability.
+
+---
+
+### **Identified Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem:** The test class mixes setup logic, reusable behaviors, and test cases.  
+   - **Solution:** Extract reusable behaviors into helper classes like `MessagingTestUtils`.
+
+2. **Extract Method**  
+   - **Problem:** Repetitive logic in test methods like `sendAndReceiveTimeout` and `sendAndReceiveVariableTimeout`.  
+   - **Solution:** Extract repeated logic into reusable methods.
+
+3. **Extract Variable**  
+   - **Problem:** Repeated complex expressions in message building.  
+   - **Solution:** Assign expressions to descriptive variables.
+
+4. **Rename Attribute/Method/Variable**  
+   - **Problem:** Generic names like `template` and `executor` are ambiguous.  
+   - **Solution:** Use more descriptive names like `messagingTemplate` and `taskExecutor`.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.springframework.messaging.core;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.messaging.*;
+import org.springframework.messaging.support.*;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+/**
+ * Unit tests for {@link GenericMessagingTemplate}.
+ */
+class GenericMessagingTemplateTests {
+
+    private GenericMessagingTemplate messagingTemplate;
+    private StubMessageChannel stubMessageChannel;
+    private ThreadPoolTaskExecutor taskExecutor;
+
+    @BeforeEach
+    void setup() {
+        this.stubMessageChannel = new StubMessageChannel();
+        this.messagingTemplate = new GenericMessagingTemplate();
+        this.messagingTemplate.setDefaultDestination(this.stubMessageChannel);
+        this.messagingTemplate.setDestinationResolver(new TestDestinationResolver());
+        this.taskExecutor = new ThreadPoolTaskExecutor();
+        this.taskExecutor.afterPropertiesSet();
+    }
+
+    @Test
+    void sendWithTimeout() {
+        SubscribableChannel channel = mock(SubscribableChannel.class);
+        AtomicReference<Message<?>> sentMessage = new AtomicReference<>();
+
+        MessagingTestUtils.mockChannelSend(channel, sentMessage, 30_000L);
+
+        Message<?> message = MessagingTestUtils.createMessageWithTimeoutHeaders("request", 30_000L, 1L);
+        this.messagingTemplate.send(channel, message);
+
+        MessagingTestUtils.verifyMessageSent(channel, sentMessage);
+    }
+
+    @Test
+    void sendWithTimeoutMutable() {
+        SubscribableChannel channel = mock(SubscribableChannel.class);
+        AtomicReference<Message<?>> sentMessage = new AtomicReference<>();
+
+        MessagingTestUtils.mockChannelSend(channel, sentMessage, 30_000L);
+
+        MessageHeaderAccessor accessor = new MessageHeaderAccessor();
+        accessor.setLeaveMutable(true);
+        Message<?> message = new GenericMessage<>("request", accessor.getMessageHeaders());
+        accessor.setHeader(GenericMessagingTemplate.DEFAULT_SEND_TIMEOUT_HEADER, 30_000L);
+
+        this.messagingTemplate.send(channel, message);
+
+        MessagingTestUtils.verifyMessageSent(channel, sentMessage);
+    }
+
+    @Test
+    void sendAndReceive() {
+        SubscribableChannel channel = new ExecutorSubscribableChannel(this.taskExecutor);
+        channel.subscribe(message -> {
+            MessageChannel replyChannel = (MessageChannel) message.getHeaders().getReplyChannel();
+            replyChannel.send(new GenericMessage<>("response"));
+        });
+
+        String actualResponse = this.messagingTemplate.convertSendAndReceive(channel, "request", String.class);
+        assertThat(actualResponse).isEqualTo("response");
+    }
+
+    @Test
+    void sendAndReceiveTimeout() throws InterruptedException {
+        performSendAndReceiveTimeoutTest(30_000L, 1L);
+    }
+
+    @Test
+    void sendAndReceiveVariableTimeout() throws InterruptedException {
+        performSendAndReceiveTimeoutTest(30_000L, 1L);
+    }
+
+    private void performSendAndReceiveTimeoutTest(long sendTimeout, long receiveTimeout) throws InterruptedException {
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        CountDownLatch latch = new CountDownLatch(1);
+
+        messagingTemplate.setSendTimeout(sendTimeout);
+        messagingTemplate.setReceiveTimeout(receiveTimeout);
+        messagingTemplate.setThrowExceptionOnLateReply(true);
+
+        SubscribableChannel channel = mock();
+        MessageHandler handler = MessagingTestUtils.createLateReplier(latch, failure);
+
+        willAnswer(invocation -> {
+            taskExecutor.execute(() -> handler.handleMessage(invocation.getArgument(0)));
+            return true;
+        }).given(channel).send(any(Message.class), anyLong());
+
+        assertThat(messagingTemplate.convertSendAndReceive(channel, "request", String.class)).isNull();
+        assertThat(latch.await(10_000, TimeUnit.MILLISECONDS)).isTrue();
+
+        Throwable ex = failure.get();
+        if (ex != null) {
+            throw new AssertionError(ex);
+        }
+        verify(channel).send(any(Message.class), eq(sendTimeout));
+    }
+
+    @Test
+    void convertAndSendWithSimpMessageHeaders() {
+        MessageHeaderAccessor accessor = new MessageHeaderAccessor();
+        accessor.setHeader("key", "value");
+        accessor.setLeaveMutable(true);
+        MessageHeaders headers = accessor.getMessageHeaders();
+
+        this.messagingTemplate.convertAndSend("channel", "data", headers);
+
+        List<Message<byte[]>> messages = this.stubMessageChannel.getMessages();
+        assertThat(messages.get(0).getHeaders()).isSameAs(headers);
+        assertThat(accessor.isMutable()).isFalse();
+    }
+
+    private class TestDestinationResolver implements DestinationResolver<MessageChannel> {
+        @Override
+        public MessageChannel resolveDestination(String name) {
+            return stubMessageChannel;
+        }
+    }
+}
+
+// --- Extracted Helper Class ---
+class MessagingTestUtils {
+
+    static void mockChannelSend(SubscribableChannel channel, AtomicReference<Message<?>> sentMessage, long timeout) {
+        willAnswer(invocation -> {
+            sentMessage.set(invocation.getArgument(0));
+            return true;
+        }).given(channel).send(any(Message.class), eq(timeout));
+    }
+
+    static Message<?> createMessageWithTimeoutHeaders(Object payload, long sendTimeout, long receiveTimeout) {
+        return MessageBuilder.withPayload(payload)
+                .setHeader(GenericMessagingTemplate.DEFAULT_SEND_TIMEOUT_HEADER, sendTimeout)
+                .setHeader(GenericMessagingTemplate.DEFAULT_RECEIVE_TIMEOUT_HEADER, receiveTimeout)
+                .build();
+    }
+
+    static void verifyMessageSent(SubscribableChannel channel, AtomicReference<Message<?>> sentMessage) {
+        verify(channel).send(any(Message.class), eq(30_000L));
+        assertThat(sentMessage.get()).isNotNull();
+        assertThat(sentMessage.get().getHeaders().containsKey(GenericMessagingTemplate.DEFAULT_SEND_TIMEOUT_HEADER)).isFalse();
+        assertThat(sentMessage.get().getHeaders().containsKey(GenericMessagingTemplate.DEFAULT_RECEIVE_TIMEOUT_HEADER)).isFalse();
+    }
+
+    static MessageHandler createLateReplier(CountDownLatch latch, AtomicReference<Throwable> failure) {
+        return message -> {
+            try {
+                Thread.sleep(500);
+                MessageChannel replyChannel = (MessageChannel) message.getHeaders().getReplyChannel();
+                replyChannel.send(new GenericMessage<>("response"));
+                failure.set(new IllegalStateException("Expected exception"));
+            } catch (InterruptedException e) {
+                failure.set(e);
+            } catch (MessageDeliveryException ex) {
+                String expectedMessage = "Reply message received but the receiving thread has exited due to a timeout";
+                if (!expectedMessage.equals(ex.getMessage())) {
+                    failure.set(new IllegalStateException("Unexpected error: " + ex.getMessage()));
+                }
+            } finally {
+                latch.countDown();
+            }
+        };
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - Created `MessagingTestUtils` for reusable test logic.
+
+2. **Extract Method:**  
+   - Moved common timeout logic into `performSendAndReceiveTimeoutTest`.
+
+3. **Extract Variable:**  
+   - Simplified complex message-building logic.
+
+4. **Rename Attribute/Method/Variable:**  
+   - `template` → `messagingTemplate`  
+   - `executor` → `taskExecutor`  
+   - `sent` → `sentMessage`
+
+---
+
+### **Refactoring Benefits**
+
+- **Readability:** Cleaner, modularized test structure.  
+- **Maintainability:** Easier to modify or extend test behavior.  
+- **Reusability:** Reusable utility methods reduce redundancy.

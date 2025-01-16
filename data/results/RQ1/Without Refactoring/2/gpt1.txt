@@ -1,0 +1,97 @@
+Upon reviewing the code snippet, there are a few areas where we could refactor the code for readability and maintainability. While the code itself is functional, the refactoring suggestions focus on improving clarity and making the class more extensible.
+
+### Refactoring Opportunities
+
+1. **Constants for file types**: The use of integer constants (`TYPE_FILE` and `TYPE_DIRECTORY`) is a good practice. However, they could be further clarified by using an `enum` for better type safety and readability. This would also avoid magic numbers and make the code more self-documenting.
+   
+2. **Javadoc improvements**: The Javadoc for the `compare` method could be more detailed, especially in explaining how the comparison works and why it's using `getType` instead of comparing file names, sizes, or other attributes.
+
+3. **Code readability**: The `getType` method is simple but the ternary operator (`file.isDirectory() ? TYPE_DIRECTORY : TYPE_FILE`) could be clearer with a switch-case approach if the complexity increases later. For now, this is fine, but it’s something to think about for future extensions.
+
+4. **Reverse comparator**: The `ReverseFileComparator` is used to generate a reverse comparator, which is a good approach. However, this part might benefit from a static method to encapsulate the logic of reverse comparator creation. This isn't strictly necessary, but it could be useful if more comparator inversions are needed in the future.
+
+### Refactored Code
+
+Here’s a refactored version of the code:
+
+```java
+package org.apache.commons.io.comparator;
+
+import java.io.File;
+import java.io.Serializable;
+import java.util.Comparator;
+
+/**
+ * Comparator for directories and files.
+ * Directories are considered "less than" files when compared.
+ */
+public class DirectoryFileComparator extends AbstractFileComparator implements Serializable {
+
+    private static final long serialVersionUID = 296132640160964395L;
+
+    /** Singleton default comparator instance */
+    public static final Comparator<File> DIRECTORY_COMPARATOR = new DirectoryFileComparator();
+
+    /** Singleton reverse default comparator instance */
+    public static final Comparator<File> DIRECTORY_REVERSE = new ReverseFileComparator(DIRECTORY_COMPARATOR);
+
+    /**
+     * Enum for file types to improve readability and maintainability.
+     */
+    private enum FileType {
+        DIRECTORY(1),
+        FILE(2);
+
+        private final int typeCode;
+
+        FileType(int typeCode) {
+            this.typeCode = typeCode;
+        }
+
+        public int getTypeCode() {
+            return typeCode;
+        }
+    }
+
+    /**
+     * Compares the two files using the {@link File#isDirectory()} method.
+     *
+     * @param file1 The first file to compare.
+     * @param file2 The second file to compare.
+     * @return a negative integer, zero, or a positive integer as the first file is less than, equal to, or greater than the second.
+     */
+    @Override
+    public int compare(final File file1, final File file2) {
+        return Integer.compare(getType(file1).getTypeCode(), getType(file2).getTypeCode());
+    }
+
+    /**
+     * Determines the file type.
+     *
+     * @param file The file.
+     * @return the {@link FileType} of the file.
+     */
+    private FileType getType(final File file) {
+        return file.isDirectory() ? FileType.DIRECTORY : FileType.FILE;
+    }
+}
+```
+
+### Key Refactoring Points
+
+1. **Enum for `FileType`**: 
+   - Replaced the integer constants with an enum (`FileType`), which makes the code more type-safe and improves readability.
+   - The `getTypeCode()` method in the enum allows us to retrieve the code value (`1` for directories and `2` for files), but it's now part of a well-defined type.
+   
+2. **`Integer.compare`**: 
+   - Using `Integer.compare()` instead of subtracting the type codes (`getType(file1) - getType(file2)`) makes the comparison more semantically clear and avoids potential issues with integer overflow.
+
+3. **Improved Javadoc**: 
+   - Enhanced the description of the `compare()` method to explain the comparison logic more clearly.
+
+4. **FileType Enum**: 
+   - By encapsulating the file types as an enum, it's easier to extend this in the future if needed (e.g., adding more types, like symbolic links).
+
+### Conclusion
+
+The refactoring introduces the `FileType` enum to replace the integer constants, improves clarity with `Integer.compare()`, and enhances documentation for maintainability. While these changes aren't strictly necessary, they can make the code more robust and easier to extend in the future.

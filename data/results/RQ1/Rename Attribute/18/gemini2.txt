@@ -1,0 +1,100 @@
+There are a few rename refactoring opportunities in the provided code snippet. Here are some suggestions:
+1. Rename `queue` to `updateQueue`: This better reflects the fact that the queue is specifically for storing updates.
+2. Rename `runners` to `updateRunners`: This clarifies that these runners are responsible for processing updates.
+3. Rename `streamDeletes` to `alwaysStreamDeletes`: This is a more positive and explicit way to indicate the behavior.
+4. Rename `END_UPDATE` to `END_OF_UPDATES`: This makes the constant name more descriptive.
+5. Rename `CustomBlockingQueue` to `UpdateBlockingQueue`: This clarifies the purpose of the queue.
+
+Here's the refactored code with the suggested renames:
+
+```java
+package org.apache.solr.client.solrj.impl;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.invoke.MethodHandles;
+import java.util.ArrayDeque;
+import java.util.Iterator;
+import java.util.Queue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrRequest;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.impl.ConcurrentUpdateSolrClient.Update;
+import org.apache.solr.client.solrj.request.UpdateRequest;
+import org.apache.solr.client.solrj.util.ClientUtils;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.params.UpdateParams;
+import org.apache.solr.common.util.ExecutorUtil;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.common.util.SolrNamedThreadFactory;
+import org.eclipse.jetty.client.api.Response;
+import org.eclipse.jetty.client.util.InputStreamResponseListener;
+import org.eclipse.jetty.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
+/**
+ * @lucene.experimental
+ */
+public class ConcurrentUpdateHttp2SolrClient extends SolrClient {
+    private static final long serialVersionUID = 1L;
+    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static final Update END_OF_UPDATES = new Update(null, null);
+
+    private Http2SolrClient client;
+    private final String basePath;
+    private final UpdateBlockingQueue updateQueue;
+    private final ExecutorService scheduler;
+    private final Queue<UpdateRunner> updateRunners;
+    private final int threadCount;
+
+    private boolean shutdownClient;
+    private boolean shutdownExecutor;
+    private long pollQueueTimeMillis;
+    private long stallTimeMillis;
+    private final boolean alwaysStreamDeletes;
+    private volatile boolean closed;
+    private volatile CountDownLatch lock = null; // used to block everything
+
+    private static class UpdateBlockingQueue implements Iterable<Update> {
+        private final BlockingQueue<Update> queue;
+        private final Semaphore available;
+        private final int queueSize;
+        private final Update backdoorE;
+
+        public UpdateBlockingQueue(int queueSize, int maxConsumers, Update backdoorE) {
+            queue = new LinkedBlockingQueue<>();
+            available = new Semaphore(queueSize);
+            this.queueSize = queueSize;
+            this.backdoorE = backdoorE;
+        }
+
+        public boolean offer(Update e) {
+            boolean success = available.tryAcquire();
+            if (success) {
+                queue.offer(e);
+            }
+            return success;
+        }
+
+        public boolean offer(Update e, long timeout, TimeUnit unit) throws InterruptedException {
+            boolean success = available.tryAcquire(timeout, unit);
+            if (success) {
+                queue.offer(e, timeout, unit);
+            }
+            return success;
+        }
+
+        public boolean isEmpty() {
+            return size() == 0;
+        }
+
+        public Update poll(long timeout, TimeUnit unit) throws InterruptedException {

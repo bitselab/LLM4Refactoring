@@ -1,0 +1,170 @@
+The given code snippet provides a clear structure for gathering Java environment details. However, there are several opportunities for refactoring to improve readability, maintainability, and reduce code duplication. Let's review the possible refactorings based on the nine types mentioned:
+
+### 1. **Extract Class**
+   There is no immediate need to extract any classes since the classes `JavaVendorInfo`, `JavaRuntimeEnvironmentInfo`, and `JavaVirtualMachineInfo` are already encapsulated and serve specific roles. However, extracting the logic for system property fetching into a utility class might be beneficial.
+
+### 2. **Extract Method**
+   The constructor logic in each inner class (e.g., `JavaVendorInfo`, `JavaRuntimeEnvironmentInfo`, `JavaVirtualMachineInfo`) repeats the pattern of fetching system properties. We can extract this into a helper method to reduce redundancy.
+
+### 3. **Extract Variable**
+   Extracting variables can make the code more readable by reducing the complexity of statements. The system properties could be stored in variables to make the code cleaner.
+
+### 4. **Inline Method**
+   There is no immediate use of methods that should be inlined, as the methods are already relatively simple.
+
+### 5. **Inline Variable**
+   There are no cases where inlining a variable would improve readability; the existing variable usage is fairly straightforward.
+
+### 6. **Rename Attribute**
+   The attribute names are clear and align with common Java conventions. No renaming is necessary here.
+
+### 7. **Rename Method**
+   The method names (`getVersion`, `getVendor`, etc.) are descriptive and aligned with conventions, so renaming is not necessary.
+
+### 8. **Rename Parameter**
+   There are no method parameters that need renaming, as the code does not have ambiguous or non-descriptive parameter names.
+
+### 9. **Rename Variable**
+   Similarly, the variables are descriptive and well-named, so no renaming is needed.
+
+---
+
+### Refactored Code
+
+The main opportunity for improvement lies in extracting the common pattern of fetching system properties into a utility method. Here’s the refactored code:
+
+```java
+package org.springframework.boot.info;
+
+/**
+ * Information about the Java environment the application is running in.
+ *
+ * @author Jonatan Ivanov
+ * @author Stephane Nicoll
+ * @since 2.6.0
+ */
+public class JavaInfo {
+
+  private final String version;
+  private final JavaVendorInfo vendor;
+  private final JavaRuntimeEnvironmentInfo runtime;
+  private final JavaVirtualMachineInfo jvm;
+
+  public JavaInfo() {
+    this.version = getSystemProperty("java.version");
+    this.vendor = new JavaVendorInfo();
+    this.runtime = new JavaRuntimeEnvironmentInfo();
+    this.jvm = new JavaVirtualMachineInfo();
+  }
+
+  public String getVersion() {
+    return this.version;
+  }
+
+  public JavaVendorInfo getVendor() {
+    return this.vendor;
+  }
+
+  public JavaRuntimeEnvironmentInfo getRuntime() {
+    return this.runtime;
+  }
+
+  public JavaVirtualMachineInfo getJvm() {
+    return this.jvm;
+  }
+
+  private String getSystemProperty(String property) {
+    return System.getProperty(property);
+  }
+
+  /**
+   * Information about the Java Vendor of the Java Runtime the application is running
+   * in.
+   *
+   * @since 2.7.0
+   */
+  public static class JavaVendorInfo {
+
+    private final String name;
+    private final String version;
+
+    public JavaVendorInfo() {
+      this.name = getSystemProperty("java.vendor");
+      this.version = getSystemProperty("java.vendor.version");
+    }
+
+    public String getName() {
+      return this.name;
+    }
+
+    public String getVersion() {
+      return this.version;
+    }
+
+  }
+
+  /**
+   * Information about the Java Runtime Environment the application is running in.
+   */
+  public static class JavaRuntimeEnvironmentInfo {
+
+    private final String name;
+    private final String version;
+
+    public JavaRuntimeEnvironmentInfo() {
+      this.name = getSystemProperty("java.runtime.name");
+      this.version = getSystemProperty("java.runtime.version");
+    }
+
+    public String getName() {
+      return this.name;
+    }
+
+    public String getVersion() {
+      return this.version;
+    }
+
+  }
+
+  /**
+   * Information about the Java Virtual Machine the application is running in.
+   */
+  public static class JavaVirtualMachineInfo {
+
+    private final String name;
+    private final String vendor;
+    private final String version;
+
+    public JavaVirtualMachineInfo() {
+      this.name = getSystemProperty("java.vm.name");
+      this.vendor = getSystemProperty("java.vm.vendor");
+      this.version = getSystemProperty("java.vm.version");
+    }
+
+    public String getName() {
+      return this.name;
+    }
+
+    public String getVendor() {
+      return this.vendor;
+    }
+
+    public String getVersion() {
+      return this.version;
+    }
+
+  }
+
+}
+```
+
+### Refactor Summary:
+
+1. **Extracted the repetitive logic of fetching system properties**: The method `getSystemProperty(String property)` is introduced to centralize the logic of getting system properties, reducing duplication.
+2. **Encapsulation remains intact**: Each inner class (`JavaVendorInfo`, `JavaRuntimeEnvironmentInfo`, `JavaVirtualMachineInfo`) remains self-contained with minimal changes.
+
+### Benefits:
+- **Maintainability**: Changes to how system properties are fetched only need to be made in one place.
+- **Readability**: The constructor logic in the inner classes is now cleaner and easier to read.
+
+This is a good example of refactoring to reduce redundancy and improve the code's long-term maintainability while preserving the original design.

@@ -1,0 +1,196 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - Break down large and complex methods like `readLine` and `readLines` for clarity.  
+   - Isolate repeated logic like skipping and resetting streams.  
+
+2. **Extract Variable:**  
+   - Use descriptive variable names instead of magic numbers.  
+
+3. **Inline Method:**  
+   - Inline trivial helper methods to simplify logic.  
+
+4. **Rename Method:**  
+   - `readFully` is overloaded with unclear intent; clarify names to avoid confusion.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.eclipse.jgit.util;
+
+import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.eclipse.jgit.internal.JGitText;
+import org.eclipse.jgit.util.io.SilentFileInputStream;
+
+/**
+ * Input/Output utilities
+ */
+public class IO {
+
+    private static final int DEFAULT_BUFFER_SIZE = 1024;
+
+    /**
+     * Read an entire local file into memory as a byte array.
+     */
+    public static byte[] readFile(File path) throws IOException {
+        return readFileWithLimit(path, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Read a local file up to a specified limit.
+     */
+    public static byte[] readFileWithLimit(File path, int limit) throws IOException {
+        try (SilentFileInputStream in = new SilentFileInputStream(path)) {
+            byte[] data = in.readNBytes(limit);
+            if (in.read() != -1) {
+                throw new IOException(MessageFormat.format(JGitText.get().fileIsTooLarge, path));
+            }
+            return data;
+        }
+    }
+
+    /**
+     * Read part of a file into memory as a byte array.
+     */
+    public static byte[] readPartialFile(File path, int limit) throws IOException {
+        try (SilentFileInputStream in = new SilentFileInputStream(path)) {
+            return in.readNBytes(limit);
+        }
+    }
+
+    /**
+     * Read an entire InputStream into a ByteBuffer.
+     */
+    public static ByteBuffer readStreamToBuffer(InputStream in, int sizeHint) throws IOException {
+        return ByteBuffer.wrap(in.readAllBytes());
+    }
+
+    /**
+     * Read exactly 'len' bytes from InputStream into a byte array.
+     */
+    public static void readExactBytes(InputStream input, byte[] buffer, int offset, int length) throws IOException {
+        int bytesRead = input.readNBytes(buffer, offset, length);
+        if (bytesRead != length) {
+            throw new EOFException(JGitText.get().shortReadOfBlock);
+        }
+    }
+
+    /**
+     * Read a whole byte array from InputStream.
+     */
+    public static void readExactBytes(InputStream input, byte[] buffer) throws IOException {
+        readExactBytes(input, buffer, 0, buffer.length);
+    }
+
+    /**
+     * Read as much as possible into a byte array from a channel.
+     */
+    public static int readFromChannel(ReadableByteChannel channel, byte[] buffer, int offset, int length) throws IOException {
+        int totalRead = 0;
+        while (length > 0) {
+            int bytesRead = channel.read(ByteBuffer.wrap(buffer, offset, length));
+            if (bytesRead <= 0) break;
+            offset += bytesRead;
+            length -= bytesRead;
+            totalRead += bytesRead;
+        }
+        return totalRead > 0 ? totalRead : -1;
+    }
+
+    /**
+     * Skip a number of bytes in InputStream.
+     */
+    public static void skipBytes(InputStream input, long bytesToSkip) throws IOException {
+        while (bytesToSkip > 0) {
+            long skipped = input.skip(bytesToSkip);
+            if (skipped <= 0) throw new EOFException(JGitText.get().shortSkipOfBlock);
+            bytesToSkip -= skipped;
+        }
+    }
+
+    /**
+     * Splits a string into lines.
+     */
+    public static List<String> splitIntoLines(String input) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder currentLine = new StringBuilder();
+
+        for (char c : input.toCharArray()) {
+            if (c == '\n') {
+                lines.add(currentLine.toString());
+                currentLine.setLength(0);
+            } else if (c == '\r') {
+                lines.add(currentLine.toString());
+                currentLine.setLength(0);
+            } else {
+                currentLine.append(c);
+            }
+        }
+        if (currentLine.length() > 0) {
+            lines.add(currentLine.toString());
+        }
+
+        return lines;
+    }
+
+    /**
+     * Reads the next line from a reader, including the trailing newline.
+     */
+    public static String readLineWithNewline(Reader reader, int sizeHint) throws IOException {
+        StringBuilder buffer = new StringBuilder(sizeHint > 0 ? sizeHint : DEFAULT_BUFFER_SIZE);
+        char[] chunk = new char[DEFAULT_BUFFER_SIZE];
+
+        while (true) {
+            int charsRead = reader.read(chunk);
+            if (charsRead == -1) break;
+
+            for (int i = 0; i < charsRead; i++) {
+                char c = chunk[i];
+                buffer.append(c);
+                if (c == '\n') return buffer.toString();
+            }
+        }
+        return buffer.toString();
+    }
+
+    private IO() {
+        // Prevent instantiation
+    }
+}
+```
+
+---
+
+### **Summary of Refactoring**
+
+1. **Extract Method:**  
+   - Separated file reading methods into `readFile`, `readFileWithLimit`, and `readPartialFile`.  
+   - Moved stream-skipping logic into `skipBytes`.
+
+2. **Extract Variable:**  
+   - Introduced `DEFAULT_BUFFER_SIZE` for buffer size consistency.
+
+3. **Rename Method:**  
+   - `readFully` → `readFile` and `readFileWithLimit` for clarity.  
+   - `readLine` → `readLineWithNewline` to clarify its behavior.
+
+4. **Inline Method:**  
+   - Removed redundant internal helpers by simplifying logic.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Readability:** Clearer method names and modular logic.  
+- **Maintainability:** Separated methods with specific responsibilities.  
+- **Usability:** Better-defined interfaces for common I/O operations.
+
+No further refactoring is necessary.

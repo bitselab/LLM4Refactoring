@@ -1,0 +1,34 @@
+Absolutely, there is an opportunity for Inline Method Refactoring in the provided code snippet. Here's the specific method that can be inlined:
+
+- **Method:** `_allPropsWriter`
+
+This method is a private helper function used within the `writeMap` method. It iterates through the `propMap` and writes specific key-value pairs to the `EntryWriter`. However, these operations can be directly included in the `writeMap` method for better readability and maintainability.
+
+Here's the refactored code with the inlined method:
+
+```java
+public class Replica extends ZkNodeProps implements MapWriter {
+  // ... (rest of the code unchanged)
+
+  @Override
+  public void writeMap(MapWriter.EntryWriter ew) throws IOException {
+    ew.putIfNotNull(ReplicaStateProps.CORE_NAME, core)
+        .putIfNotNull(ReplicaStateProps.NODE_NAME, node)
+        .putIfNotNull(ReplicaStateProps.TYPE, type.toString())
+        .putIfNotNull(ReplicaStateProps.STATE, getState().toString())
+        .putIfNotNull(ReplicaStateProps.LEADER, () -> isLeader() ? "true" : null)
+        .putIfNotNull(
+            ReplicaStateProps.FORCE_SET_STATE, propMap.get(ReplicaStateProps.FORCE_SET_STATE))
+        .putIfNotNull(ReplicaStateProps.BASE_URL, propMap.get(ReplicaStateProps.BASE_URL));
+    for (Map.Entry<String, Object> e : propMap.entrySet()) {
+      if (!ReplicaStateProps.WELL_KNOWN_PROPS.contains(e.getKey())) {
+        ew.putIfNotNull(e.getKey(), e.getValue());
+      }
+    }
+  }
+
+  // ... (rest of the code unchanged)
+}
+```
+
+By inlining the `_allPropsWriter` method, we eliminate unnecessary method calls and improve code clarity. The logic for writing key-value pairs now resides within the `writeMap` method, making the code easier to understand and maintain.

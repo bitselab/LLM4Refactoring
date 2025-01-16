@@ -1,0 +1,68 @@
+The given code snippet is well-structured and concise. However, there are some minor refactoring opportunities that could improve code maintainability and readability.
+
+### Refactoring Suggestions:
+1. **Extracting the common assertions**: The assertions in the tests are repetitive, and extracting them into a helper method can reduce redundancy.
+2. **Naming conventions**: The method names and variables are clear, so there’s no need for renaming.
+3. **Avoid unnecessary resource initialization**: The `try-with-resources` can be avoided for the singleton case since `CLOSED_INPUT_STREAM` and `INSTANCE` are constants.
+
+### Refactored Code:
+```java
+package org.apache.commons.io.input;
+
+import static org.apache.commons.io.IOUtils.EOF;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests {@link ClosedInputStream}.
+ */
+public class ClosedInputStreamTest {
+
+    private void assertEOF(ClosedInputStream cis) throws Exception {
+        assertEquals(EOF, cis.read(), "read()");
+    }
+
+    @Test
+    public void testRead() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertEOF(cis);
+        }
+    }
+
+    @Test
+    public void testReadArray() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertEOF(cis.read(new byte[4096]));
+            assertEOF(cis.read(new byte[1]));
+            assertEOF(cis.read(new byte[0]));
+        }
+    }
+
+    @Test
+    public void testReadArrayIndex() throws Exception {
+        try (ClosedInputStream cis = new ClosedInputStream()) {
+            assertEOF(cis.read(new byte[4096], 0, 1));
+            assertEOF(cis.read(new byte[1], 0, 1));
+            assertEOF(cis.read(new byte[0], 0, 0));
+        }
+    }
+
+    @Test
+    public void testSingleton() throws Exception {
+        // No need for try-with-resources here, as CLOSED_INPUT_STREAM and INSTANCE are constants
+        ClosedInputStream cis = ClosedInputStream.CLOSED_INPUT_STREAM;
+        assertEOF(cis);
+        
+        cis = ClosedInputStream.INSTANCE;
+        assertEOF(cis);
+    }
+}
+```
+
+### Explanation of Refactorings:
+1. **Extracted common assertions**: I created the helper method `assertEOF(ClosedInputStream cis)` to avoid repeating the `assertEquals(EOF, cis.read(), "read()")` in each test method.
+2. **Removed unnecessary `try-with-resources` for singletons**: Since the `CLOSED_INPUT_STREAM` and `INSTANCE` are constants, they don’t need to be wrapped in a `try-with-resources` block. This change avoids unnecessary resource management code for constants.
+
+### Conclusion:
+The refactored code is more maintainable and readable, but the original code was already well-structured.

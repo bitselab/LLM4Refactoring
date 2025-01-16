@@ -1,0 +1,112 @@
+## Refactoring Opportunities in the Code
+
+The provided code is well-written and follows good coding practices. However, there are a few minor refactoring opportunities that could be considered:
+
+**1. Extract Variable:** The string literal `"Integer"` in the `coverageStatement` method could be extracted into a variable to improve readability.
+
+**Refactored Code:**
+
+```java
+private static final String INTEGER_MESSAGE = "Integer";
+
+static void coverageStatement(Object o) {
+    switch (o) {
+        case String s:
+            System.out.println(s);
+            break;
+        case Integer i:
+            System.out.println(INTEGER_MESSAGE);
+            break;
+        default:    // Now exhaustive!
+            break;
+    }
+}
+```
+
+**2. Inline Variable:** The `INTEGER_MESSAGE` variable in the `coverageStatement` method is only used once. It could be inlined to simplify the code.
+
+**Refactored Code:**
+
+```java
+static void coverageStatement(Object o) {
+    switch (o) {
+        case String s:
+            System.out.println(s);
+            break;
+        case Integer i:
+            System.out.println("Integer");
+            break;
+        default:    // Now exhaustive!
+            break;
+    }
+}
+```
+
+**3. Rename Method:** The `testSealedExhaustive` method could be renamed to something more descriptive, such as `calculateValueBasedOnSealedType`.
+
+**Refactored Code:**
+
+```java
+static int calculateValueBasedOnSealedType(S s) {
+    return switch (s) {
+        case A a -> 1;
+        case B b -> 2;
+        case C c -> 3;
+    };
+}
+```
+
+**4. Rename Parameter:** The `i` parameter in the `testGenericSealedExhaustive` method could be renamed to something more descriptive, such as `sealedInstance`.
+
+**Refactored Code:**
+
+```java
+static int testGenericSealedExhaustive(I<Integer> sealedInstance) {
+    return switch (sealedInstance) {
+        // Exhaustive as no E case possible!
+        case F<Integer> bi -> 42;
+    };
+}
+```
+
+**5. Extract Method:** The switch statement in the `main` method could be extracted into a separate method to improve readability and maintainability.
+
+**Refactored Code:**
+
+```java
+public static void main(String[] args) {
+    System.out.println(coverage("a string"));
+    System.out.println(coverage(42));
+    System.out.println(coverage(new Object()));
+
+    coverageStatement("a string");
+    coverageStatement(21);
+    coverageStatement(new Object());
+
+    System.out.println("A:" + calculateValueBasedOnSealedType(new A()));
+    System.out.println("B:" + calculateValueBasedOnSealedType(new B()));
+    System.out.println("C:" + calculateValueBasedOnSealedType(new C(1)));
+
+    printSealedType(new A());
+    printSealedType(new B());
+    printSealedType(new C(2));
+
+    System.out.println("F:" + testGenericSealedExhaustive(new F<Integer>()));
+}
+
+private static void printSealedType(S s) {
+    switch (s) {
+        case A a :
+            System.out.println("A");
+            break;
+        case C c :
+            System.out.println("C");
+            break;
+        default:
+            System.out.println("default case, should be B");
+            break;
+    };
+}
+```
+
+It's important to note that these are just suggestions, and the decision of whether or not to refactor should be based on the specific needs of the project.

@@ -1,0 +1,126 @@
+## Refactoring Opportunities
+
+Based on your provided code snippet, here are some potential refactoring opportunities:
+
+**1. Extract Class:**
+
+* The `getSnapshotsToDelete()` method is quite complex and could be extracted into a separate class for better organization and readability. This class could be named `SnapshotDeletionEligibilityChecker`.
+
+**Refactored Code:**
+
+```java
+package org.elasticsearch.xpack.slm;
+
+// ... (rest of the code)
+
+class SnapshotDeletionEligibilityChecker {
+
+    private final String repositoryName;
+    private final SnapshotLifecyclePolicy policy;
+    private final Map<SnapshotId, RepositoryData.SnapshotDetails> snapshotsForPolicy;
+
+    public SnapshotDeletionEligibilityChecker(String repositoryName, SnapshotLifecyclePolicy policy, Map<SnapshotId, RepositoryData.SnapshotDetails> snapshotsForPolicy) {
+        this.repositoryName = repositoryName;
+        this.policy = policy;
+        this.snapshotsForPolicy = snapshotsForPolicy;
+    }
+
+    public List<Tuple<SnapshotId, String>> getSnapshotsToDelete() {
+        return snapshotsForPolicy.entrySet().stream().filter(e -> {
+            final var eligibleForDeletion = policy.getRetentionPolicy().isSnapshotEligibleForDeletion(e.getKey(), e.getValue(), snapshotsForPolicy);
+            logger.debug(
+                    "[{}]: testing snapshot [{}] deletion eligibility with policy [{}]: {}",
+                    repositoryName,
+                    e.getKey(),
+                    policy.getName(),
+                    eligibleForDeletion ? "ELIGIBLE" : "INELIGIBLE"
+            );
+            return eligibleForDeletion;
+        }).map(e -> Tuple.tuple(e.getKey(), policy.getName())).toList();
+    }
+}
+```
+
+**2. Extract Method:**
+
+* The code block that retrieves snapshot details from the snapshot info could be extracted into a separate method for better organization and reusability. This method could be named `getSnapshotDetailsFromInfo()` and placed within the `SLMGetExpiredSnapshotsAction` class.
+
+**Refactored Code:**
+
+```java
+package org.elasticsearch.xpack.slm;
+
+// ... (rest of the code)
+
+public class SLMGetExpiredSnapshotsAction extends ActionType<SLMGetExpiredSnapshotsAction.Response> {
+
+    // ... (rest of the class)
+
+    private static void getSnapshotDetailsFromInfo(
+            Executor executor,
+            Repository repository,
+            List<SnapshotId> snapshotsWithMissingDetails,
+            ActionListener<SnapshotDetailsByPolicy> listener
+    ) {
+        assert ThreadPool.assertCurrentThreadPool(ThreadPool.Names.MANAGEMENT);
+        final var snapshotDetailsByPolicy = new SnapshotDetailsByPolicy();
+
+        repository.getSnapshotInfo(
+                new GetSnapshotInfoContext(
+                        snapshotsWithMissingDetails,
+                        false,
+                        () -> false,
+                        (ignored, snapshotInfo) -> snapshotDetailsByPolicy.add(
+                                snapshotInfo.snapshotId(),
+                                RepositoryData.SnapshotDetails.fromSnapshotInfo(snapshotInfo)
+                        ),
+                        new ThreadedActionListener<>(executor, listener.map(ignored -> snapshotDetailsByPolicy))
+                )
+        );
+    }
+}
+```
+
+**3. Inline Variable:**
+
+* The variable `snapshotsWithMissingDetails` in the `getSnapshotDetailsByPolicy()` method could be inlined directly into the `getSnapshotInfo()` call. This would reduce the number of variables and improve code conciseness.
+
+**Refactored Code:**
+
+```java
+package org.elasticsearch.xpack.slm;
+
+// ... (rest of the code)
+
+public class SLMGetExpiredSnapshotsAction extends ActionType<SLMGetExpiredSnapshotsAction.Response> {
+
+    // ... (rest of the class)
+
+    private static void getSnapshotDetailsByPolicy(
+            Executor executor,
+            Repository repository,
+            RepositoryData repositoryData,
+            ActionListener<SnapshotDetailsByPolicy> listener
+    ) {
+        assert ThreadPool.assertCurrentThreadPool(ThreadPool.Names.MANAGEMENT);
+        final var snapshotDetailsByPolicy = new SnapshotDetailsByPolicy();
+
+        repository.getSnapshotInfo(
+                new GetSnapshotInfoContext(
+                        repositoryData.getSnapshotIds().stream()
+                                .filter(repositoryData::hasMissingDetails)
+                                .toList(),
+                        false,
+                        () -> false,
+                        (ignored, snapshotInfo) -> snapshotDetailsByPolicy.add(
+                                snapshotInfo.snapshotId(),
+                                RepositoryData.SnapshotDetails.fromSnapshotInfo(snapshotInfo)
+                        ),
+                        new ThreadedActionListener<>(executor, listener.map(ignored -> snapshotDetailsByPolicy))
+                )
+        );
+    }
+}
+```
+
+These are just a few potential refactoring opportunities based on the provided code snippet. There may be other opportunities depending on the specific context and requirements of your project.

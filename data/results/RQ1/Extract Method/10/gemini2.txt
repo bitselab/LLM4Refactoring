@@ -1,0 +1,75 @@
+## Refactoring Opportunities in FileChannelDataBlock
+
+There are two potential opportunities for extract method refactoring in the provided code:
+
+1. **Refactoring `ensureOpen` in both `FileChannelDataBlock` and `ManagedFileChannel`:**
+
+Both classes have a very similar `ensureOpen` method that checks if the channel is open and throws an exception if not. This can be refactored into a single private method within `ManagedFileChannel` to avoid code duplication.
+
+Here's the refactored code:
+
+```java
+class FileChannelDataBlock implements CloseableDataBlock {
+  // ... other code ...
+
+  private void ensureOpen(Supplier<E> exceptionSupplier) throws E {
+    channel.ensureOpen(exceptionSupplier);
+  }
+
+  // ... other code ...
+
+  static class ManagedFileChannel {
+    // ... other code ...
+
+    private void ensureOpen(Supplier<E> exceptionSupplier) throws E {
+      synchronized (this.lock) {
+        if (this.referenceCount == 0 || !this.fileChannel.isOpen()) {
+          throw exceptionSupplier.get();
+        }
+      }
+    }
+
+    // ... other code ...
+  }
+}
+```
+
+2. **Refactoring `read` logic in `ManagedFileChannel`:**
+
+The `read` method in `ManagedFileChannel` has some repetitive logic for handling buffer position and size. This can be refactored into a separate private method to improve readability.
+
+Here's the refactored code:
+
+```java
+class FileChannelDataBlock implements CloseableDataBlock {
+  // ... other code ...
+
+  static class ManagedFileChannel {
+    // ... other code ...
+
+    private int readFromChannel(ByteBuffer dst, long position) throws IOException {
+      synchronized (this.lock) {
+        if (position < this.bufferPosition || position >= this.bufferPosition + this.bufferSize) {
+          this.buffer.clear();
+          this.bufferSize = this.fileChannel.read(this.buffer, position);
+          this.bufferPosition = position;
+        }
+        if (this.bufferSize <= 0) {
+          return this.bufferSize;
+        }
+        // ... rest of the read logic using buffer...
+      }
+    }
+
+    int read(ByteBuffer dst, long position) throws IOException {
+      int bytesRead = readFromChannel(dst, position);
+      // ... rest of the logic using bytesRead ...
+      return bytesRead;
+    }
+
+    // ... other code ...
+  }
+}
+```
+
+These refactorings improve code readability and maintainability by reducing code duplication and separating concerns.

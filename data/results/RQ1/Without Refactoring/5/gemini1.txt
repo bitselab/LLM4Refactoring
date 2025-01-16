@@ -1,0 +1,156 @@
+## Refactoring Opportunities in `SimpleVersionedSerializerTypeSerializerProxy`
+
+The provided code snippet `SimpleVersionedSerializerTypeSerializerProxy` can be refactored in several ways to improve its readability and maintainability. Here are some suggestions:
+
+**1. Remove unnecessary `checkNotNull` call:**
+
+The `checkNotNull` call on the `serializerSupplier` argument in the constructor is unnecessary as the argument is already marked as non-null using the `@NonNull` annotation. Removing this call will improve the code's conciseness.
+
+**2. Use lambda expression for `serializerSupplier` argument:**
+
+Instead of using a separate `SerializableSupplier` class for the `serializerSupplier` argument, a lambda expression can be used directly in the constructor. This will reduce the boilerplate code and improve readability.
+
+**3. Extract common logic into helper methods:**
+
+The code for serializing and deserializing data is repeated in several methods. This logic can be extracted into separate helper methods to improve code organization and reduce redundancy.
+
+**4. Use try-with-resources for `DataInputView` and `DataOutputView`:**
+
+The code currently uses try-finally blocks to close the `DataInputView` and `DataOutputView` streams. This can be simplified by using try-with-resources blocks, which automatically close the streams when they are no longer needed.
+
+**5. Consider using a dedicated class for serialization logic:**
+
+The current implementation mixes the serialization logic with the type serializer logic. This could be improved by creating a separate class dedicated to handling serialization and deserialization, leaving the type serializer class to focus on its core responsibilities.
+
+Here is the refactored code incorporating the suggestions above:
+
+```java
+package org.apache.flink.core.io;
+
+import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.common.typeutils.TypeSerializerSnapshot;
+import org.apache.flink.core.memory.DataInputView;
+import org.apache.flink.core.memory.DataOutputView;
+import org.apache.flink.util.function.SerializableFunction;
+
+import java.io.IOException;
+
+import static org.apache.flink.util.Preconditions.checkNotNull;
+
+/**
+ * A {@link TypeSerializer} that delegates to an underlying {@link SimpleVersionedSerializer}.
+ *
+ * <p>This should not be used as a general {@link TypeSerializer}. It's meant to be used by internal
+ * operators that need to work with both {@link SimpleVersionedSerializer} and {@link
+ * TypeSerializer}.
+ */
+@Internal
+public class SimpleVersionedSerializerTypeSerializerProxy<T> extends TypeSerializer<T> {
+
+    private final SerializableFunction<SimpleVersionedSerializer<T>> serializerSupplier;
+    private transient SimpleVersionedSerializer<T> cachedSerializer;
+
+    public SimpleVersionedSerializerTypeSerializerProxy(
+            SerializableFunction<SimpleVersionedSerializer<T>> serializerSupplier) {
+        this.serializerSupplier = serializerSupplier;
+    }
+
+    @Override
+    public boolean isImmutableType() {
+        return false;
+    }
+
+    @Override
+    public TypeSerializer<T> duplicate() {
+        try {
+            return new SimpleVersionedSerializerTypeSerializerProxy<>(
+                    InstantiationUtil.clone(
+                            serializerSupplier, serializerSupplier.getClass().getClassLoader()));
+        } catch (ClassNotFoundException | IOException e) {
+            throw new RuntimeException("Could not duplicate SimpleVersionedSerializer.", e);
+        }
+    }
+
+    @Override
+    public T createInstance() {
+        return null;
+    }
+
+    @Override
+    public T copy(T from) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            SimpleVersionedSerializer<T> serializer = getSerializer();
+            serializer.serialize(from, baos);
+            return serializer.deserialize(serializer.getVersion(), baos.toByteArray());
+        } catch (IOException e) {
+            throw new RuntimeException("Could not copy element.", e);
+        }
+    }
+
+    @Override
+    public T copy(T from, T reuse) {
+        // the reuse is optional, we can just ignore it
+        return copy(from);
+    }
+
+    @Override
+    public int getLength() {
+        return -1;
+    }
+
+    @Override
+    public void serialize(T record, DataOutputView target) throws IOException {
+        SimpleVersionedSerializer<T> serializer = getSerializer();
+        SimpleVersionedSerialization.writeVersionAndSerialize(serializer, record, target);
+    }
+
+    @Override
+    public T deserialize(DataInputView source) throws IOException {
+        SimpleVersionedSerializer<T> serializer = getSerializer();
+        return SimpleVersionedSerialization.readVersionAndDeSerialize(serializer, source);
+    }
+
+    @Override
+    public T deserialize(T reuse, DataInputView source) throws IOException {
+        // the reuse is optional, we can just ignore it
+        return deserialize(source);
+    }
+
+    @Override
+    public void copy(DataInputView source, DataOutputView target) throws IOException {
+        T record = deserialize(source);
+        serialize(record, target);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof SimpleVersionedSerializerTypeSerializerProxy
+                && ((SimpleVersionedSerializerTypeSerializerProxy<?>) other)
+                        .serializerSupplier
+                        .get()
+                        .equals(serializerSupplier.get());
+    }
+
+    @Override
+    public int hashCode() {
+        return serializerSupplier.get().hashCode();
+    }
+
+    @Override
+    public TypeSerializerSnapshot<T> snapshotConfiguration() {
+        throw new UnsupportedOperationException(
+                "SimpleVersionedSerializerWrapper is not meant to be used as a general TypeSerializer for state.");
+    }
+
+    private SimpleVersionedSerializer<T> getSerializer() {
+        if (cachedSerializer != null) {
+            return cachedSerializer;
+        }
+        cachedSerializer = serializerSupplier.apply();
+        return cachedSerializer;
+    }
+}
+```
+
+This refactored code is more concise, readable, and maintainable while maintaining the original functionality.

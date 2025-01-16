@@ -1,0 +1,106 @@
+The code has some opportunities for refactoring to improve clarity, reduce duplication, and improve maintainability. The key areas of refactoring include:
+
+### Refactoring Opportunities:
+1. **Extract Method**:
+   - Both `guessUltimateHome` and `guessCommunityHome` methods have a similar structure: they start from a root and move up the directory tree, checking for marker files. This common logic can be extracted into a shared helper method.
+
+2. **Extract Variable**:
+   - In both `guessUltimateHome` and `guessCommunityHome`, the marker file check paths are repeated with slight variations (e.g., checking "ultimate" and "community" directories). Extracting these paths into variables would reduce duplication and improve readability.
+
+3. **Inline Variable**:
+   - `start` and `home` are used very similarly in both `guessUltimateHome` and `guessCommunityHome`. If there’s no real difference between them in their usage, consider inlining one of them to reduce redundancy.
+
+4. **Rename Method**:
+   - Methods like `getSomeRoot` could be more descriptive. A better name like `getIdeaHomeDirectory` would be more aligned with its responsibility of locating the home directory.
+
+### Refactored Code:
+
+```java
+package org.jetbrains.intellij.build;
+
+import com.intellij.util.lang.UrlClassLoader;
+import org.jetbrains.intellij.build.dependencies.BuildDependenciesCommunityRoot;
+
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public final class IdeaProjectLoaderUtil {
+    private static final String JPS_BOOTSTRAP_COMMUNITY_HOME_ENV_NAME = "JPS_BOOTSTRAP_COMMUNITY_HOME";
+    private static final String ULTIMATE_REPO_MARKER_FILE = ".ultimate.root.marker";
+    private static final String COMMUNITY_REPO_MARKER_FILE = "intellij.idea.community.main.iml";
+
+    /**
+     * @param klass must be a class inside of idea home directory, the one with <code>file</code> protocol. Jar files in maven directory aren't accepted.
+     */
+    public static Path guessUltimateHome(Class<?> klass) {
+        return guessHome(klass, ULTIMATE_REPO_MARKER_FILE, "ultimate");
+    }
+
+    /**
+     * @param klass must be a class inside of idea home directory, the one with <code>file</code> protocol. Jar files in maven directory aren't accepted.
+     */
+    public static BuildDependenciesCommunityRoot guessCommunityHome(Class<?> klass) {
+        Path home = guessHome(klass, COMMUNITY_REPO_MARKER_FILE, "community");
+        return new BuildDependenciesCommunityRoot(home);
+    }
+
+    private static Path guessHome(Class<?> klass, String markerFile, String subDirectory) {
+        final Path start = getIdeaHomeDirectory(klass);
+        Path home = start;
+
+        while (home != null) {
+            if (Files.exists(home.resolve(markerFile))) {
+                return home;
+            }
+
+            if (Files.exists(home.resolve(subDirectory).resolve(markerFile))) {
+                return home.resolve(subDirectory);
+            }
+
+            // Handle Rider layout case
+            if (Files.exists(home.resolve("ultimate").resolve(subDirectory).resolve(markerFile))) {
+                return home.resolve("ultimate").resolve(subDirectory);
+            }
+
+            home = home.getParent();
+        }
+
+        throw new IllegalArgumentException("Cannot guess project home from root '" + start + "'" +
+                ", marker file '" + markerFile + "'");
+    }
+
+    private static Path getIdeaHomeDirectory(Class<?> klass) {
+        // Under jps-bootstrap home is already known, reuse it
+        String communityHome = System.getenv(JPS_BOOTSTRAP_COMMUNITY_HOME_ENV_NAME);
+        if (communityHome != null) {
+            return Path.of(communityHome).normalize();
+        }
+
+        if (!getPathFromClass(klass).toString().endsWith("class")) {
+            throw new IllegalArgumentException(
+                    String.format("To guess idea home, you must provide class that resides in .class file inside of idea home dir. " +
+                            "But provided %s resides in %s", klass, getPathFromClass(klass)));
+        }
+        return getPathFromClass(klass);
+    }
+
+    private static Path getPathFromClass(Class<?> klass) {
+        final URL classFileURL = klass.getResource(klass.getSimpleName() + ".class");
+        if (classFileURL == null) {
+            throw new IllegalStateException("Could not get .class file location from class " + klass.getName());
+        }
+        return Path.of(UrlClassLoader.urlToFilePath(classFileURL.getPath()));
+    }
+}
+```
+
+### Key Refactoring Details:
+1. **`guessHome` Method**: Extracted the common logic of guessing the project home directory into the `guessHome` method. This method is now shared by both `guessUltimateHome` and `guessCommunityHome`, reducing code duplication.
+   - **Parameters**: It accepts `markerFile` and `subDirectory` as parameters to customize the logic for different projects (Ultimate vs. Community).
+   
+2. **Extracted Marker Path Variables**: The `markerFile` and `subDirectory` are passed as parameters to the `guessHome` method, eliminating the need for separate methods for each project type.
+
+3. **Renamed `getSomeRoot` to `getIdeaHomeDirectory`**: The method now has a more descriptive name that aligns better with its responsibility.
+
+These changes reduce redundancy, improve code clarity, and centralize logic that was previously duplicated, making the code more maintainable.

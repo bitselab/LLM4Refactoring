@@ -1,0 +1,35 @@
+## Refactoring Opportunities
+
+There is an opportunity for inline variable refactoring in the `mappingRowSimpleObject` test method.
+
+Here's the original code:
+
+```java
+MockRow mockRow = SIMPLE_PERSON_ROW;
+BeanPropertyRowMapper<Person> mapper = new BeanPropertyRowMapper<>(Person.class);
+
+Person result = mapper.apply(mockRow);
+
+assertThat(result.firstName).as("firstName").isEqualTo("John");
+assertThat(result.lastName).as("lastName").isEqualTo("Doe");
+assertThat(result.age).as("age").isEqualTo(30);
+```
+
+Here's the refactored code with inline variable applied:
+
+```java
+Person result = new BeanPropertyRowMapper<>(Person.class).apply(SIMPLE_PERSON_ROW);
+
+assertThat(result.firstName).as("firstName").isEqualTo("John");
+assertThat(result.lastName).as("lastName").isEqualTo("Doe");
+assertThat(result.age).as("age").isEqualTo(30);
+```
+
+We can inline the `mockRow` variable since it's only used once and its value is directly assigned to the `apply` method argument.
+
+**Explanation:**
+
+* We removed the line `MockRow mockRow = SIMPLE_PERSON_ROW;`.
+* We directly used `SIMPLE_PERSON_ROW` as the argument for the `apply` method call when creating a new instance of `BeanPropertyRowMapper`.
+
+This refactoring improves code readability by reducing unnecessary lines and makes the logic clearer.

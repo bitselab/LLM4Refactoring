@@ -1,0 +1,43 @@
+Here are some refactoring opportunities in the code:
+
+1. **Extract method:** The logic for creating the `FSDataInputStreamBuilder` can be extracted into a separate method to improve readability and reusability. Here's the refactored code:
+
+```java
+private FutureDataInputStreamBuilder getParameterizedBuilder(final Path path,
+                                                            final AzureBlobFileSystem fs,
+                                                            int footerReadBufferSize) throws Exception {
+  return fs.openFile(path).opt(AZURE_FOOTER_READ_BUFFER_SIZE, footerReadBufferSize);
+}
+```
+
+2. **Simplify variable names:** Some variable names can be more descriptive to improve code readability. Here's an example:
+
+```java
+private static final int DEFAULT_FOOTER_READ_BUFFER_SIZE = 1024;
+
+private void testPartialReadWithSomeData(final FileSystem fs,
+                                         final Path testFilePath,
+                                         final int seekPos,
+                                         final int length,
+                                         final byte[] fileContent,
+                                         final int expectedFooterReadBufferSize) throws IOException {
+  // ...
+}
+```
+
+3. **Combine conditions:** The conditions in the `getFileSystem` method can be combined using a logical OR operator to improve readability. Here's an example:
+
+```java
+private AzureBlobFileSystem getFileSystem(final boolean optimizeFooterRead,
+                                           final int fileSize,
+                                           final int footerReadBufferSize) throws IOException {
+  final AzureBlobFileSystem fs = getFileSystem();
+  AzureBlobFileSystemStore store = getAbfsStore(fs);
+  store.getAbfsConfiguration().setOptimizeFooterRead(optimizeFooterRead);
+  store.getAbfsConfiguration().setFooterReadBufferSize(footerReadBufferSize);
+  store.getAbfsConfiguration().setReadSmallFilesCompletely(fileSize > store.getAbfsConfiguration().getReadBufferSize());
+  return fs;
+}
+```
+
+These are just a few suggestions, and there may be other refactoring opportunities depending on your specific coding style and preferences.

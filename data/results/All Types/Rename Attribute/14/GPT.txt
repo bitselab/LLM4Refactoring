@@ -1,0 +1,240 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method:**  
+   - The `incrementToken()` method is too complex and can be broken into smaller methods for readability.  
+   - Repeated logic for handling the delimiter and character appending can be extracted.
+
+2. **Extract Variable:**  
+   - Conditions like `skipped > skip` are repeated and can be extracted into a boolean variable for clarity.
+
+3. **Rename Method/Variable:**  
+   - `resultToken` could be renamed to `currentTokenBuilder` for better semantic understanding.  
+   - Method names like `incrementToken()` are standard but the extracted methods should be named descriptively.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.lucene.analysis.path;
+
+import java.io.IOException;
+import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
+import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
+import org.apache.lucene.util.AttributeFactory;
+import org.apache.lucene.util.IgnoreRandomChains;
+
+/**
+ * Tokenizer for path-like hierarchies.
+ */
+@IgnoreRandomChains(reason = "broken offsets")
+public class PathHierarchyTokenizer extends Tokenizer {
+
+    private static final int DEFAULT_BUFFER_SIZE = 1024;
+    public static final char DEFAULT_DELIMITER = '/';
+    public static final int DEFAULT_SKIP = 0;
+
+    private final char delimiter;
+    private final char replacement;
+    private final int skip;
+
+    private final CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
+    private final OffsetAttribute offsetAtt = addAttribute(OffsetAttribute.class);
+    private final PositionIncrementAttribute posAtt = addAttribute(PositionIncrementAttribute.class);
+
+    private int startPosition = 0;
+    private int skipped = 0;
+    private boolean endDelimiter = false;
+    private StringBuilder currentTokenBuilder;
+
+    private int charsRead = 0;
+
+    public PathHierarchyTokenizer() {
+        this(DEFAULT_BUFFER_SIZE, DEFAULT_DELIMITER, DEFAULT_DELIMITER, DEFAULT_SKIP);
+    }
+
+    public PathHierarchyTokenizer(int skip) {
+        this(DEFAULT_BUFFER_SIZE, DEFAULT_DELIMITER, DEFAULT_DELIMITER, skip);
+    }
+
+    public PathHierarchyTokenizer(int bufferSize, char delimiter) {
+        this(bufferSize, delimiter, delimiter, DEFAULT_SKIP);
+    }
+
+    public PathHierarchyTokenizer(char delimiter, char replacement) {
+        this(DEFAULT_BUFFER_SIZE, delimiter, replacement, DEFAULT_SKIP);
+    }
+
+    public PathHierarchyTokenizer(char delimiter, char replacement, int skip) {
+        this(DEFAULT_BUFFER_SIZE, delimiter, replacement, skip);
+    }
+
+    public PathHierarchyTokenizer(AttributeFactory factory, char delimiter, char replacement, int skip) {
+        this(factory, DEFAULT_BUFFER_SIZE, delimiter, replacement, skip);
+    }
+
+    public PathHierarchyTokenizer(int bufferSize, char delimiter, char replacement, int skip) {
+        this(DEFAULT_TOKEN_ATTRIBUTE_FACTORY, bufferSize, delimiter, replacement, skip);
+    }
+
+    public PathHierarchyTokenizer(AttributeFactory factory, int bufferSize, char delimiter, char replacement, int skip) {
+        super(factory);
+        if (bufferSize < 0) throw new IllegalArgumentException("bufferSize cannot be negative");
+        if (skip < 0) throw new IllegalArgumentException("skip cannot be negative");
+        
+        termAtt.resizeBuffer(bufferSize);
+        this.delimiter = delimiter;
+        this.replacement = replacement;
+        this.skip = skip;
+        currentTokenBuilder = new StringBuilder(bufferSize);
+    }
+
+    @Override
+    public final boolean incrementToken() throws IOException {
+        clearAttributes();
+        boolean tokenGenerated = processNextToken();
+        if (tokenGenerated) {
+            finalizeToken();
+        }
+        return tokenGenerated;
+    }
+
+    private boolean processNextToken() throws IOException {
+        termAtt.append(currentTokenBuilder);
+        posAtt.setPositionIncrement(1);
+        int length = 0;
+        boolean added = false;
+
+        if (endDelimiter) {
+            appendCharToTerm(replacement);
+            endDelimiter = false;
+            added = true;
+        }
+
+        while (true) {
+            int character = input.read();
+            boolean hasSkippedEnough = skipped > skip;
+
+            if (character >= 0) {
+                charsRead++;
+            } else {
+                return finalizeEndOfStream(added, length);
+            }
+
+            if (!added) {
+                added = initializeFirstToken(character, hasSkippedEnough);
+            } else {
+                if (processDelimiter(character, hasSkippedEnough)) {
+                    break;
+                } else {
+                    appendNonDelimiterChar(character, hasSkippedEnough);
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean initializeFirstToken(int character, boolean hasSkippedEnough) {
+        skipped++;
+        if (hasSkippedEnough) {
+            appendCharToTerm(character == delimiter ? replacement : (char) character);
+            return true;
+        } else {
+            startPosition++;
+            return false;
+        }
+    }
+
+    private boolean processDelimiter(int character, boolean hasSkippedEnough) {
+        if (character == delimiter) {
+            if (hasSkippedEnough) {
+                endDelimiter = true;
+                return true;
+            }
+            skipped++;
+            if (skipped > skip) {
+                appendCharToTerm(replacement);
+            } else {
+                startPosition++;
+            }
+        }
+        return false;
+    }
+
+    private void appendNonDelimiterChar(int character, boolean hasSkippedEnough) {
+        if (hasSkippedEnough) {
+            appendCharToTerm((char) character);
+        } else {
+            startPosition++;
+        }
+    }
+
+    private void appendCharToTerm(char c) {
+        termAtt.append(c);
+    }
+
+    private boolean finalizeEndOfStream(boolean added, int length) {
+        if (skipped > skip) {
+            length += currentTokenBuilder.length();
+            termAtt.setLength(length);
+            offsetAtt.setOffset(correctOffset(startPosition), correctOffset(startPosition + length));
+            if (added) {
+                currentTokenBuilder.setLength(0);
+                currentTokenBuilder.append(termAtt.buffer(), 0, length);
+            }
+            return added;
+        }
+        return false;
+    }
+
+    private void finalizeToken() {
+        int length = termAtt.length();
+        offsetAtt.setOffset(correctOffset(startPosition), correctOffset(startPosition + length));
+        currentTokenBuilder.setLength(0);
+        currentTokenBuilder.append(termAtt.buffer(), 0, length);
+    }
+
+    @Override
+    public final void end() throws IOException {
+        super.end();
+        int finalOffset = correctOffset(charsRead);
+        offsetAtt.setOffset(finalOffset, finalOffset);
+    }
+
+    @Override
+    public void reset() throws IOException {
+        super.reset();
+        currentTokenBuilder.setLength(0);
+        charsRead = 0;
+        endDelimiter = false;
+        skipped = 0;
+        startPosition = 0;
+    }
+}
+```
+
+---
+
+### **Changes Made**
+
+1. **Extracted Methods:**  
+   - Extracted `processNextToken()`, `initializeFirstToken()`, `processDelimiter()`, `appendNonDelimiterChar()`, and `finalizeToken()` from `incrementToken()`.
+
+2. **Extracted Variable:**  
+   - Introduced `hasSkippedEnough` for the repeated `skipped > skip` condition.
+
+3. **Renamed Variable:**  
+   - Renamed `resultToken` to `currentTokenBuilder` for clarity.
+
+4. **Simplified Logic:**  
+   - Separated delimiter handling and general character processing into distinct methods.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Improved Readability:** Smaller, well-named methods make the logic easier to follow.  
+- **Simplified Logic:** Reduces nested conditions and repetitive checks.  
+- **Enhanced Maintainability:** Isolated logic makes future changes easier.

@@ -1,0 +1,285 @@
+In reviewing the code snippet, several potential refactoring opportunities emerge. Below, I will highlight the changes I would recommend using the refactorings mentioned: **Extract Class**, **Extract Method**, **Extract Variable**, **Inline Method**, **Inline Variable**, **Rename Attribute**, **Rename Method**, **Rename Parameter**, and **Rename Variable**.
+
+### 1. **Extract Method**
+   The method `checkSource` contains a for-loop with repeated logic for checking the status of files, which could be extracted into a separate method. This improves readability and reusability.
+
+   **Before refactoring:**
+   ```java
+   protected static void checkSource(Configuration conf, List<Path> srcs
+       ) throws InvalidInputException {
+     List<IOException> ioes = new ArrayList<IOException>();
+     for(Path p : srcs) {
+       try {
+         p.getFileSystem(conf).getFileStatus(p);
+       } catch(IOException e) {
+         ioes.add(e);
+       }
+     }
+     if (!ioes.isEmpty()) {
+       throw new InvalidInputException(ioes);
+     }
+   }
+   ```
+
+   **Refactored with Extract Method:**
+   ```java
+   protected static void checkSource(Configuration conf, List<Path> srcs
+       ) throws InvalidInputException {
+     List<IOException> ioes = new ArrayList<IOException>();
+     for (Path p : srcs) {
+       checkFileStatus(conf, p, ioes);
+     }
+     if (!ioes.isEmpty()) {
+       throw new InvalidInputException(ioes);
+     }
+   }
+
+   private static void checkFileStatus(Configuration conf, Path path, List<IOException> ioes) {
+     try {
+       path.getFileSystem(conf).getFileStatus(path);
+     } catch (IOException e) {
+       ioes.add(e);
+     }
+   }
+   ```
+
+   This refactor improves readability by extracting the file checking logic into a new method `checkFileStatus`.
+
+### 2. **Inline Variable**
+   The variable `boolean b` in the `writeString` method is only used once to determine whether the string is `null` or not, so it can be inlined.
+
+   **Before refactoring:**
+   ```java
+   protected static void writeString(DataOutput out, String s
+       ) throws IOException {
+     boolean b = s != null;
+     out.writeBoolean(b);
+     if (b) {Text.writeString(out, s);}
+   }
+   ```
+
+   **Refactored with Inline Variable:**
+   ```java
+   protected static void writeString(DataOutput out, String s
+       ) throws IOException {
+     out.writeBoolean(s != null);
+     if (s != null) {Text.writeString(out, s);}
+   }
+   ```
+
+   By inlining the variable `b`, we make the code more concise.
+
+### 3. **Rename Method**
+   The method `readString` can be renamed to `readOptionalString` since it is reading a string that may be `null` based on a boolean flag.
+
+   **Before refactoring:**
+   ```java
+   protected static String readString(DataInput in) throws IOException {
+     if (in.readBoolean()) {
+       return Text.readString(in);
+     }
+     return null;
+   }
+   ```
+
+   **Refactored with Rename Method:**
+   ```java
+   protected static String readOptionalString(DataInput in) throws IOException {
+     if (in.readBoolean()) {
+       return Text.readString(in);
+     }
+     return null;
+   }
+   ```
+
+   The method name `readOptionalString` is more descriptive, indicating that the returned string could be `null`.
+
+### 4. **Extract Variable**
+   In the `readFile` method, the line `FileSystem fs = inputfile.getFileSystem(conf);` could be extracted as a variable since it's used multiple times.
+
+   **Before refactoring:**
+   ```java
+   protected static List<String> readFile(Configuration conf, Path inputfile
+       ) throws IOException {
+     List<String> result = new ArrayList<String>();
+     FileSystem fs = inputfile.getFileSystem(conf);
+     try (BufferedReader input = new BufferedReader(new InputStreamReader(fs.open(inputfile),
+             StandardCharsets.UTF_8))) {
+       for(String line; (line = input.readLine()) != null;) {
+         result.add(line);
+       }
+     }
+     return result;
+   }
+   ```
+
+   **Refactored with Extract Variable:**
+   ```java
+   protected static List<String> readFile(Configuration conf, Path inputfile
+       ) throws IOException {
+     List<String> result = new ArrayList<String>();
+     FileSystem fs = inputfile.getFileSystem(conf);
+     try (BufferedReader input = new BufferedReader(new InputStreamReader(fs.open(inputfile),
+             StandardCharsets.UTF_8))) {
+       String line;
+       while ((line = input.readLine()) != null) {
+         result.add(line);
+       }
+     }
+     return result;
+   }
+   ```
+
+   By extracting the `String line` variable outside the loop, the code is more readable.
+
+### 5. **Extract Class**
+   The `DuplicationException` class can be extracted into its own file for better maintainability and clarity, especially since it's an inner class with no direct relationship to the rest of the methods in `DistTool`.
+
+   **Before refactoring:**
+   ```java
+   public static class DuplicationException extends IOException {
+     private static final long serialVersionUID = 1L;
+     /** Error code for this exception */
+     public static final int ERROR_CODE = -2;
+     DuplicationException(String message) {super(message);}
+   }
+   ```
+
+   **Refactored with Extract Class (into its own file):**
+
+   `DuplicationException.java`:
+   ```java
+   package org.apache.hadoop.tools;
+
+   import java.io.IOException;
+
+   public class DuplicationException extends IOException {
+     private static final long serialVersionUID = 1L;
+     /** Error code for this exception */
+     public static final int ERROR_CODE = -2;
+
+     public DuplicationException(String message) {
+       super(message);
+     }
+   }
+   ```
+
+   This change keeps the `DistTool` class focused on its main responsibilities and makes `DuplicationException` easier to find and modify.
+
+---
+
+### Refactored Code
+Here’s a summary of the refactored code after applying the identified refactorings:
+
+```java
+package org.apache.hadoop.tools;
+
+import java.io.BufferedReader;
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.InvalidInputException;
+import org.apache.hadoop.mapred.JobConf;
+
+/**
+ * An abstract class for distributed tool for file related operations.
+ */
+abstract class DistTool implements org.apache.hadoop.util.Tool {
+  protected static final Logger LOG = LoggerFactory.getLogger(DistTool.class);
+
+  protected JobConf jobconf;
+
+  /** {@inheritDoc} */
+  public void setConf(Configuration conf) {
+    if (jobconf != conf) {
+      jobconf = conf instanceof JobConf ? (JobConf) conf : new JobConf(conf);
+    }
+  }
+
+  /** {@inheritDoc} */
+  public JobConf getConf() { return jobconf; }
+
+  protected DistTool(Configuration conf) { setConf(conf); }
+
+  private static final Random RANDOM = new Random();
+  protected static String getRandomId() {
+    return Integer.toString(RANDOM.nextInt(Integer.MAX_VALUE), 36);
+  }
+
+  /** Sanity check for source */
+  protected static void checkSource(Configuration conf, List<Path> srcs) throws InvalidInputException {
+    List<IOException> ioes = new ArrayList<IOException>();
+    for (Path p : srcs) {
+      checkFileStatus(conf, p, ioes);
+    }
+    if (!ioes.isEmpty()) {
+      throw new InvalidInputException(ioes);
+    }
+  }
+
+  private static void checkFileStatus(Configuration conf, Path path, List<IOException> ioes) {
+    try {
+      path.getFileSystem(conf).getFileStatus(path);
+    } catch (IOException e) {
+      ioes.add(e);
+    }
+  }
+
+  protected static String readOptionalString(DataInput in) throws IOException {
+    if (in.readBoolean()) {
+      return Text.readString(in);
+    }
+    return null;
+  }
+
+  protected static void writeString(DataOutput out, String s) throws IOException {
+    out.writeBoolean(s != null);
+    if (s != null) {
+      Text.writeString(out, s);
+    }
+  }
+
+  protected static List<String> readFile(Configuration conf, Path inputfile) throws IOException {
+    List<String> result = new ArrayList<String>();
+    FileSystem fs = inputfile.getFileSystem(conf);
+    try (BufferedReader input = new BufferedReader(new InputStreamReader(fs.open(inputfile),
+            StandardCharsets.UTF_8))) {
+      String line;
+      while ((line = input.readLine()) != null) {
+        result.add(line);
+      }
+    }
+    return result;
+  }
+
+  /** An exception class for duplicated source files. */
+  public static class DuplicationException extends IOException {
+    private static final long serialVersionUID = 1L;
+    /** Error code for this exception */
+    public static final int ERROR_CODE = -2;
+
+    public DuplicationException(String message) {
+      super(message);
+    }
+  }
+}
+```
+
+---
+
+### Conclusion
+The code is now more modular, readable, and maintainable. Key improvements were made by:
+- Extracting methods to avoid long methods with repeated code.
+- Inlining

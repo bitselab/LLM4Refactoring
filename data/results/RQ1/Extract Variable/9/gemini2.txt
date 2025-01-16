@@ -1,0 +1,101 @@
+There are two opportunities for Extract Variable refactoring in the provided code:
+
+**1. Extracting the logic to check for the marker file:**
+
+Both `guessUltimateHome` and `guessCommunityHome` methods have repetitive logic for checking the existence of the marker file. We can extract this logic into a separate method.
+
+Refactored code:
+
+```java
+public static Path guessUltimateHome(Class<?> klass) {
+  final Path start = getSomeRoot(klass);
+  Path home = start;
+  while (home != null) {
+    if (hasMarkerFile(home, ULTIMATE_REPO_MARKER_FILE)) {
+      return home;
+    }
+    if (hasMarkerFile(home.resolve("ultimate"), ULTIMATE_REPO_MARKER_FILE)) {
+      return home.resolve("ultimate");
+    }
+    home = home.getParent();
+  }
+  throw new IllegalArgumentException("Cannot guess ultimate project home from root '" + start + "'" +
+      ", marker file '" + ULTIMATE_REPO_MARKER_FILE + "'");
+}
+
+public static BuildDependenciesCommunityRoot guessCommunityHome(Class<?> klass) {
+  final Path start = getSomeRoot(klass);
+  Path home = start;
+  while (home != null) {
+    if (hasMarkerFile(home, COMMUNITY_REPO_MARKER_FILE)) {
+      return new BuildDependenciesCommunityRoot(home);
+    }
+    if (hasMarkerFile(home.resolve("community"), COMMUNITY_REPO_MARKER_FILE)) {
+      return new BuildDependenciesCommunityRoot(home.resolve("community"));
+    }
+    if (hasMarkerFile(home.resolve("ultimate").resolve("community"), COMMUNITY_REPO_MARKER_FILE)) {
+      return new BuildDependenciesCommunityRoot(home.resolve("ultimate").resolve("community"));
+    }
+    home = home.getParent();
+  }
+  throw new IllegalArgumentException("Cannot guess community project home from root '" + start + "'" +
+      ", marker file '" + COMMUNITY_REPO_MARKER_FILE + "'");
+}
+
+private static boolean hasMarkerFile(Path path, String markerFile) {
+  return Files.exists(path.resolve(markerFile));
+}
+```
+
+**2. Extracting the logic to handle Rider layout:**
+
+Both methods also have repetitive logic to handle the Rider layout case. We can extract this logic into a separate method as well.
+
+Refactored code (based on the previous refactoring):
+
+```java
+public static Path guessUltimateHome(Class<?> klass) {
+  final Path start = getSomeRoot(klass);
+  Path home = start;
+  while (home != null) {
+    if (hasMarkerFile(home, ULTIMATE_REPO_MARKER_FILE)) {
+      return home;
+    }
+    if (checkForRiderLayout(home, ULTIMATE_REPO_MARKER_FILE)) {
+      return home.resolve("ultimate");
+    }
+    home = home.getParent();
+  }
+  throw new IllegalArgumentException("Cannot guess ultimate project home from root '" + start + "'" +
+      ", marker file '" + ULTIMATE_REPO_MARKER_FILE + "'");
+}
+
+public static BuildDependenciesCommunityRoot guessCommunityHome(Class<?> klass) {
+  final Path start = getSomeRoot(klass);
+  Path home = start;
+  while (home != null) {
+    if (hasMarkerFile(home, COMMUNITY_REPO_MARKER_FILE)) {
+      return new BuildDependenciesCommunityRoot(home);
+    }
+    if (checkForRiderLayout(home, COMMUNITY_REPO_MARKER_FILE)) {
+      return new BuildDependenciesCommunityRoot(home.resolve("community"));
+    }
+    if (checkForRiderLayout(home.resolve("ultimate"), COMMUNITY_REPO_MARKER_FILE)) {
+      return new BuildDependenciesCommunityRoot(home.resolve("ultimate").resolve("community"));
+    }
+    home = home.getParent();
+  }
+  throw new IllegalArgumentException("Cannot guess community project home from root '" + start + "'" +
+      ", marker file '" + COMMUNITY_REPO_MARKER_FILE + "'");
+}
+
+private static boolean hasMarkerFile(Path path, String markerFile) {
+  return Files.exists(path.resolve(markerFile));
+}
+
+private static boolean checkForRiderLayout(Path path, String markerFile) {
+  return Files.exists(path.resolve("ultimate").resolve(markerFile));
+}
+```
+
+These refactorings improve code readability and maintainability by reducing code duplication. 

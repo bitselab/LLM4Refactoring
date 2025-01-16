@@ -1,0 +1,101 @@
+As a developer, imagine your team leader requests you to review a piece of code to identify potential refactoring opportunities for the following nine types of refactoring: [Extract Class, Extract Method, Extract Variable, Inline Method, Inline Variable, Rename Attribute, Rename Method, Rename Parameter, Rename Variable]. The original code snippet is as follows:
+```
+public class BrokenInputStreamTest {
+
+    /**
+     * Factory for parameterized tests of BrokenInputStream, BrokenReader, BrokenOutputStream, and BrokenWriter.
+     */
+    public static final class CustomException extends Exception {
+
+        private static final long serialVersionUID = 1L;
+
+    }
+
+    public static Stream<Class<? extends Throwable>> parameters() {
+        // @formatter:off
+        return Stream.of(
+                IOException.class,
+                FileNotFoundException.class,
+                FileSystemNotFoundException.class,
+                RuntimeException.class,
+                IllegalArgumentException.class,
+                IllegalStateException.class,
+                Error.class,
+                ExceptionInInitializerError.class,
+                CustomException.class
+        );
+        // @formatter:on
+    }
+
+    private static BrokenInputStream createBrokenInputStream(final Throwable exception) {
+        if (exception instanceof IOException) {
+            return new BrokenInputStream((IOException) exception);
+        }
+        return new BrokenInputStream(exception);
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+    public void testAvailable(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource") final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.available()));
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+    public void testClose(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource") final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.close()));
+    }
+
+    @Test
+    public void testInstance() {
+        assertNotNull(BrokenInputStream.INSTANCE);
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+    public void testRead(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource") final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.read()));
+        assertEquals(exception, assertThrows(clazz, () -> stream.read(new byte[1])));
+        assertEquals(exception, assertThrows(clazz, () -> stream.read(new byte[1], 0, 1)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+    public void testReset(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource") final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.reset()));
+    }
+
+    @ParameterizedTest
+    @MethodSource("org.apache.commons.io.BrokenTestFactories#parameters")
+    public void testSkip(final Class<Exception> clazz) throws Exception {
+        final Throwable exception = clazz.newInstance();
+        @SuppressWarnings("resource") final BrokenInputStream stream = createBrokenInputStream(exception);
+        assertEquals(exception, assertThrows(clazz, () -> stream.skip(1)));
+    }
+
+    @Test
+    public void testTryWithResources() {
+        final IOException thrown = assertThrows(IOException.class, () -> {
+            try (InputStream newStream = new BrokenInputStream()) {
+                newStream.read();
+            }
+        });
+        assertEquals("Broken input stream", thrown.getMessage());
+
+        final Throwable[] suppressed = thrown.getSuppressed();
+        assertEquals(1, suppressed.length);
+        assertEquals(IOException.class, suppressed[0].getClass());
+        assertEquals("Broken input stream", suppressed[0].getMessage());
+    }
+
+}
+```
+If there are any refactoring opportunities, please do it and generate the refactored code. Otherwise, simply state that no refactoring is necessary.

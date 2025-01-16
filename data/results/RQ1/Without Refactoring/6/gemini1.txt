@@ -1,0 +1,121 @@
+## Refactoring Opportunities in the Code
+
+The provided code snippet presents several opportunities for refactoring:
+
+**1. Extract Interface for Common Functionality:**
+
+The `DistTool` class serves as an abstract base class for distributed file-related operations. However, the methods `checkSource`, `readString`, `writeString`, and `readFile` are static and do not rely on any state specific to `DistTool`. These methods can be extracted into a separate interface, `FileReaderUtil`, to improve code organization and reusability.
+
+**2. Use Java 8 Stream API:**
+
+The `readFile` method can be refactored to utilize the Java 8 Stream API for more concise and efficient code. Instead of manually iterating through lines using a `BufferedReader`, we can use `Files.lines` to create a stream of lines and collect them into a list.
+
+**3. Use Optional for String Values:**
+
+The `readString` and `writeString` methods handle null values using a boolean flag. This can be simplified by using the `Optional` class to represent the presence or absence of a string value.
+
+**4. Use try-with-resources for BufferedReader:**
+
+The `readFile` method uses a `try-with-resources` block for the `BufferedReader`, but it can be further improved by using the diamond operator for type inference.
+
+**5. Use Logger for Exceptions:**
+
+The `checkSource` method catches `IOException` and throws an `InvalidInputException`. Instead of simply throwing the exception, it would be beneficial to log the exception details using the `Logger` before re-throwing.
+
+**Refactored Code:**
+
+```java
+package org.apache.hadoop.tools;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.InvalidInputException;
+import org.apache.hadoop.mapred.JobConf;
+
+/**
+ * An abstract class for distributed tool for file related operations.
+ */
+abstract class DistTool implements org.apache.hadoop.util.Tool {
+  protected static final Logger LOG = LoggerFactory.getLogger(DistTool.class);
+
+  protected JobConf jobconf;
+
+  /** {@inheritDoc} */
+  public void setConf(Configuration conf) {
+    if (jobconf != conf) {
+      jobconf = conf instanceof JobConf? (JobConf)conf: new JobConf(conf);
+    }
+  }
+
+  /** {@inheritDoc} */
+  public JobConf getConf() {return jobconf;}
+
+  protected DistTool(Configuration conf) {setConf(conf);}
+
+  private static final Random RANDOM = new Random();
+  protected static String getRandomId() {
+    return Integer.toString(RANDOM.nextInt(Integer.MAX_VALUE), 36);
+  }
+
+  /**
+   * Interface for reading files.
+   */
+  interface FileReaderUtil {
+    static List<String> readFile(Configuration conf, Path inputfile) throws IOException {
+      return Files.lines(inputfile, StandardCharsets.UTF_8)
+          .collect(Collectors.toList());
+    }
+
+    static Optional<String> readString(DataInput in) throws IOException {
+      if (in.readBoolean()) {
+        return Optional.of(Text.readString(in));
+      }
+      return Optional.empty();
+    }
+
+    static void writeString(DataOutput out, Optional<String> s) throws IOException {
+      out.writeBoolean(s.isPresent());
+      s.ifPresent(value -> Text.writeString(out, value));
+    }
+  }
+
+  /** Sanity check for source */
+  protected static void checkSource(Configuration conf, List<Path> srcs)
+      throws InvalidInputException {
+    List<IOException> ioes = new ArrayList<>();
+    for (Path p : srcs) {
+      try {
+        p.getFileSystem(conf).getFileStatus(p);
+      } catch (IOException e) {
+        ioes.add(e);
+      }
+    }
+    if (!ioes.isEmpty()) {
+      for (IOException e : ioes) {
+        LOG.error("Error checking source file: {}", e.getMessage());
+      }
+      throw new InvalidInputException(ioes);
+    }
+  }
+
+  /** An exception class for duplicated source files. */
+  public static class DuplicationException extends IOException {
+    private static final long serialVersionUID = 1L;
+    /** Error code for this exception */
+    public static final int ERROR_CODE = -2;
+    DuplicationException(String message) {super(message);}
+  }
+}
+```
+
+This refactored code improves modularity, readability, and efficiency by utilizing Java 8 features and separating common functionalities into an interface.

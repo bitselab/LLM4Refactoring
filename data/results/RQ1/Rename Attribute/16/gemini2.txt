@@ -1,0 +1,40 @@
+## Refactoring Opportunities
+
+There are a few opportunities for rename attribute refactorings in the provided code:
+
+1. **DataClass.param2**: This attribute could be renamed to a more descriptive name like `isOptional` to better reflect its purpose of indicating whether an optional value exists.
+
+Here's the refactored code with the rename:
+
+```java
+private static class DataClass {
+
+  @NotNull
+  private final String param1;
+
+  private final boolean isOptional;  // renamed from param2
+
+  private int param3;
+
+  @ConstructorProperties({"param1", "param2", "optionalParam"})
+  DataClass(String param1, boolean isOptional, Optional<Integer> optionalParam) {
+    this.param1 = param1;
+    this.isOptional = isOptional;
+    Assert.notNull(optionalParam, "Optional must not be null");
+    optionalParam.ifPresent(integer -> this.param3 = integer);
+  }
+
+  // ... remaining getters unchanged ...
+}
+```
+
+2. **NestedDataClass.nestedParam2**: Consider renaming this attribute to a more specific name depending on its usage. Here are some options:
+
+  - `optionalNestedData`: If `nestedParam2` can be null.
+  - `nestedData`: If `nestedParam2` is always present.
+
+Choose the name that best reflects the semantics of the attribute in your specific use case.
+
+It's important to note that these are suggestions, and the best names might depend on the specific context of your application. 
+
+For the other attributes (`param1`, `param3`, `optionalParam`), there's no need for renaming as they seem clear based on the code.

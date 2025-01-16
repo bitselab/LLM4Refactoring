@@ -1,0 +1,298 @@
+This code contains some opportunities for refactoring that can improve readability, maintainability, and reduce duplication. Below are some suggestions for applying the nine types of refactoring to the code:
+
+### 1. **Extract Class**
+The `SupportedDatabase` enum and its inner logic can be refactored into a separate class, especially since the `container` method for each database is doing a lot of setup. This would help simplify the `DatabaseContainer` class and give each database configuration its own class.
+
+### 2. **Extract Method**
+Some repeated logic, such as starting the `DATABASE_CONTAINER` in the `configure` method, could be extracted into a separate method to improve readability.
+
+### 3. **Extract Variable**
+Some complex expressions, such as `root.resolve( "build" ).resolve( "container" ).resolve( name + ".Dockerfile" )`, could be extracted into meaningful variables for clarity.
+
+### 4. **Inline Method**
+The `dialect()` method in the `SupportedDatabase` enum might not need to be a separate method, as it's only used in one place. This could be inlined into the `Configuration` constructor.
+
+### 5. **Inline Variable**
+Variables such as `DATABASE_CONTAINER` and `DATABASE` in the static block could potentially be inlined for simplicity, though they currently serve as useful abstractions for maintaining state.
+
+### 6. **Rename Attribute**
+The `DATABASE_CONTAINER` and `DATABASE` constants could be renamed to better reflect their actual role in the class.
+
+### 7. **Rename Method**
+The `configuration()` method is slightly ambiguous in terms of what configuration it is setting. Renaming it to something like `getConfiguration()` might make it clearer.
+
+### 8. **Rename Parameter**
+The parameter `propertySetter` in the `configure` method could be renamed to `configurationSetter` to clarify its role.
+
+### 9. **Rename Variable**
+The variable `root` could be renamed to `projectRoot` for better clarity.
+
+### Refactored Code:
+```java
+package org.hibernate.search.util.impl.integrationtest.mapper.orm;
+
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.BiConsumer;
+
+import org.hibernate.cfg.JdbcSettings;
+
+import com.github.dockerjava.api.model.HostConfig;
+import com.github.dockerjava.api.model.Ulimit;
+
+import org.testcontainers.containers.JdbcDatabaseContainer;
+import org.testcontainers.images.builder.ImageFromDockerfile;
+
+/*
+ * Suppress "Resource leak: '<unassigned Closeable value>' is never closed". Testcontainers take care of closing
+ * these resources in the end.
+ */
+@SuppressWarnings("resource")
+public final class DatabaseContainer {
+
+    private static final Duration REGULAR_TIMEOUT = Duration.ofMinutes(5);
+    private static final Duration EXTENDED_TIMEOUT = Duration.ofMinutes(10);
+
+    private static final SupportedDatabase DATABASE;
+    private static final HibernateSearchJdbcDatabaseContainer DATABASE_CONTAINER;
+
+    static {
+        String name = System.getProperty("org.hibernate.search.integrationtest.orm.database.kind", "");
+        Path projectRoot = Path.of(System.getProperty("org.hibernate.search.integrationtest.orm.project.root.directory", ""));
+        DATABASE = SupportedDatabase.from(name);
+
+        DATABASE_CONTAINER = DATABASE.createContainer(
+                projectRoot.resolve("build").resolve("container").resolve(name + ".Dockerfile"),
+                name
+        );
+    }
+
+    public static Configuration getConfiguration() {
+        return configure(Configuration::addAsSystemProperties);
+    }
+
+    private static Configuration configure(BiConsumer<Configuration> configurationSetter) {
+        if (!SupportedDatabase.H2.equals(DATABASE)) {
+            DATABASE_CONTAINER.start();
+        }
+        Configuration configuration = DATABASE.getConfiguration(DATABASE_CONTAINER);
+
+        if (DATABASE_CONTAINER != null && !DATABASE_CONTAINER.isRunning()) {
+            synchronized (DATABASE_CONTAINER) {
+                if (!DATABASE_CONTAINER.isRunning()) {
+                    DATABASE_CONTAINER.start();
+                }
+            }
+        }
+
+        return configuration;
+    }
+
+    private enum SupportedDatabase {
+        H2 {
+            @Override
+            String dialect() {
+                return org.hibernate.dialect.H2Dialect.class.getName();
+            }
+
+            @Override
+            Configuration getConfiguration(JdbcDatabaseContainer<?> container) {
+                return new Configuration(
+                        dialect(),
+                        "org.h2.Driver",
+                        "jdbc:h2:mem:db1;DB_CLOSE_DELAY=-1",
+                        "sa",
+                        "sa",
+                        ""
+                );
+            }
+
+            @Override
+            HibernateSearchJdbcDatabaseContainer createContainer(Path dockerfile, String name) {
+                return null;
+            }
+        },
+        POSTGRES {
+            @Override
+            String dialect() {
+                return org.hibernate.dialect.PostgreSQLDialect.class.getName();
+            }
+
+            @Override
+            HibernateSearchJdbcDatabaseContainer createContainer(Path dockerfile, String name) {
+                return new HibernateSearchJdbcDatabaseContainer(
+                        dockerfile, name,
+                        "org.postgresql.Driver",
+                        "jdbc:postgresql://%s:%d/hibernate_orm_test",
+                        5432,
+                        "hibernate_orm_test",
+                        "hibernate_orm_test",
+                        "select 1"
+                ).withEnv("POSTGRES_USER", "hibernate_orm_test")
+                        .withEnv("POSTGRES_PASSWORD", "hibernate_orm_test")
+                        .withEnv("POSTGRES_DB", "hibernate_orm_test");
+            }
+        },
+        MARIADB {
+            @Override
+            String dialect() {
+                return org.hibernate.dialect.MariaDBDialect.class.getName();
+            }
+
+            @Override
+            HibernateSearchJdbcDatabaseContainer createContainer(Path dockerfile, String name) {
+                return new HibernateSearchJdbcDatabaseContainer(
+                        dockerfile, name,
+                        "org.mariadb.jdbc.Driver",
+                        "jdbc:mariadb://%s:%d/hibernate_orm_test",
+                        3306,
+                        "hibernate_orm_test",
+                        "hibernate_orm_test",
+                        "select 1"
+                ).withCommand("--character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci")
+                        .withEnv("MYSQL_USER", "hibernate_orm_test")
+                        .withEnv("MYSQL_PASSWORD", "hibernate_orm_test")
+                        .withEnv("MYSQL_DATABASE", "hibernate_orm_test")
+                        .withEnv("MYSQL_RANDOM_ROOT_PASSWORD", "true")
+                        .withTmpFs(Collections.singletonMap("/var/lib/mysql", ""));
+            }
+        },
+        MYSQL {
+            @Override
+            String dialect() {
+                return org.hibernate.dialect.MySQLDialect.class.getName();
+            }
+
+            @Override
+            HibernateSearchJdbcDatabaseContainer createContainer(Path dockerfile, String name) {
+                return new HibernateSearchJdbcDatabaseContainer(
+                        dockerfile, name,
+                        "com.mysql.jdbc.Driver",
+                        "jdbc:mysql://%s:%d/hibernate_orm_test",
+                        3306,
+                        "hibernate_orm_test",
+                        "hibernate_orm_test",
+                        "select 1"
+                ).withCommand("--character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci")
+                        .withEnv("MYSQL_USER", "hibernate_orm_test")
+                        .withEnv("MYSQL_PASSWORD", "hibernate_orm_test")
+                        .withEnv("MYSQL_DATABASE", "hibernate_orm_test")
+                        .withEnv("MYSQL_RANDOM_ROOT_PASSWORD", "true")
+                        .withTmpFs(Collections.singletonMap("/var/lib/mysql", ""));
+            }
+        },
+        DB2 {
+            @Override
+            String dialect() {
+                return org.hibernate.dialect.DB2Dialect.class.getName();
+            }
+
+            @Override
+            HibernateSearchJdbcDatabaseContainer createContainer(Path dockerfile, String name) {
+                return new HibernateSearchJdbcDatabaseContainer(
+                        dockerfile, name,
+                        "com.ibm.db2.jcc.DB2Driver",
+                        "jdbc:db2://%s:%d/hreact",
+                        50000,
+                        "hreact",
+                        "hreact",
+                        "SELECT 1 FROM SYSIBM.SYSDUMMY1"
+                ).withNetworkMode("bridge")
+                        .withEnv("DB2INSTANCE", "hreact")
+                        .withEnv("DB2INST1_PASSWORD", "hreact")
+                        .withEnv("DBNAME", "hreact")
+                        .withEnv("LICENSE", "accept")
+                        .withEnv("AUTOCONFIG", "false")
+                        .withEnv("ARCHIVE_LOGS", "false")
+                        .withEnv("PERSISTENT_HOME", "false")
+                        .withStartupTimeoutSeconds(600)
+                        .withStartupTimeout(EXTENDED_TIMEOUT);
+            }
+        },
+        ORACLE {
+            @Override
+            String dialect() {
+                return org.hibernate.dialect.OracleDialect.class.getName();
+            }
+
+            @Override
+            HibernateSearchJdbcDatabaseContainer createContainer(Path dockerfile, String name) {
+                return new HibernateSearchJdbcDatabaseContainer(
+                        dockerfile, name,
+                        "oracle.jdbc.OracleDriver",
+                        "jdbc:oracle:thin:@%s:%d/FREEPDB1",
+                        1521,
+                        "SYSTEM",
+                        "hibernate_orm_test",
+                        "select 1 from dual"
+                ).withEnv("ORACLE_PASSWORD", "hibernate_orm_test")
+                        .withStartupTimeout(EXTENDED_TIMEOUT);
+            }
+        },
+        MSSQL {
+            @Override
+            String dialect() {
+                return org.hibernate.dialect.SQLServerDialect.class.getName();
+            }
+
+            @Override
+            HibernateSearchJdbcDatabaseContainer createContainer(Path dockerfile, String name) {
+                return new HibernateSearchJdbcDatabaseContainer(
+                        dockerfile, name,
+                        "com.microsoft.sqlserver.jdbc.SQLServerDriver",
+                        "jdbc:sqlserver://%s:%d;databaseName=tempdb",
+                        1433,
+                        "SA",
+                        "ActuallyRequired11Complexity",
+                        "select 1"
+                ).withEnv("ACCEPT_EULA", "Y")
+                        .withEnv("SA_PASSWORD", "ActuallyRequired11Complexity")
+                        .withStartupTimeout(EXTENDED_TIMEOUT);
+            }
+
+
+        };
+
+        abstract String dialect();
+
+        abstract HibernateSearchJdbcDatabaseContainer createContainer(Path dockerfile, String name);
+
+        abstract Configuration getConfiguration(JdbcDatabaseContainer<?> container);
+    }
+
+    public static class Configuration {
+        private final String dialect;
+        private final String driver;
+        private final String url;
+        private final String username;
+        private final String password;
+        private final String additionalProperties;
+
+        public Configuration(String dialect, String driver, String url, String username, String password, String additionalProperties) {
+            this.dialect = dialect;
+            this.driver = driver;
+            this.url = url;
+            this.username = username;
+            this.password = password;
+            this.additionalProperties = additionalProperties;
+        }
+
+        public static void addAsSystemProperties(Configuration configuration) {
+            System.setProperty("hibernate.dialect", configuration.dialect);
+            System.setProperty("hibernate.connection.driver_class", configuration.driver);
+            System.setProperty("hibernate.connection.url", configuration.url);
+            System.setProperty("hibernate.connection.username", configuration.username);
+            System.setProperty("hibernate.connection.password", configuration.password);
+        }
+    }
+}
+```
+
+### Summary of Changes:
+- Extracted common methods into the `SupportedDatabase` enum.
+- Improved naming for better clarity.
+- Simplified logic around database container management.

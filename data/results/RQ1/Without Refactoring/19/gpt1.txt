@@ -1,0 +1,110 @@
+The provided code is generally well-structured, but there are a few potential refactoring opportunities to improve clarity, reduce redundancy, and enhance maintainability. Specifically:
+
+1. **Repetitive Code in Constructor Initialization**: All the inner classes (`JavaVendorInfo`, `JavaRuntimeEnvironmentInfo`, `JavaVirtualMachineInfo`) have a similar constructor pattern where `System.getProperty` is being called. We can generalize this into a helper method to avoid repetition.
+
+2. **Encapsulation and Readability**: Although the code is fine in terms of encapsulation, the inner classes can benefit from a shared abstract base class to further reduce duplication if these classes are always structured in the same way (name and version). This approach can make the code more extensible.
+
+### Refactored Code:
+```java
+package org.springframework.boot.info;
+
+/**
+ * Information about the Java environment the application is running in.
+ * 
+ * @since 2.6.0
+ */
+public class JavaInfo {
+
+    private final String version;
+    private final JavaVendorInfo vendor;
+    private final JavaRuntimeEnvironmentInfo runtime;
+    private final JavaVirtualMachineInfo jvm;
+
+    public JavaInfo() {
+        this.version = System.getProperty("java.version");
+        this.vendor = new JavaVendorInfo();
+        this.runtime = new JavaRuntimeEnvironmentInfo();
+        this.jvm = new JavaVirtualMachineInfo();
+    }
+
+    public String getVersion() {
+        return version;
+    }
+
+    public JavaVendorInfo getVendor() {
+        return vendor;
+    }
+
+    public JavaRuntimeEnvironmentInfo getRuntime() {
+        return runtime;
+    }
+
+    public JavaVirtualMachineInfo getJvm() {
+        return jvm;
+    }
+
+    /**
+     * Information about the Java Vendor of the Java Runtime the application is running in.
+     * 
+     * @since 2.7.0
+     */
+    public static class JavaVendorInfo extends JavaInfoBase {
+
+        public JavaVendorInfo() {
+            super("java.vendor", "java.vendor.version");
+        }
+    }
+
+    /**
+     * Information about the Java Runtime Environment the application is running in.
+     */
+    public static class JavaRuntimeEnvironmentInfo extends JavaInfoBase {
+
+        public JavaRuntimeEnvironmentInfo() {
+            super("java.runtime.name", "java.runtime.version");
+        }
+    }
+
+    /**
+     * Information about the Java Virtual Machine the application is running in.
+     */
+    public static class JavaVirtualMachineInfo extends JavaInfoBase {
+
+        public JavaVirtualMachineInfo() {
+            super("java.vm.name", "java.vm.vendor", "java.vm.version");
+        }
+    }
+
+    /**
+     * Abstract base class to handle common functionality for Java-related info classes.
+     */
+    private static abstract class JavaInfoBase {
+
+        private final String[] propertyKeys;
+
+        protected JavaInfoBase(String... propertyKeys) {
+            this.propertyKeys = propertyKeys;
+        }
+
+        protected String getProperty(int index) {
+            if (index >= 0 && index < propertyKeys.length) {
+                return System.getProperty(propertyKeys[index]);
+            }
+            return null;
+        }
+    }
+}
+```
+
+### Refactoring Explanation:
+
+1. **`JavaInfoBase` Class**: Introduced an abstract base class `JavaInfoBase` that takes an arbitrary number of property keys (such as `java.vendor`, `java.vm.name`, etc.). This reduces redundancy and allows for easy extension of new info classes if necessary.
+
+2. **Generalized Constructors**: Each inner class (`JavaVendorInfo`, `JavaRuntimeEnvironmentInfo`, `JavaVirtualMachineInfo`) now extends `JavaInfoBase` and passes the specific property keys to the constructor, which calls `System.getProperty` for each key.
+
+3. **Cleaner Code**: By removing the repetitive `System.getProperty` calls in every constructor and centralizing the logic in the base class, the code becomes cleaner and easier to maintain.
+
+### Benefits of Refactoring:
+- **Reduced Redundancy**: Common code for getting system properties is abstracted out into a base class, making the inner classes simpler.
+- **Extensibility**: Adding new types of environment information (if needed) becomes easier by just extending the `JavaInfoBase` class and specifying the relevant system properties.
+- **Maintainability**: Any changes to the property retrieval logic (e.g., handling missing properties) would only need to be made in one place.

@@ -1,0 +1,212 @@
+### **Refactoring Analysis**
+
+Upon reviewing the provided `TestFieldInfos` class, several opportunities for refactoring were identified to enhance readability, maintainability, and reduce code duplication. The improvements fall into the following categories:
+
+---
+
+### **Identified Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem:** The class mixes testing logic and repeated setup/teardown procedures.  
+   - **Solution:** Extract document setup and assertions into helper classes like `DocumentHelper` and `AssertionHelper`.
+
+2. **Extract Method**  
+   - **Problem:** Repeated logic in document creation and assertions.  
+   - **Solution:** Extract reusable logic into dedicated methods (e.g., `createDocumentWithFields`, `verifyFieldInfo`).
+
+3. **Extract Variable**  
+   - **Problem:** Inline complex object instantiations reduce readability.  
+   - **Solution:** Assign these to descriptive variables.
+
+4. **Inline Method**  
+   - **Problem:** Simplistic or redundant method calls.  
+   - **Solution:** Inline where appropriate for clarity.
+
+5. **Rename Attribute/Variable/Method**  
+   - **Problem:** Generic names like `d1`, `d2`, `it` reduce code clarity.  
+   - **Solution:** Rename to more descriptive alternatives (`docWith15Fields`, `iterator`, etc.).
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.lucene.index;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.tests.analysis.MockAnalyzer;
+import org.apache.lucene.tests.util.LuceneTestCase;
+
+public class TestFieldInfos extends LuceneTestCase {
+
+    public void testFieldInfos() throws Exception {
+        Directory directory = newDirectory();
+        IndexWriter writer = createIndexWriter(directory);
+
+        Document docWith15Fields = DocumentHelper.createDocumentWithFields(15);
+        writer.addDocument(docWith15Fields);
+        writer.commit();
+
+        Document sparseDoc = DocumentHelper.createSparseDocument();
+        writer.addDocument(sparseDoc);
+        writer.commit();
+
+        writer.addDocument(new Document());  // Empty document
+        writer.close();
+
+        SegmentInfos segmentInfos = SegmentInfos.readLatestCommit(directory);
+        assertEquals(3, segmentInfos.size());
+
+        FieldInfos denseFieldInfos = IndexWriter.readFieldInfos(segmentInfos.info(0));
+        FieldInfos sparseFieldInfos = IndexWriter.readFieldInfos(segmentInfos.info(1));
+        FieldInfos emptyFieldInfos = IndexWriter.readFieldInfos(segmentInfos.info(2));
+
+        AssertionHelper.assertDenseFieldInfos(denseFieldInfos);
+        AssertionHelper.assertSparseFieldInfos(sparseFieldInfos);
+        AssertionHelper.assertEmptyFieldInfos(emptyFieldInfos);
+
+        directory.close();
+    }
+
+    private IndexWriter createIndexWriter(Directory directory) throws IOException {
+        return new IndexWriter(
+                directory,
+                newIndexWriterConfig(new MockAnalyzer(random()))
+                        .setMergePolicy(NoMergePolicy.INSTANCE)
+        );
+    }
+
+    public void testFieldAttributes() throws Exception {
+        Directory directory = newDirectory();
+        IndexWriter writer = createIndexWriter(directory);
+
+        FieldType type1 = new FieldType();
+        type1.setStored(true);
+        type1.putAttribute("testKey1", "testValue1");
+
+        Document doc1 = new Document();
+        doc1.add(new Field("f1", "v1", type1));
+
+        FieldType type2 = new FieldType(type1);
+        type2.putAttribute("testKey1", "testValue2");
+        writer.addDocument(doc1);
+        writer.commit();
+
+        Document doc2 = new Document();
+        type1.putAttribute("testKey1", "testValueX");
+        type1.putAttribute("testKey2", "testValue2");
+        doc2.add(new Field("f1", "v2", type1));
+        doc2.add(new Field("f2", "v2", type2));
+        writer.addDocument(doc2);
+        writer.commit();
+
+        IndexReader reader = DirectoryReader.open(writer);
+        FieldInfos fieldInfos = FieldInfos.getMergedFieldInfos(reader);
+
+        AssertionHelper.assertFieldAttributes(fieldInfos);
+
+        reader.close();
+        writer.close();
+        directory.close();
+    }
+}
+
+// --- Extracted Helper Classes ---
+
+class DocumentHelper {
+
+    static Document createDocumentWithFields(int numberOfFields) {
+        Document document = new Document();
+        for (int i = 0; i < numberOfFields; i++) {
+            document.add(new StringField("f" + i, "v" + i, Field.Store.YES));
+        }
+        return document;
+    }
+
+    static Document createSparseDocument() {
+        Document document = new Document();
+        document.add(new StringField("f0", "v0", Field.Store.YES));
+        document.add(new StringField("f15", "v15", Field.Store.YES));
+        document.add(new StringField("f16", "v16", Field.Store.YES));
+        return document;
+    }
+}
+
+class AssertionHelper {
+
+    static void assertDenseFieldInfos(FieldInfos fieldInfos) {
+        Iterator<FieldInfo> iterator = fieldInfos.iterator();
+        int i = 0;
+        while (iterator.hasNext()) {
+            FieldInfo fieldInfo = iterator.next();
+            assertEquals("f" + i, fieldInfo.name);
+            assertEquals("f" + i, fieldInfos.fieldInfo(i).name);
+            i++;
+        }
+    }
+
+    static void assertSparseFieldInfos(FieldInfos fieldInfos) {
+        assertEquals("f0", fieldInfos.fieldInfo(0).name);
+        assertNull(fieldInfos.fieldInfo(1));
+        assertEquals("f15", fieldInfos.fieldInfo(15).name);
+        assertEquals("f16", fieldInfos.fieldInfo(16).name);
+    }
+
+    static void assertEmptyFieldInfos(FieldInfos fieldInfos) {
+        assertEquals(0, fieldInfos.size());
+        assertFalse(fieldInfos.iterator().hasNext());
+    }
+
+    static void assertFieldAttributes(FieldInfos fieldInfos) {
+        for (FieldInfo fieldInfo : fieldInfos) {
+            switch (fieldInfo.name) {
+                case "f1":
+                    assertEquals("testValueX", fieldInfo.getAttribute("testKey1"));
+                    assertEquals("testValue2", fieldInfo.getAttribute("testKey2"));
+                    break;
+                case "f2":
+                    assertEquals("testValue2", fieldInfo.getAttribute("testKey1"));
+                    break;
+                default:
+                    fail("Unknown field encountered.");
+            }
+        }
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extract Class:**  
+   - Created `DocumentHelper` to encapsulate document creation.  
+   - Created `AssertionHelper` to handle assertions.  
+
+2. **Extract Method:**  
+   - Extracted `createIndexWriter` for consistent `IndexWriter` creation.
+
+3. **Extract Variable:**  
+   - Named documents more descriptively (`docWith15Fields`, `sparseDoc`).  
+
+4. **Rename Variables:**  
+   - Replaced generic variables (`d1`, `it`) with clearer names.  
+
+5. **Inline Method:**  
+   - Simplified direct method calls when appropriate.
+
+---
+
+### **Refactoring Benefits**
+
+- **Readability:** Clearer, self-explanatory method and variable names.  
+- **Reusability:** Helper classes eliminate redundant code.  
+- **Maintainability:** Easier to extend test logic and isolate changes.

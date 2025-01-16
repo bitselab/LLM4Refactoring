@@ -1,0 +1,87 @@
+## Refactoring Opportunities in DefaultRefreshEventListener
+
+There are a couple of opportunities for Extract Method refactoring in the provided code snippet:
+
+1. Extracting `isReadOnly` logic:
+
+The code for determining the read-only state of an entity (`isReadOnly` method) appears multiple times with slight variations. This logic can be extracted into a separate method to improve code readability and maintainability.
+
+Here's the refactored code with the extracted method:
+
+```java
+public class DefaultRefreshEventListener implements RefreshEventListener {
+
+  // ... other code ...
+
+  private static boolean isEntityReadOnly(EntityEntry entry, EntityPersister persister, LazyInitializer lazyInitializer, EventSource source) {
+    // Keep the same read-only/modifiable setting for the entity that it had before refreshing;
+    // If it was transient, then set it to the default for the source.
+    if (!persister.isMutable()) {
+      return true;
+    } else if (entry != null) {
+      return entry.isReadOnly();
+    } else if (lazyInitializer != null) {
+      return lazyInitializer.isReadOnly();
+    } else {
+      return source.isDefaultReadOnly();
+    }
+  }
+
+  // ... other code ...
+
+  private static Object doRefresh(
+    // ... other parameters ...
+  ) {
+    final Object result = persister.load(id, object, lockOptionsToUse, source);
+    if (result != null) {
+      // apply `postRefreshLockMode`, if needed
+      // ...
+
+      source.setReadOnly(result, isEntityReadOnly(entry, persister, lazyInitializer, source));
+    }
+    return result;
+  }
+
+  // ... other code ...
+}
+```
+
+2. Extracting `evictCachedCollections` logic:
+
+The `evictCachedCollections` method has repetitive logic for handling collection and component types. This can be refactored to improve code reusability.
+
+Here's the refactored code with the extracted method:
+
+```java
+public class DefaultRefreshEventListener implements RefreshEventListener {
+
+  // ... other code ...
+
+  private static void evictCollectionOrComponentCache(Type type, Object id, EventSource source) throws HibernateException {
+    if (type.isCollectionType()) {
+      final String role = ((CollectionType) type).getRole();
+      final CollectionPersister collectionPersister = source.getFactory().getRuntimeMetamodels().getMappingMetamodel().getCollectionDescriptor(role);
+      if (collectionPersister.hasCache()) {
+        // ... existing logic for collection cache eviction ...
+      }
+    } else if (type.isComponentType()) {
+      final CompositeType compositeType = (CompositeType) type;
+      evictCachedCollections(compositeType.getSubtypes(), id, source);
+    }
+  }
+
+  // ... other code ...
+
+  private static void evictCachedCollections(Type[] types, Object id, EventSource source) throws HibernateException {
+    final ActionQueue actionQueue = source.getActionQueue();
+    final SessionFactoryImplementor factory = source.getFactory();
+    for (Type type : types) {
+      evictCollectionOrComponentCache(type, id, source);
+    }
+  }
+
+  // ... other code ...
+}
+```
+
+These refactorings make the code more concise and easier to understand. Remember to update any tests to reflect the changes made.

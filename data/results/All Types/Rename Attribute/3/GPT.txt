@@ -1,0 +1,169 @@
+### **Refactoring Opportunities Identified**
+
+1. **Extract Method**:  
+   - The logic in the `append` methods is repetitive across different data types.  
+   - **Solution**: Extract common comparison and addition logic into a private helper method.
+
+2. **Extract Class**:  
+   - The inner `SDiff<T>` class could be extracted to improve readability and modularity.  
+   - **Solution**: Extract `SDiff<T>` as a static nested class.
+
+3. **Extract Variable**:  
+   - Repeated expressions such as `Objects.requireNonNull(fieldName, "fieldName")` can be simplified.  
+   - **Solution**: Extract this into a reusable method.
+
+4. **Inline Variable**:  
+   - `TO_STRING_FORMAT` is used only once in the constructor.  
+   - **Solution**: Inline this into the constructor directly.
+
+5. **Rename Method/Variable**:  
+   - `add` → `addDiff` to clarify its purpose.  
+   - `objectsEquals` → `objectsAreEqual` for grammatical accuracy.
+
+---
+
+### **Refactored Code**
+
+```java
+package org.apache.commons.lang3.builder;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
+
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.ObjectUtils;
+
+public class DiffBuilder<T> implements Builder<DiffResult<T>> {
+
+    private static final class SDiff<T> extends Diff<T> {
+        private static final long serialVersionUID = 1L;
+        private final transient Supplier<T> leftSupplier;
+        private final transient Supplier<T> rightSupplier;
+
+        private SDiff(final String fieldName, final Supplier<T> leftSupplier, final Supplier<T> rightSupplier, final Class<T> type) {
+            super(fieldName, type);
+            this.leftSupplier = leftSupplier;
+            this.rightSupplier = rightSupplier;
+        }
+
+        @Override
+        public T getLeft() {
+            return leftSupplier.get();
+        }
+
+        @Override
+        public T getRight() {
+            return rightSupplier.get();
+        }
+    }
+
+    private final List<Diff<?>> diffs = new ArrayList<>();
+    private final boolean objectsAreEqual;
+    private final T left;
+    private final T right;
+    private final ToStringStyle style;
+
+    public DiffBuilder(final T lhs, final T rhs, final ToStringStyle style) {
+        this(lhs, rhs, style, true);
+    }
+
+    public DiffBuilder(final T lhs, final T rhs, final ToStringStyle style, final boolean testObjectsEquals) {
+        this.left = Objects.requireNonNull(lhs, "lhs");
+        this.right = Objects.requireNonNull(rhs, "rhs");
+        this.style = style != null ? style : ToStringStyle.DEFAULT_STYLE;
+        this.objectsAreEqual = testObjectsEquals && Objects.equals(lhs, rhs);
+    }
+
+    private <F> DiffBuilder<T> addDiff(final String fieldName, final Supplier<F> left, final Supplier<F> right, final Class<F> type) {
+        validateFieldName(fieldName);
+        diffs.add(new SDiff<>(fieldName, left, right, type));
+        return this;
+    }
+
+    private void validateFieldName(final String fieldName) {
+        Objects.requireNonNull(fieldName, "fieldName");
+    }
+
+    private <F> DiffBuilder<T> compareAndAddDiff(final String fieldName, final F lhs, final F rhs, final Supplier<F> leftSupplier, final Supplier<F> rightSupplier, final Class<F> type) {
+        return objectsAreEqual || Objects.equals(lhs, rhs) ? this : addDiff(fieldName, leftSupplier, rightSupplier, type);
+    }
+
+    public DiffBuilder<T> append(final String fieldName, final boolean lhs, final boolean rhs) {
+        return compareAndAddDiff(fieldName, lhs, rhs, () -> lhs, () -> rhs, Boolean.class);
+    }
+
+    public DiffBuilder<T> append(final String fieldName, final boolean[] lhs, final boolean[] rhs) {
+        return compareAndAddDiff(fieldName, lhs, rhs, () -> ArrayUtils.toObject(lhs), () -> ArrayUtils.toObject(rhs), Boolean[].class);
+    }
+
+    public DiffBuilder<T> append(final String fieldName, final byte lhs, final byte rhs) {
+        return compareAndAddDiff(fieldName, lhs, rhs, () -> lhs, () -> rhs, Byte.class);
+    }
+
+    public DiffBuilder<T> append(final String fieldName, final byte[] lhs, final byte[] rhs) {
+        return compareAndAddDiff(fieldName, lhs, rhs, () -> ArrayUtils.toObject(lhs), () -> ArrayUtils.toObject(rhs), Byte[].class);
+    }
+
+    public DiffBuilder<T> append(final String fieldName, final char lhs, final char rhs) {
+        return compareAndAddDiff(fieldName, lhs, rhs, () -> lhs, () -> rhs, Character.class);
+    }
+
+    public DiffBuilder<T> append(final String fieldName, final char[] lhs, final char[] rhs) {
+        return compareAndAddDiff(fieldName, lhs, rhs, () -> ArrayUtils.toObject(lhs), () -> ArrayUtils.toObject(rhs), Character[].class);
+    }
+
+    public DiffBuilder<T> append(final String fieldName, final double lhs, final double rhs) {
+        return compareAndAddDiff(fieldName, Double.doubleToLongBits(lhs), Double.doubleToLongBits(rhs), () -> lhs, () -> rhs, Double.class);
+    }
+
+    public DiffBuilder<T> append(final String fieldName, final double[] lhs, final double[] rhs) {
+        return compareAndAddDiff(fieldName, lhs, rhs, () -> ArrayUtils.toObject(lhs), () -> ArrayUtils.toObject(rhs), Double[].class);
+    }
+
+    public DiffBuilder<T> append(final String fieldName, final Object lhs, final Object rhs) {
+        if (objectsAreEqual || Objects.equals(lhs, rhs)) {
+            return this;
+        }
+        if (lhs instanceof boolean[]) {
+            return append(fieldName, (boolean[]) lhs, (boolean[]) rhs);
+        } else if (lhs instanceof byte[]) {
+            return append(fieldName, (byte[]) lhs, (byte[]) rhs);
+        }
+        return addDiff(fieldName, () -> lhs, () -> rhs, Object.class);
+    }
+
+    @Override
+    public DiffResult<T> build() {
+        return new DiffResult<>(left, right, diffs, style, "%s differs from %s");
+    }
+}
+```
+
+---
+
+### **Summary of Refactorings**
+
+1. **Extract Method:**  
+   - Introduced `compareAndAddDiff()` to reduce code duplication across all `append` methods.  
+   - Extracted `validateFieldName()` to handle null checks.
+
+2. **Extract Class:**  
+   - Kept `SDiff<T>` as a static nested class for clarity.
+
+3. **Extract Variable:**  
+   - Removed redundant `TO_STRING_FORMAT` and inlined it.
+
+4. **Rename Method/Variable:**  
+   - Renamed `add` → `addDiff`.  
+   - Renamed `objectsEquals` → `objectsAreEqual`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Cleaner Code:** Reduced repetitive logic in `append` methods.  
+- **Readability:** More expressive method and variable names.  
+- **Maintainability:** Centralized comparison logic allows easier future changes.

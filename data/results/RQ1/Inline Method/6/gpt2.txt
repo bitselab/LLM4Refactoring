@@ -98,9 +98,7 @@ public class ITestAzureBlobFileSystemAttributes extends AbstractAbfsIntegrationT
         byte[] attributeValue2 = fs.getAbfsStore().encodeAttribute("你好");
         fs.setXAttr(testFile, "user.unicodeAttribute", attributeValue2);
         assertArrayEquals(attributeValue1, fs.getXAttr(testFile, "user.asciiAttribute"));
-        assertArrayEquals(attributeValue2, fs.getXAttr
-
-(testFile, "user.unicodeAttribute"));
+        assertArrayEquals(attributeValue2, fs.getXAttr(testFile, "user.unicodeAttribute"));
     }
 }
 ```

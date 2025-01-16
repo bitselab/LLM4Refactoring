@@ -1,0 +1,256 @@
+The `NewItemSimplePopupPanel` class has several responsibilities, including UI component setup, error handling, and input validation. This violates the Single Responsibility Principle and introduces several opportunities for refactoring.
+
+---
+
+### **Refactoring Opportunities**
+
+1. **Extract Class**  
+   - **Problem**: Error handling logic is tightly coupled within `NewItemSimplePopupPanel`.  
+   - **Solution**: Extract error handling into a separate `ErrorPopupHandler` class.
+
+2. **Extract Method**  
+   - **Problem**: Methods like `setMessage()` and `createTextField()` are doing too much.  
+   - **Solution**: Break these into smaller, focused methods.
+
+3. **Extract Variable**  
+   - **Problem**: Complex expressions like `new RelativePoint(myTextField, new Point(0, myTextField.getHeight()))`.  
+   - **Solution**: Extract these into clearly named variables.
+
+4. **Inline Method**  
+   - **Problem**: `createNonCustomizedTextField()` is a trivial method.  
+   - **Solution**: Inline this method.
+
+5. **Rename Attribute**  
+   - **Problem**: `myApplyAction` is not descriptive.  
+   - **Solution**: Rename to `applyAction`.
+
+6. **Rename Method**  
+   - **Problem**: `setMessage()` is vague.  
+   - **Solution**: Rename to `displayValidationMessage()`.
+
+7. **Rename Parameter**  
+   - **Problem**: `res` in `createTextField()` is unclear.  
+   - **Solution**: Rename to `textField`.
+
+8. **Rename Variable**  
+   - **Problem**: `errorDelegateBorder` in `ErrorBorder` is verbose.  
+   - **Solution**: Rename to `delegateBorder`.
+
+---
+
+### **Refactored Code**
+
+---
+
+#### 1. **`NewItemSimplePopupPanel.java`**
+
+```java
+package com.intellij.ide.ui.newItemPopup;
+
+import com.intellij.ide.IdeBundle;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.AccessToken;
+import com.intellij.openapi.ui.ComponentValidator;
+import com.intellij.openapi.ui.ValidationInfo;
+import com.intellij.openapi.ui.popup.JBPopup;
+import com.intellij.ui.DocumentAdapter;
+import com.intellij.ui.awt.RelativePoint;
+import com.intellij.ui.components.ExtendableTextField;
+import com.intellij.ui.scale.JBUIScale;
+import com.intellij.util.Consumer;
+import com.intellij.util.SlowOperations;
+import com.intellij.util.ui.JBUI;
+import org.jetbrains.annotations.NotNull;
+
+import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import java.awt.*;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+
+public class NewItemSimplePopupPanel extends JPanel implements Disposable {
+
+    protected final ExtendableTextField textField;
+    private final ErrorPopupHandler errorPopupHandler;
+    protected Consumer<? super InputEvent> applyAction;
+
+    public NewItemSimplePopupPanel() {
+        this(false);
+    }
+
+    public NewItemSimplePopupPanel(boolean liveValidation) {
+        super(new BorderLayout());
+        this.textField = createTextField(liveValidation);
+        this.errorPopupHandler = new ErrorPopupHandler(textField);
+        add(textField, BorderLayout.NORTH);
+    }
+
+    public void setApplyAction(@NotNull Consumer<? super InputEvent> applyAction) {
+        this.applyAction = applyAction;
+    }
+
+    public @NotNull Consumer<? super InputEvent> getApplyAction() {
+        return applyAction;
+    }
+
+    public void setError(@NotNull String error) {
+        errorPopupHandler.displayError(error);
+    }
+
+    public void setWarning(@NotNull String warning) {
+        errorPopupHandler.displayWarning(warning);
+    }
+
+    @Override
+    public void dispose() {
+        errorPopupHandler.dispose();
+    }
+
+    public JTextField getTextField() {
+        return textField;
+    }
+
+    protected @NotNull ExtendableTextField createTextField(boolean liveErrorValidation) {
+        ExtendableTextField textField = new ExtendableTextField();
+        configureTextFieldAppearance(textField);
+        configureTextFieldBehavior(textField, liveErrorValidation);
+        return textField;
+    }
+
+    private void configureTextFieldAppearance(ExtendableTextField textField) {
+        textField.setPreferredSize(new Dimension(textField.getPreferredSize().width, JBUIScale.scale(28)));
+        textField.setColumns(30);
+        textField.setBackground(JBUI.CurrentTheme.NewClassDialog.searchFieldBackground());
+        textField.getEmptyText().setText(IdeBundle.message("action.create.new.class.name.field"));
+    }
+
+    private void configureTextFieldBehavior(ExtendableTextField textField, boolean liveErrorValidation) {
+        textField.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER && applyAction != null) {
+                    try (AccessToken ignore = SlowOperations.startSection(SlowOperations.ACTION_PERFORM)) {
+                        applyAction.consume(e);
+                    }
+                }
+            }
+        });
+
+        textField.getDocument().addDocumentListener(new DocumentAdapter() {
+            @Override
+            protected void textChanged(@NotNull DocumentEvent e) {
+                if (!liveErrorValidation) {
+                    errorPopupHandler.clearError();
+                }
+            }
+        });
+    }
+
+    public boolean hasError() {
+        return errorPopupHandler.hasError();
+    }
+}
+```
+
+---
+
+#### 2. **`ErrorPopupHandler.java`**
+
+```java
+package com.intellij.ide.ui.newItemPopup;
+
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.ui.ComponentValidator;
+import com.intellij.openapi.ui.ValidationInfo;
+import com.intellij.openapi.ui.popup.ComponentPopupBuilder;
+import com.intellij.openapi.ui.popup.JBPopup;
+import com.intellij.openapi.util.Disposer;
+import com.intellij.ui.awt.RelativePoint;
+import com.intellij.ui.scale.JBUIScale;
+
+import javax.swing.*;
+import java.awt.*;
+
+public class ErrorPopupHandler implements Disposable {
+
+    private final JTextField textField;
+    private JBPopup errorPopup;
+    private RelativePoint errorShowPoint;
+
+    public ErrorPopupHandler(JTextField textField) {
+        this.textField = textField;
+        this.errorShowPoint = new RelativePoint(textField, new Point(0, textField.getHeight()));
+    }
+
+    public void displayError(String error) {
+        displayMessage(error, false);
+    }
+
+    public void displayWarning(String warning) {
+        displayMessage(warning, true);
+    }
+
+    private void displayMessage(String message, boolean isWarning) {
+        disposeErrorPopup();
+        if (message == null) return;
+
+        ValidationInfo validationInfo = new ValidationInfo(message, textField);
+        if (isWarning) validationInfo.asWarning();
+
+        ComponentPopupBuilder popupBuilder = ComponentValidator.createPopupBuilder(validationInfo, hint -> {
+            Point point = new Point(0, textField.getInsets().top - JBUIScale.scale(6) - hint.getPreferredSize().height);
+            errorShowPoint = new RelativePoint(textField, point);
+        });
+
+        errorPopup = popupBuilder.createPopup();
+        errorPopup.show(errorShowPoint);
+    }
+
+    public void clearError() {
+        disposeErrorPopup();
+    }
+
+    public boolean hasError() {
+        return errorPopup != null && !errorPopup.isDisposed();
+    }
+
+    private void disposeErrorPopup() {
+        if (errorPopup != null && !errorPopup.isDisposed()) {
+            Disposer.dispose(errorPopup);
+            errorPopup = null;
+        }
+    }
+
+    @Override
+    public void dispose() {
+        disposeErrorPopup();
+    }
+}
+```
+
+---
+
+### **Summary of Changes**
+
+1. **Extracted Class**:  
+   - Extracted error handling into `ErrorPopupHandler`.
+
+2. **Extracted Methods**:  
+   - Split `createTextField()` into `configureTextFieldAppearance()` and `configureTextFieldBehavior()`.
+
+3. **Renamed Attributes/Methods**:  
+   - `myApplyAction` → `applyAction`.  
+   - `setMessage()` → `displayMessage()`.
+
+4. **Removed Redundant Methods**:  
+   - Inlined `createNonCustomizedTextField()`.
+
+---
+
+### **Benefits of Refactoring**
+
+- **Separation of Concerns**: UI setup and error handling are clearly separated.  
+- **Improved Readability**: Smaller, focused methods make the code easier to read.  
+- **Maintainability**: Future changes to error handling logic are isolated in `ErrorPopupHandler`.
+
+Let me know if you'd like to explore further improvements!
