@@ -9,7 +9,7 @@
   
   # General Introduction
   
-  This is the replication package for TOSEM2024 submission, containing both the tool and the data that are requested by the replication. It also provides detailed instructions to replicate the evaluation.
+  This is the replication package for Automated Software Engineering, containing both the tool and the data that are requested by the replication. It also provides detailed instructions to replicate the evaluation.
   
   # Contents of the Replication Package
   
